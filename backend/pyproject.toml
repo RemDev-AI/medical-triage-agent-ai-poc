@@ -1,0 +1,33 @@
+"medical-triage-agent-ai-poc/backend/pyproject.toml"
+
+[project]
+name = "medical-triage-backend"
+version = "0.1.0"
+description = "Backend AI Medical Triage POC"
+authors = [
+    { name = "Raymond Francius - AI Engineer Student" }
+]
+requires-python = ">=3.11"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[tool.flake8]
+max-line-length = 88
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv"
+]

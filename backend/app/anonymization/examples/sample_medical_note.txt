@@ -1,0 +1,11 @@
+Patient : Jean Dupont
+Email : jean.dupont@gmail.com
+Adresse : 12 rue Victor Hugo, Paris
+Téléphone : 06 12 34 56 78
+Numéro sécurité sociale : 123456789012345
+MRN-458796
+
+Le patient présente :
+- douleurs thoraciques ;
+- fatigue ;
+- essoufflement.

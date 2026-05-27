@@ -1,0 +1,18 @@
+
+{
+  "sft": {
+    "target_samples": 5000,
+    "splits": {
+      "train": "80%",
+      "validation": "10%",
+      "test": "10%"
+    },
+    "language": "fr",
+    "deduplication": true
+  },
+  "dpo": {
+    "chosen_rejected_pairs": true,
+    "clinical_quality_scoring": true,
+    "safety_scoring": true
+  }
+}
