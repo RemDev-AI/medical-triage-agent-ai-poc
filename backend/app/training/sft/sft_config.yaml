@@ -1,0 +1,74 @@
+# medical-triage-agent-ai-poc/backend/app/training/sft/sft_config.yaml
+
+training:
+  output_dir: "artifacts/checkpoints/sft"
+
+  num_train_epochs: 3
+
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 2
+
+  gradient_accumulation_steps: 8
+
+  learning_rate: 2e-4
+  weight_decay: 0.01
+
+  warmup_ratio: 0.05
+
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 100
+
+  save_total_limit: 3
+
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
+
+  load_best_model_at_end: true
+
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+
+  fp16: false
+  bf16: true
+
+  max_grad_norm: 1.0
+
+  gradient_checkpointing: true
+
+  lr_scheduler_type: "cosine"
+
+  report_to:
+    - "mlflow"
+    - "wandb"
+
+  resume_from_checkpoint: null
+
+  early_stopping_patience: 3
+
+model:
+  model_name: "Qwen/Qwen3-1.7B-Base"
+
+  trust_remote_code: true
+
+  device_map: "auto"
+
+  use_flash_attention: false
+
+dataset:
+  train_path: "backend/app/datasets/processed/sft_train.jsonl"
+  validation_path: "backend/app/datasets/processed/sft_validation.jsonl"
+
+  max_sequence_length: 2048
+
+tracking:
+  mlflow_experiment_name: "medical-triage-sft"
+
+  wandb_project: "medical-triage-llm"
+
+  wandb_run_name: "qwen3-1.7b-sft"
+
+system:
+  seed: 42
+
+  logging_level: "INFO"

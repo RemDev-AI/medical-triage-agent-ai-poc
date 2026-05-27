@@ -1,0 +1,89 @@
+# medical-triage-agent-ai-poc/backend/app/training/dpo/dpo_config.yaml
+
+training:
+  output_dir: "artifacts/checkpoints/dpo"
+
+  num_train_epochs: 2
+
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+
+  gradient_accumulation_steps: 16
+
+  learning_rate: 5e-6
+
+  warmup_ratio: 0.05
+
+  logging_steps: 10
+  eval_steps: 50
+  save_steps: 50
+
+  save_total_limit: 3
+
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
+
+  load_best_model_at_end: true
+
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+
+  bf16: true
+  fp16: false
+
+  max_grad_norm: 1.0
+
+  gradient_checkpointing: true
+
+  lr_scheduler_type: "cosine"
+
+  report_to:
+    - "mlflow"
+    - "wandb"
+
+  resume_from_checkpoint: null
+
+  early_stopping_patience: 2
+
+dpo:
+  beta: 0.1
+
+  max_prompt_length: 1024
+  max_length: 2048
+
+model:
+  model_name: "Qwen/Qwen3-1.7B-Base"
+
+  trust_remote_code: true
+
+  device_map: "auto"
+
+dataset:
+  train_path: "backend/app/datasets/processed/dpo_train.jsonl"
+
+  validation_path: "backend/app/datasets/processed/dpo_validation.jsonl"
+
+tracking:
+  mlflow_experiment_name: "medical-triage-dpo"
+
+  wandb_project: "medical-triage-llm"
+
+  wandb_run_name: "qwen3-1.7b-dpo"
+
+safety:
+  hallucination_keywords:
+    - "guaranteed cure"
+    - "miracle treatment"
+    - "ignore emergency symptoms"
+    - "stop medication immediately"
+
+  dangerous_keywords:
+    - "avoid hospital"
+    - "ignore chest pain"
+    - "self-medicate antibiotics"
+    - "replace doctor diagnosis"
+
+system:
+  seed: 42
+
+  logging_level: "INFO"
