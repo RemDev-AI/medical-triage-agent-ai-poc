@@ -22,6 +22,8 @@ accelerate
 datasets
 sentencepiece
 safetensors
+huggingface_hub
+
 
 # ==========================================
 # PEFT / LORA

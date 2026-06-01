@@ -1,0 +1,24 @@
+# medical-triage-agent-ai-poc/backend/.dockerignore
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.git/
+.github/
+
+tests/
+
+mlruns/
+wandb/
+
+checkpoints/
+outputs/
+
+.env
+.env.*
+
+*.log
+
+.DS_Store

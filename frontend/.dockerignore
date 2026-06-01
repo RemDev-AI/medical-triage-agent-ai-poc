@@ -1,0 +1,16 @@
+# medical-triage-agent-ai-poc/frontend/.dockerignore
+
+__pycache__/
+*.pyc
+
+.git/
+.github/
+
+.env
+.env.*
+
+.streamlit/secrets.toml
+
+tests/
+
+*.log
