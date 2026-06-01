@@ -6,6 +6,10 @@ from fastapi import FastAPI, Depends
 
 from app.api.router import api_router
 
+from app.api.routes.monitoring import (
+    router as monitoring_router,
+)
+
 from app.api.middleware.auth_middleware import (
     JWTAuthMiddleware,
 )
@@ -72,6 +76,12 @@ app.include_router(
     ],
 )
 
+# Monitoring / Observability
+app.include_router(
+    monitoring_router,
+    tags=["Monitoring"],
+)
+
 
 # =========================================================
 # STARTUP EVENTS
@@ -114,6 +124,16 @@ async def startup_event() -> None:
             f"{runtime_config.load_in_8bit}"
         )
 
+        print(
+            f"[MONITORING] Enabled : "
+            f"{runtime_config.monitoring_enabled}"
+        )
+
+        print(
+            f"[REQUEST_TRACKING] Enabled : "
+            f"{runtime_config.request_tracking_enabled}"
+        )
+
     else:
 
         print(
@@ -151,7 +171,7 @@ async def root() -> dict:
 
 
 # =========================================================
-# HEALTH CHECK
+# SYSTEM INFO
 # =========================================================
 
 @app.get(
