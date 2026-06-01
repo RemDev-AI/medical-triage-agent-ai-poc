@@ -22,6 +22,9 @@ from inference.prompt_builder import (
     build_triage_prompt,
 )
 
+# PHASE 7 - Monitoring
+from app.monitoring.gpu_monitor import gpu_monitor
+
 logger = logging.getLogger(__name__)
 
 
@@ -61,36 +64,57 @@ class TriageEngine:
 
         start_time = time.time()
 
-        prompt = build_triage_prompt(
-            patient_age=patient_age,
-            symptoms=symptoms,
-            medical_history=medical_history,
-            vital_signs=vital_signs,
-        )
+        try:
+            prompt = build_triage_prompt(
+                patient_age=patient_age,
+                symptoms=symptoms,
+                medical_history=medical_history,
+                vital_signs=vital_signs,
+            )
 
-        raw_response = generate_response(
-            model=self.model,
-            tokenizer=self.tokenizer,
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=prompt,
-        )
+            raw_response = generate_response(
+                model=self.model,
+                tokenizer=self.tokenizer,
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=prompt,
+            )
 
-        raw_response = clean_response(raw_response)
+            raw_response = clean_response(
+                raw_response,
+            )
 
-        parsed_response = self.parse_response(
-            raw_response,
-        )
+            parsed_response = self.parse_response(
+                raw_response,
+            )
 
-        metadata = build_generation_metadata(
-            latency_seconds=time.time() - start_time,
-            model_name=self.model_name,
-        )
+            latency_seconds = (
+                time.time() - start_time
+            )
 
-        return {
-            "triage": parsed_response,
-            "metadata": metadata,
-            "raw_response": raw_response,
-        }
+            metadata = build_generation_metadata(
+                latency_seconds=latency_seconds,
+                model_name=self.model_name,
+            )
+
+            # ----------------------------------
+            # PHASE 7 Monitoring
+            # ----------------------------------
+
+            gpu_monitor.increment_request()
+
+            return {
+                "triage": parsed_response,
+                "metadata": metadata,
+                "raw_response": raw_response,
+            }
+
+        except Exception as exc:
+
+            logger.exception(
+                "Triage inference failed"
+            )
+
+            raise exc
 
     def parse_response(
         self,
@@ -115,7 +139,9 @@ class TriageEngine:
             "RECOMMANDATIONS",
         )
 
-        priority = self.normalize_priority(priority)
+        priority = self.normalize_priority(
+            priority,
+        )
 
         return {
             "priority": priority,
@@ -159,6 +185,7 @@ class TriageEngine:
         priority = priority.upper().strip()
 
         if priority not in VALID_PRIORITIES:
+
             logger.warning(
                 "Unknown priority detected: %s",
                 priority,
