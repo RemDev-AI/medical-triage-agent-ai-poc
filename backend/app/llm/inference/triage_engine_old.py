@@ -9,23 +9,17 @@ from __future__ import annotations
 import logging
 import re
 import time
-from typing import Dict
-from typing import List
-from typing import Optional
+from typing import Dict, List, Optional
 
-from app.llm.inference.generate import (
+from inference.generate import (
     build_generation_metadata,
     clean_response,
     generate_response,
 )
 
-from app.llm.inference.prompt_builder import (
+from inference.prompt_builder import (
     SYSTEM_PROMPT,
     build_triage_prompt,
-)
-
-from app.llm.modal.modal_inference import (
-    ModalInferenceService,
 )
 
 # PHASE 7 - Monitoring
@@ -49,13 +43,15 @@ class TriageEngine:
 
     def __init__(
         self,
-        modal_service: ModalInferenceService,
+        model,
+        tokenizer,
         model_name: str,
-    ) -> None:
-        self.modal_service = modal_service
+    ):
+        self.model = model
+        self.tokenizer = tokenizer
         self.model_name = model_name
 
-    async def run_triage(
+    def run_triage(
         self,
         patient_age: int,
         symptoms: List[str],
@@ -69,7 +65,6 @@ class TriageEngine:
         start_time = time.time()
 
         try:
-
             prompt = build_triage_prompt(
                 patient_age=patient_age,
                 symptoms=symptoms,
@@ -77,8 +72,9 @@ class TriageEngine:
                 vital_signs=vital_signs,
             )
 
-            raw_response = await generate_response(
-                modal_service=self.modal_service,
+            raw_response = generate_response(
+                model=self.model,
+                tokenizer=self.tokenizer,
                 system_prompt=SYSTEM_PROMPT,
                 user_prompt=prompt,
             )
@@ -112,13 +108,13 @@ class TriageEngine:
                 "raw_response": raw_response,
             }
 
-        except Exception:
+        except Exception as exc:
 
             logger.exception(
-                "Triage inference failed."
+                "Triage inference failed"
             )
 
-            raise
+            raise exc
 
     def parse_response(
         self,
