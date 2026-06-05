@@ -2,20 +2,23 @@
 
 ## 1. Introduction
 
-Cette documentation décrit l'API REST du projet **Medical AI Triage Agent**.
+Cette documentation décrit l'API REST du projet **Medical AI Triage Agent**, intégrant désormais **Modal AI GPU Infrastructure** pour l’inférence haute performance.
 
 L'API permet :
-- l'exécution des évaluations de triage ;
-- l'accès aux métriques système ;
-- la consultation de l'état de santé du service ;
-- l'audit des opérations ;
-- l'intégration avec des applications externes.
 
-L'API est développée avec :
+- exécution des évaluations de triage ;
+- accès aux métriques système (incluant l’utilisation GPU Modal) ;
+- consultation de l'état de santé du service ;
+- audit des opérations ;
+- intégration avec des applications externes.
+
+Technologies :
+
 - FastAPI ;
 - Pydantic ;
 - JWT Authentication ;
-- OpenAPI 3.0.
+- OpenAPI 3.0 ;
+- vLLM / Modal GPU pour l’inférence.
 
 ---
 
@@ -38,6 +41,9 @@ Inference Engine
   │
   ▼
 Qwen3 + LoRA
+  │
+  ▼
+Modal GPU
 ```
 
 ---
@@ -83,13 +89,13 @@ Authorization: Bearer eyJ...
 
 ## 5. Endpoints Disponibles
 
-| Endpoint         | Méthode  | Description      |
-|------------------|----------|------------------|
-| /health          | GET      | État du service  |
-| /api/v1/triage   | POST     | Triage médical   |
-| /api/v1/generate | POST     | Génération libre |
-| /api/v1/metrics  | GET      | Monitoring       |
-| /api/v1/audit    | GET      | Audit système    |
+| Endpoint         | Méthode  | Description                  |
+|------------------|----------|------------------------------|
+| /health          | GET      | État du service              |
+| /api/v1/triage   | POST     | Triage médical               |
+| /api/v1/generate | POST     | Génération libre             |
+| /api/v1/metrics  | GET      | Monitoring, incl. GPU Modal  |
+| /api/v1/audit    | GET      | Audit système                |
 
 ---
 
@@ -107,7 +113,8 @@ GET /health
 {
   "status": "healthy",
   "version": "1.0.0",
-  "model_loaded": true
+  "model_loaded": true,
+  "modal_gpu_ready": true
 }
 ```
 
@@ -134,13 +141,8 @@ POST /api/v1/triage
 {
   "age": 45,
   "gender": "male",
-  "symptoms": [
-    "chest pain",
-    "shortness of breath"
-  ],
-  "medical_history": [
-    "hypertension"
-  ]
+  "symptoms": ["chest pain","shortness of breath"],
+  "medical_history": ["hypertension"]
 }
 ```
 
@@ -151,7 +153,8 @@ POST /api/v1/triage
   "priority": "HIGH",
   "confidence": 0.94,
   "justification": "Possible cardiac event",
-  "recommendation": "Seek emergency care immediately"
+  "recommendation": "Seek emergency care immediately",
+  "gpu_usage": 45
 }
 ```
 
@@ -187,7 +190,8 @@ POST /api/v1/generate
 
 ```json
 {
-  "response": "Hypertension increases the risk..."
+  "response": "Hypertension increases the risk...",
+  "gpu_usage": 48
 }
 ```
 
@@ -208,7 +212,8 @@ GET /api/v1/metrics
   "latency_ms": 245,
   "requests_total": 1024,
   "error_rate": 0.02,
-  "gpu_usage": 56
+  "gpu_usage": 56,
+  "modal_gpu_utilization": 52
 }
 ```
 
@@ -257,7 +262,8 @@ GET /api/v1/audit
   "priority": "LOW|MEDIUM|HIGH|CRITICAL",
   "confidence": 0.0,
   "justification": "string",
-  "recommendation": "string"
+  "recommendation": "string",
+  "gpu_usage": 0
 }
 ```
 
@@ -266,6 +272,7 @@ GET /api/v1/audit
 ## 12. Validation des Données
 
 Règles :
+
 - âge compris entre 0 et 120 ;
 - symptômes obligatoires ;
 - listes non nulles ;
@@ -296,12 +303,14 @@ Pydantic
 ## 14. Sécurité API
 
 Mesures implémentées :
+
 - JWT Authentication ;
 - HTTPS ;
 - CORS ;
 - Rate Limiting ;
 - Validation Pydantic ;
-- Journalisation sécurisée.
+- Journalisation sécurisée ;
+- secrets Modal GPU pour inférence.
 
 ---
 
@@ -320,11 +329,12 @@ par utilisateur authentifié.
 ## 16. Observabilité
 
 Métriques collectées :
+
 - temps de réponse ;
 - taux d'erreur ;
 - nombre de requêtes ;
-- utilisation GPU ;
-- utilisation mémoire.
+- utilisation GPU Modal ;
+- consommation mémoire.
 
 ---
 
@@ -367,17 +377,19 @@ Convention :
 - gérer les erreurs 429 ;
 - implémenter des timeouts ;
 - journaliser les réponses ;
-- surveiller les métriques.
+- surveiller les métriques GPU.
 
 ---
 
 ## 20. Conclusion
 
 L'API Medical AI Triage Agent fournit :
-- une interface REST moderne ;
-- une validation robuste ;
-- une sécurité renforcée ;
-- une observabilité complète ;
-- une intégration simple avec des applications tierces.
 
-Elle constitue la couche d'accès officielle aux fonctionnalités du moteur de triage médical.
+- interface REST moderne ;
+- validation robuste ;
+- sécurité renforcée ;
+- observabilité complète ;
+- intégration simple avec des applications tierces ;
+- support complet de l’inférence GPU via Modal AI.
+
+Elle constitue la couche d'accès officielle aux fonctionnalités du moteur de triage médical et GPU.

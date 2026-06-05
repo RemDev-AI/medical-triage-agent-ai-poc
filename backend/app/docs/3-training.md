@@ -5,88 +5,138 @@
 Ce document décrit l'ensemble du pipeline d'entraînement du projet **Medical AI Triage Agent**.
 
 L'objectif est de produire un modèle spécialisé dans le triage médical capable :
+
 - d'évaluer un niveau d'urgence ;
 - de générer une justification clinique ;
 - de proposer des recommandations adaptées ;
 - de limiter les hallucinations ;
-- d'améliorer la sécurité des réponses.
+- d'améliorer la sécurité des réponses ;
+- de garantir la traçabilité et la reproductibilité du pipeline.
 
-Le pipeline suit les standards modernes de :
+Le projet suit une architecture moderne combinant :
+
+- Hugging Face Hub ;
+- Modal AI Infrastructure pour GPU global ;
 - LLMOps ;
-- AI Engineering ;
 - MLOps ;
+- AI Engineering ;
 - Fine-Tuning supervisé ;
 - Alignement par préférences.
 
 ---
 
-## 2. Architecture du Pipeline
+## 2. Architecture Générale du Pipeline
 
-```
-Datasets RAW
-      │
-      ▼
+```text
+Hugging Face Datasets
+        │
+        ▼
 Anonymisation RGPD
-      │
-      ▼
+        │
+        ▼
 Préprocessing
-      │
-      ▼
+        │
+        ▼
 Dataset SFT
-      │
-      ▼
-Fine-Tuning LoRA
-      │
-      ▼
+        │
+        ▼
+Modal GPU Training
+        │
+        ▼
+LoRA Fine-Tuning
+        │
+        ▼
 Modèle SFT
-      │
-      ▼
+        │
+        ▼
 Dataset DPO
-      │
-      ▼
-Alignement DPO
-      │
-      ▼
+        │
+        ▼
+Modal GPU DPO Training
+        │
+        ▼
 Modèle Final
-      │
-      ▼
+        │
+        ▼
+Hugging Face Models
+        │
+        ▼
 Inference Engine
+        │
+        ▼
+Hugging Face Space API
+        │
+        ▼
+Hugging Face Space UI
 ```
 
 ---
 
-## 3. Modèle de Base
+## 3. Architecture Hugging Face + Modal
 
-**Modèle sélectionné** : Qwen3-1.7B-Base
+### 3.1 Hugging Face
+
+Repositories principaux :
+
+- **Models** : `medical-triage-agent-ai-poc-models`  
+  Contient : modèle final, adaptateurs LoRA, tokenizer, configuration d'inférence, model card.
+
+- **Datasets** : `medical-triage-agent-ai-poc-datasets`  
+  Contient : datasets RAW, SFT, DPO, métadonnées, dataset card.
+
+- **API** : `medical-triage-agent-ai-poc-api`  
+  Docker Space hébergeant FastAPI, Inference Engine, Monitoring.
+
+- **UI** : `medical-triage-agent-ai-poc-ui`  
+  Streamlit Space hébergeant interface utilisateur, dashboard et historique.
+
+### 3.2 Modal AI Infrastructure
+
+Modal est utilisé pour tous les besoins GPU :
+
+- Entraînement SFT et DPO ;
+- Évaluation et benchmarks ;
+- Batch inference ;
+- Génération de datasets.
+
+Avantages :
+
+- GPU à la demande (A100/H100) ;
+- Facturation à l’usage ;
+- Scalabilité automatique ;
+- Intégration Python native ;
+- Sécurité par isolation et secrets vault.
+
+---
+
+## 4. Modèle de Base
+
+**Modèle sélectionné** : `Qwen3-1.7B-Base`  
 
 Motivations :
-- excellent rapport qualité / performance ;
-- coût d'entraînement réduit ;
-- compatibilité LoRA et Hugging Face ;
-- faible consommation GPU.
+
+- Excellent rapport performance/coût ;
+- Compatible PEFT et LoRA ;
+- Faible consommation GPU ;
+- Performances multilingues adaptées au français médical.
 
 ---
 
-## 4. Datasets Utilisés
+## 5. Datasets Utilisés
 
-### 4.1 MediQA
-Utilisé pour raisonnement médical et réponses cliniques.
-
-### 4.2 FrenchMedMCQA
-Connaissances médicales en français et validation clinique.
-
-### 4.3 MedQuAD
-Questions/réponses médicales et enrichissement du vocabulaire médical.
-
-### 4.4 UltraMedical Preference Dataset
-Alignement DPO et apprentissage des préférences.
+- **MediQA** : raisonnement clinique, réponses spécialisées.  
+- **FrenchMedMCQA** : connaissances médicales francophones, validation clinique.  
+- **MedQuAD** : enrichissement vocabulaire médical, génération de réponses.  
+- **UltraMedical Preference Dataset** : alignement DPO, apprentissage préférences, sécurité clinique.
 
 ---
 
-## 5. Préparation des Données
+## 6. Préparation des Données
 
 ### Standardisation
-Tous les datasets sont convertis en JSONL UTF-8 avec un format unifié :
+
+Tous les datasets sont convertis en **JSONL UTF-8** avec un format unifié :
+
 ```json
 {
   "instruction": "...",
@@ -97,46 +147,39 @@ Tous les datasets sont convertis en JSONL UTF-8 avec un format unifié :
 ```
 
 ### Nettoyage
-Suppression :
-- doublons ;
-- données corrompues ;
-- réponses incomplètes ;
-- données non médicales.
 
-### Contrôle qualité
-Validation :
-- cohérence clinique ;
-- cohérence linguistique ;
-- qualité des annotations.
+- Suppression des doublons ;
+- Suppression des exemples incomplets ou corrompus ;
+- Filtrage des données non médicales.
 
----
+### Contrôle Qualité
 
-## 6. Anonymisation
-
-- Détection PII avec Presidio ;
-- Suppression des données personnelles ;
-- Remplacement des identifiants sensibles.
-
-Entités détectées :
-- noms, emails, adresses, téléphones, identifiants médicaux.
+- Cohérence clinique et linguistique ;
+- Conformité RGPD ;
+- Qualité des annotations.
 
 ---
 
-## 7. Dataset SFT
+## 7. Anonymisation RGPD
 
-**Objectif** : apprentissage supervisé du comportement attendu.
+Technologies :
 
-**Structure** :
-```json
-{
-  "instruction": "Patient présente une douleur thoracique.",
-  "output": "Urgence élevée ..."
-}
-```
+- Microsoft Presidio ;
+- SpaCy FR (`fr_core_news_md`).
 
-**Taille** : ≈ 5000 exemples
+Entités détectées : noms, emails, adresses, téléphones, identifiants médicaux.  
+Stratégies : mask, redact, replace.
 
-**Splits** :
+---
+
+## 8. Dataset SFT
+
+**Objectif** : apprentissage supervisé du comportement attendu.  
+
+**Taille** : ≈ 5 000 exemples.  
+
+**Répartition** :
+
 | Split      | Pourcentage |
 |------------|-------------|
 | Train      | 80 %        |
@@ -145,11 +188,12 @@ Entités détectées :
 
 ---
 
-## 8. Fine-Tuning LoRA
+## 9. Fine-Tuning LoRA
 
-**Objectif** : réduire le coût d'entraînement tout en conservant les performances.
+**Objectif** : réduire les coûts GPU tout en conservant les performances.  
 
 **Paramètres** :
+
 ```yaml
 r: 16
 lora_alpha: 32
@@ -162,9 +206,12 @@ task_type: CAUSAL_LM
 
 ---
 
-## 9. Entraînement SFT
+## 10. Entraînement SFT sur Modal GPU
+
+**GPU principaux** : A100 80GB, H100.  
 
 **Hyperparamètres** :
+
 ```yaml
 learning_rate: 2e-4
 batch_size: 4
@@ -175,21 +222,23 @@ weight_decay: 0.01
 ```
 
 **Monitoring** :
-- MLflow ;
-- Weights & Biases ;
-- métriques : training loss, validation loss, learning rate, temps d'entraînement.
+
+- MLflow, Weights & Biases, Modal Metrics ;
+- Training/validation loss, learning rate, temps d'entraînement, consommation GPU, VRAM.
 
 **Checkpoints** :
-- Sauvegarde toutes les 500 étapes ;
-- Reprise automatique, rollback et comparaison de modèles.
+
+- Sauvegarde toutes les 500 steps ;
+- Reprise automatique, rollback, comparaison d'expériences.
 
 ---
 
-## 10. Dataset DPO
+## 11. Dataset DPO
 
-**Objectif** : aligner le modèle avec des préférences médicales sûres.
+Alignement sur comportements médicaux sûrs.
 
 **Structure** :
+
 ```json
 {
   "prompt": "...",
@@ -198,19 +247,17 @@ weight_decay: 0.01
 }
 ```
 
-Exemple :
-- Chosen : "Consultez immédiatement un service d'urgence."
-- Rejected : "Attendez plusieurs jours avant consultation."
-
 ---
 
-## 11. Entraînement DPO
+## 12. Entraînement DPO sur Modal GPU
 
-Objectifs :
-- Réduire hallucinations, réponses dangereuses, recommandations inadaptées ;
-- Améliorer précision clinique, prudence médicale, cohérence des réponses.
+**Objectifs** :
+
+- Réduction hallucinations et recommandations dangereuses ;
+- Amélioration précision, prudence et sécurité clinique.
 
 **Paramètres** :
+
 ```yaml
 beta: 0.1
 learning_rate: 5e-5
@@ -219,65 +266,69 @@ epochs: 2
 
 ---
 
-## 12. Évaluation
+## 13. Évaluation
 
-### Automatique
-Mesures : Loss, Accuracy, Perplexity.
-
-### Clinique
-- Contrôle manuel du niveau d'urgence ;
-- Qualité des recommandations ;
-- Cohérence des réponses ;
-- Sécurité clinique.
+**Automatique** : Loss, Accuracy, Perplexity, Latence.  
+**Clinique** : contrôle niveau urgence, cohérence médicale, sécurité recommandations, stabilité réponses.
 
 ---
 
-## 13. Optimisation GPU
+## 14. Optimisation GPU
 
-- Quantization 4-bit, 8-bit ;
-- bfloat16 (CUDA compatible GPU).
+- 4-bit et 8-bit Quantization ;
+- bfloat16 ;
+- Gradient Checkpointing ;
+- LoRA.
 
----
-
-## 14. Gestion des Artefacts
-
-Artefacts générés : checkpoints/, models/, logs/, metrics/, reports/
-
-Versionnement : GitHub, Hugging Face Hub, MLflow
+Objectifs : réduction coûts, VRAM, accélération entraînement.
 
 ---
 
-## 15. Publication Hugging Face
+## 15. Gestion des Artefacts
 
-### Modèle
-`medical-triage-agent-ai-poc-model` contenant : poids LoRA, tokenizer, configuration.
-
-### Dataset
-`medical-triage-agent-ai-poc-dataset` contenant : dataset SFT, dataset DPO, métadonnées.
+- checkpoints/, models/, logs/, metrics/, reports/  
+- Versionnement : GitHub, Hugging Face Hub, MLflow
 
 ---
 
-## 16. Limites du POC
+## 16. Publication Hugging Face
+
+- **Modèles** : `medical-triage-agent-ai-poc-models` (LoRA, tokenizer, configuration, model card)  
+- **Datasets** : `medical-triage-agent-ai-poc-datasets` (SFT, DPO, métadonnées, dataset card)
+
+---
+
+## 17. Coûts Prévisionnels Modal
+
+- Développement ponctuel : 5 à 20 USD  
+- Entraînement complet POC : 20 à 100 USD selon nombre d’expériences, taille des datasets et GPU utilisé
+
+---
+
+## 18. Limites du POC
 
 - Ne remplace pas un médecin ;
-- Ne fournit pas de diagnostic médical ;
+- Pas de diagnostic médical ;
 - Non certifié dispositif médical ;
-- Ne doit pas être utilisé pour décision clinique réelle.
+- Non destiné à usage clinique réel.
 
 ---
 
-## 17. Roadmap Future
+## 19. Roadmap Future
 
-- Qwen3-4B, Qwen3-8B ;
-- RAG médical ;
-- Évaluation clinique automatisée ;
-- RLHF ;
-- Monitoring qualité temps réel.
+**Court terme** : amélioration datasets, augmentation corpus SFT, enrichissement DPO  
+**Moyen terme** : RAG médical, évaluation clinique automatisée, optimisation Modal GPU  
+**Long terme** : Qwen3-4B/8B, RLHF, Kubernetes, multi-GPU distribué
 
 ---
 
-## 18. Conclusion
+## 20. Conclusion
 
-Pipeline d'entraînement complet et reproductible : datasets spécialisés, anonymisation RGPD, Fine-Tuning LoRA, alignement DPO, monitoring complet.
+Pipeline d’entraînement robuste, traçable et scalable combinant :
 
-Permet un modèle de triage médical robuste, traçable et aligné aux bonnes pratiques d'AI Engineering.
+- Hugging Face Hub ;
+- Modal AI GPU Infrastructure ;
+- LoRA, SFT, DPO ;
+- MLflow, Weights & Biases.
+
+Architecture optimisée pour coût, performance et standards MLOps modernes.
