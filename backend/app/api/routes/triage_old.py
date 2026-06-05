@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 
 from fastapi import APIRouter
-from fastapi import Depends
 from fastapi import HTTPException
 
 from api.schemas import (
@@ -13,9 +12,8 @@ from api.schemas import (
     TriageResponse,
 )
 
-from app.api.dependencies.modal import (
-    ModalInferenceClient,
-    get_modal_client,
+from app.llm.inference.triage_engine import (
+    run_medical_triage,
 )
 
 from app.monitoring.latency_monitor import (
@@ -43,28 +41,15 @@ router = APIRouter(
 )
 async def triage_route(
     payload: TriageRequest,
-    modal_client: ModalInferenceClient = Depends(
-        get_modal_client
-    ),
 ):
     """
     Endpoint principal de triage médical.
 
-    Nouveau pipeline :
-
-    Request
-        ↓
-    Validation Pydantic
-        ↓
-    Modal Client
-        ↓
-    Modal GPU
-        ↓
-    Monitoring
-        ↓
-    Audit
-        ↓
-    Response
+    Monitoring intégré :
+    - latence
+    - trafic API
+    - erreurs
+    - alerting
     """
 
     request_tracker.increment_total_requests()
@@ -73,7 +58,7 @@ async def triage_route(
 
     try:
 
-        triage_result = await modal_client.triage(
+        triage_result = run_medical_triage(
             symptoms=payload.symptoms,
             medical_history=payload.medical_history,
             age=payload.age,
@@ -100,28 +85,21 @@ async def triage_route(
             pass
 
         return TriageResponse(
-            priority_level=triage_result.get(
-                "priority_level",
-                "UNKNOWN",
-            ),
-            justification=triage_result.get(
-                "justification",
-                "",
-            ),
-            recommendations=triage_result.get(
-                "recommendations",
-                [],
-            ),
-            confidence_score=triage_result.get(
-                "confidence_score",
-                0.0,
-            ),
-            generated_at=triage_result.get(
-                "generated_at",
-                time.strftime(
-                    "%Y-%m-%dT%H:%M:%S"
-                ),
-            ),
+            priority_level=triage_result[
+                "priority_level"
+            ],
+            justification=triage_result[
+                "justification"
+            ],
+            recommendations=triage_result[
+                "recommendations"
+            ],
+            confidence_score=triage_result[
+                "confidence_score"
+            ],
+            generated_at=triage_result[
+                "generated_at"
+            ],
             latency_seconds=round(
                 latency_seconds,
                 3,
