@@ -4,210 +4,432 @@
 
 Ce document décrit la stratégie complète de déploiement du projet **Medical AI Triage Agent**.
 
-L'objectif est de fournir :
+L'architecture repose sur une approche **Hugging Face + Modal AI Infrastructure** :
 
-- un backend FastAPI scalable ;
-- une interface Streamlit accessible ;
-- une infrastructure reproductible ;
-- un pipeline CI/CD automatisé ;
-- une observabilité complète.
+- Hugging Face Models ;
+- Hugging Face Datasets ;
+- Hugging Face Space API ;
+- Hugging Face Space UI ;
+- Modal GPU Infrastructure.
+
+Objectifs :
+
+- backend FastAPI scalable ;
+- interface Streamlit accessible ;
+- infrastructure reproductible ;
+- pipeline CI/CD automatisé ;
+- monitoring complet ;
+- optimisation des coûts GPU.
 
 ---
 
 ## 2. Architecture de Déploiement
 
 ```text
-┌─────────────────────┐
-│     Utilisateur     │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Frontend Streamlit │
-│   Hugging Face UI   │
-└──────────┬──────────┘
-           │ REST API
-           ▼
-┌─────────────────────┐
-│   Backend FastAPI   │
-│ Hugging Face Space  │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│   Inference Engine  │
-│     Qwen3 LoRA      │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│ Hugging Face Hub    │
-│ Models + Datasets   │
-└─────────────────────┘
-```
+                           ┌────────────────────┐
+                           │     Utilisateur    │
+                           └─────────┬──────────┘
+                                     │
+                                     ▼
+                    ┌────────────────────────────────┐
+                    │ Hugging Face Space UI          │
+                    │ medical-triage-agent-ai-poc-ui │
+                    └───────────────┬────────────────┘
+                                    │ REST API
+                                    ▼
+                    ┌────────────────────────────────┐
+                    │ Hugging Face Space API         │
+                    │ medical-triage-agent-ai-poc-api│
+                    └───────────────┬────────────────┘
+                                    │
+                                    ▼
+                    ┌────────────────────────────────┐
+                    │ Inference Engine               │
+                    │ FastAPI + vLLM + LoRA          │
+                    └───────────────┬────────────────┘
+                                    │
+                   ┌────────────────┴────────────────┐
+                   ▼                                 ▼
 
-## 3. Composants Déployés
+      ┌───────────────────────┐        ┌─────────────────────────┐
+      │ Hugging Face Models   │        │ Modal GPU Infrastructure│
+      │ medical-triage-agent- │        │ A100 / H100             │
+      │ ai-poc-models         │        │ Training & Inference    │
+      └───────────────────────┘        └─────────────────────────┘
 
-### Backend
-
-Responsabilités :
-- API REST
-- authentification
-- validation des requêtes
-- chargement du modèle
-- monitoring
-
-Technologies :
-- FastAPI
-- Uvicorn
-- Pydantic
-- PyTorch
-- Transformers
-- PEFT
-
-### Frontend
-
-Responsabilités :
-- saisie patient
-- affichage résultats
-- dashboard monitoring
-- historique des requêtes
-
-Technologies :
-- Streamlit
-- Requests
-- Plotly
-
-### Modèle IA
-
-Composants :
-- Qwen3-1.7B
-- Adaptateurs LoRA
-- Tokenizer
-- Configuration d'inférence
-
----
-
-## 4. Déploiement Local
-
-### Prérequis
-
-- Python >= 3.11
-- Docker >= 24
-- Git >= 2.4
-
-### Installation
-
-```bash
-git clone https://github.com/<organization>/medical-triage-agent-ai-poc.git
-cd medical-triage-agent-ai-poc
-pip install -r requirements.txt
+                   ▲
+                   │
+      ┌────────────────────────────┐
+      │ Hugging Face Datasets      │
+      │ medical-triage-agent-ai-   │
+      │ poc-datasets               │
+      └────────────────────────────┘
 ```
 
 ---
 
-## 5. Déploiement Docker
+## 3. Stratégie de Déploiement
 
-### Backend
+### Répartition des responsabilités
 
-```bash
-docker build -t triage-api .
-docker run -p 8000:8000 triage-api
-```
-
-### Frontend
-
-```bash
-docker build -t triage-ui .
-docker run -p 8501:8501 triage-ui
-```
+| Composant             | Plateforme             |
+|-----------------------|------------------------|
+| API                   | Hugging Face Space API |
+| Interface utilisateur | Hugging Face Space UI  |
+| Modèles               | Hugging Face Models    |
+| Datasets              | Hugging Face Datasets  |
+| GPU Training          | Modal                  |
+| GPU Inference         | Modal                  |
+| CI/CD                 | GitHub Actions         |
 
 ---
 
-## 6. Variables d'Environnement
+## 4. Composants Déployés
 
-### Backend
+### Backend API
 
-```env
-ENV=production
-JWT_SECRET_KEY=xxxxxxxx
-HF_TOKEN=xxxxxxxx
-MODEL_ID=medical-triage-agent-ai-poc-model
-LOG_LEVEL=INFO
-```
-
-### Frontend
-
-```env
-API_BASE_URL=https://triage-api-url
-REQUEST_TIMEOUT=30
-```
-
----
-
-## 7. Déploiement Hugging Face
-
-### Backend Space
-
-Nom :
+Repository :
 
 ```text
 medical-triage-agent-ai-poc-api
 ```
 
-Type : Docker Space
+Responsabilités :
 
-### Frontend Space
+- API REST ;
+- authentification ;
+- validation des requêtes ;
+- orchestration des modèles ;
+- monitoring.
 
-Nom :
+Technologies :
+
+- FastAPI ;
+- Uvicorn ;
+- Pydantic ;
+- Transformers ;
+- PEFT ;
+- vLLM.
+
+---
+
+### Frontend UI
+
+Repository :
 
 ```text
 medical-triage-agent-ai-poc-ui
 ```
 
-Type : Streamlit Space
+Responsabilités :
 
-### Secrets Hugging Face
+- saisie patient ;
+- affichage résultats ;
+- dashboard monitoring ;
+- historique.
 
-- HF_TOKEN
-- JWT_SECRET_KEY
-- API_BASE_URL
+Technologies :
+
+- Streamlit ;
+- Requests ;
+- Plotly.
 
 ---
 
-## 8. Déploiement du Modèle
+### Modèle IA
 
 Repository :
 
 ```text
-medical-triage-agent-ai-poc-model
+medical-triage-agent-ai-poc-models
 ```
 
-Contient :
-- modèle de base
-- poids LoRA
-- tokenizer
-- configuration
+Contenu :
+
+- Qwen3-1.7B ;
+- LoRA adapters ;
+- tokenizer ;
+- configuration d'inférence.
 
 ---
 
-## 9. Déploiement des Datasets
+### Datasets
 
 Repository :
 
 ```text
-medical-triage-agent-ai-poc-dataset
+medical-triage-agent-ai-poc-datasets
 ```
 
-Contient :
-- dataset SFT
-- dataset DPO
-- documentation
-- métadonnées
+Contenu :
+
+- datasets RAW ;
+- datasets SFT ;
+- datasets DPO ;
+- métadonnées.
 
 ---
 
-## 10. CI/CD GitHub Actions
+## 5. Infrastructure Modal AI
+
+### Objectif
+
+Modal est utilisé exclusivement pour les ressources GPU.
+
+Cas d'utilisation :
+
+- Fine-Tuning SFT ;
+- Fine-Tuning DPO ;
+- Batch Inference ;
+- Évaluation ;
+- Benchmarking.
+
+---
+
+### GPU Utilisés
+
+#### GPU principal
+
+```text
+NVIDIA A100 80GB
+```
+
+Utilisation :
+
+- SFT ;
+- DPO ;
+- évaluations.
+
+#### GPU avancé
+
+```text
+NVIDIA H100
+```
+
+Utilisation :
+
+- benchmarking ;
+- optimisation ;
+- montée en charge.
+
+---
+
+### Avantages
+
+- GPU à la demande ;
+- facturation à l'usage ;
+- autoscaling ;
+- haute disponibilité ;
+- gestion simplifiée.
+
+---
+
+## 6. Déploiement Local
+
+### Prérequis
+
+```text
+Python >= 3.11
+Docker >= 24
+Git >= 2.40
+```
+
+---
+
+### Installation
+
+```bash
+git clone https://github.com/<organization>/medical-triage-agent-ai-poc.git
+
+cd medical-triage-agent-ai-poc
+
+pip install -r requirements.txt
+```
+
+---
+
+## 7. Déploiement Docker
+
+### Backend
+
+```bash
+docker build -t medical-triage-api .
+
+docker run \
+-p 8000:8000 \
+medical-triage-api
+```
+
+---
+
+### Frontend
+
+```bash
+docker build -t medical-triage-ui .
+
+docker run \
+-p 8501:8501 \
+medical-triage-ui
+```
+
+---
+
+## 8. Variables d'Environnement
+
+### Backend
+
+```env
+ENV=production
+
+HF_TOKEN=xxxxxxxx
+
+HF_MODEL_REPOSITORY=medical-triage-agent-ai-poc-models
+
+HF_DATASET_REPOSITORY=medical-triage-agent-ai-poc-datasets
+
+JWT_SECRET_KEY=xxxxxxxx
+
+LOG_LEVEL=INFO
+
+MODAL_TOKEN_ID=xxxxxxxx
+
+MODAL_TOKEN_SECRET=xxxxxxxx
+```
+
+---
+
+### Frontend
+
+```env
+API_BASE_URL=https://medical-triage-agent-ai-poc-api.hf.space
+
+REQUEST_TIMEOUT=30
+```
+
+---
+
+## 9. Déploiement Hugging Face
+
+### Space API
+
+Repository :
+
+```text
+medical-triage-agent-ai-poc-api
+```
+
+Type :
+
+```text
+Docker Space
+```
+
+Responsabilités :
+
+- FastAPI ;
+- Inference Engine ;
+- Monitoring.
+
+---
+
+### Space UI
+
+Repository :
+
+```text
+medical-triage-agent-ai-poc-ui
+```
+
+Type :
+
+```text
+Streamlit Space
+```
+
+Responsabilités :
+
+- interface utilisateur ;
+- dashboards ;
+- historique.
+
+---
+
+## 10. Déploiement des Modèles
+
+Repository :
+
+```text
+medical-triage-agent-ai-poc-models
+```
+
+Contient :
+
+- modèle final ;
+- LoRA ;
+- tokenizer ;
+- configuration ;
+- model card.
+
+---
+
+## 11. Déploiement des Datasets
+
+Repository :
+
+```text
+medical-triage-agent-ai-poc-datasets
+```
+
+Contient :
+
+- dataset SFT ;
+- dataset DPO ;
+- dataset card ;
+- métadonnées.
+
+---
+
+## 12. Déploiement Modal
+
+### Authentification
+
+Secrets nécessaires :
+
+```text
+MODAL_TOKEN_ID
+
+MODAL_TOKEN_SECRET
+```
+
+---
+
+### Déploiement
+
+Exemple :
+
+```bash
+modal deploy backend/app/deployment/modal/modal_inference.py
+```
+
+---
+
+### Vérification
+
+```bash
+modal app list
+```
+
+---
+
+### Logs
+
+```bash
+modal app logs
+```
+
+---
+
+## 13. CI/CD GitHub Actions
 
 Pipeline :
 
@@ -221,143 +443,254 @@ Lint
 Tests
  │
  ▼
-Build Docker
+Build
  │
  ▼
-Deploy
+Publish Models
+ │
+ ▼
+Deploy HF Spaces
+ │
+ ▼
+Deploy Modal
+ │
+ ▼
+Monitoring Validation
 ```
 
-### Étapes
+---
 
-#### Validation
-- Ruff
-- Black
-- MyPy
+### Validation
 
-#### Tests
-- Unitaires
-- Intégration
-- Sécurité
+Outils :
 
-#### Build
-- Backend Docker
-- Frontend Docker
-
-#### Déploiement
-- Hugging Face Spaces
-- Hugging Face Hub
+- Ruff ;
+- Black ;
+- MyPy.
 
 ---
 
-## 11. Monitoring
+### Tests
+
+- unitaires ;
+- intégration ;
+- sécurité ;
+- inférence.
+
+---
+
+### Déploiement
+
+Publication automatique :
+
+- Hugging Face Models ;
+- Hugging Face Datasets ;
+- Hugging Face Spaces ;
+- Modal GPU.
+
+---
+
+## 14. Monitoring
 
 ### API
-- temps de réponse
-- trafic
-- erreurs
-- disponibilité
+
+Mesures :
+
+- temps de réponse ;
+- trafic ;
+- erreurs ;
+- disponibilité.
+
+---
 
 ### GPU
-- VRAM
-- utilisation CUDA
-- throughput
+
+Mesures :
+
+- VRAM ;
+- utilisation CUDA ;
+- température ;
+- throughput.
+
+---
 
 ### Modèle
-- latence
-- temps génération
-- nombre requêtes
+
+Mesures :
+
+- latence ;
+- temps de génération ;
+- nombre de requêtes ;
+- tokens/seconde.
 
 ---
 
-## 12. Alerting
+### Modal
+
+Mesures :
+
+- temps GPU ;
+- coût d'exécution ;
+- utilisation mémoire ;
+- nombre d'instances.
+
+---
+
+## 15. Alerting
 
 ### Critique
-- API indisponible
-- modèle non chargé
-- erreur GPU
+
+- API indisponible ;
+- modèle indisponible ;
+- erreur GPU ;
+- échec déploiement.
 
 ### Warning
-- latence élevée
-- saturation mémoire
-- taux erreur élevé
+
+- latence élevée ;
+- saturation VRAM ;
+- taux d'erreur élevé ;
+- coût anormalement élevé.
 
 ---
 
-## 13. Sécurité
+## 16. Sécurité
 
 Mesures appliquées :
-- JWT
-- HTTPS
-- CORS
-- Rate Limiting
-- Validation Pydantic
-- Logs d'audit
+
+- JWT ;
+- HTTPS ;
+- CORS ;
+- Rate Limiting ;
+- Validation Pydantic ;
+- Logs d'audit ;
+- Secrets Modal ;
+- Secrets Hugging Face.
 
 ---
 
-## 14. Reprise après Incident
+## 17. Reprise après Incident
 
 ### Sauvegardes
-- modèles
-- datasets
-- logs
-- métriques
 
-### Restauration
-1. restauration modèle ;
-2. restauration configuration ;
-3. redémarrage services ;
-4. validation monitoring.
+- modèles ;
+- datasets ;
+- logs ;
+- métriques ;
+- configurations.
 
 ---
 
-## 15. Scalabilité
+### Procédure
+
+1. restauration du modèle ;
+2. restauration des datasets ;
+3. restauration des secrets ;
+4. redéploiement Hugging Face ;
+5. redéploiement Modal ;
+6. validation monitoring.
+
+---
+
+## 18. Scalabilité
 
 ### Backend
-- Load Balancer
-- Kubernetes
-- Autoscaling
+
+- FastAPI ;
+- autoscaling ;
+- multi-instances.
+
+---
 
 ### Inference
-- vLLM
-- Tensor Parallelism
-- GPU dédiés
 
-### Monitoring
-- Prometheus
-- Grafana
-- AlertManager
+- vLLM ;
+- Tensor Parallelism ;
+- Modal GPU Autoscaling.
 
 ---
 
-## 16. Validation du Déploiement
+### Infrastructure
+
+- A100 ;
+- H100 ;
+- multi-GPU.
+
+---
+
+## 19. Validation du Déploiement
 
 Checklist :
-- API accessible
-- Frontend accessible
-- Modèle chargé
-- Monitoring actif
-- Alertes fonctionnelles
-- Tests validés
+
+- API accessible ;
+- UI accessible ;
+- modèle chargé ;
+- datasets accessibles ;
+- Modal actif ;
+- monitoring actif ;
+- alertes fonctionnelles ;
+- tests validés ;
+- CI/CD opérationnel.
 
 ---
 
-## 17. Limites du POC
+## 20. Coûts Prévisionnels
+
+### Développement
+
+```text
+5 à 20 USD
+```
+
+---
+
+### Entraînement complet POC
+
+```text
+20 à 100 USD
+```
+
+---
+
+### Production POC
+
+Dépend :
+
+- trafic ;
+- nombre d'inférences ;
+- GPU utilisés ;
+- durée d'exécution.
+
+---
+
+## 21. Limites du POC
 
 Le déploiement actuel :
+
 - n'est pas certifié HDS ;
 - n'est pas certifié dispositif médical ;
-- n'est pas destiné à une production clinique réelle.
+- n'est pas destiné à un usage clinique réel ;
+- nécessite une supervision humaine.
 
 ---
 
-## 18. Conclusion
+## 22. Conclusion
 
-L'architecture de déploiement du Medical AI Triage Agent fournit :
+L'architecture de déploiement combine :
+
+- Hugging Face Hub ;
+- Hugging Face Spaces ;
+- Modal AI Global GPU Infrastructure ;
+- GitHub Actions ;
+- FastAPI ;
+- Streamlit ;
+- vLLM.
+
+Cette architecture fournit :
+
 - reproductibilité ;
 - observabilité ;
 - sécurité ;
 - automatisation ;
-- scalabilité.
-
-Elle constitue une base solide pour une industrialisation future selon les standards MLOps modernes.
+- optimisation des coûts GPU ;
+- scalabilité moderne conforme aux standards MLOps et LLMOps.
