@@ -24,12 +24,10 @@ class AlertManager:
     """
     Gestionnaire centralisé d'alertes.
 
-    Compatible :
-
-    - Hugging Face Spaces
-    - Modal GPU
-    - FastAPI
-    - Streamlit Dashboard
+    Niveaux :
+    - INFO
+    - WARNING
+    - CRITICAL
     """
 
     LATENCY_WARNING_MS = 1000
@@ -38,14 +36,10 @@ class AlertManager:
     ERROR_RATE_WARNING = 5.0
     ERROR_RATE_CRITICAL = 15.0
 
-    GPU_UTILIZATION_WARNING = 80.0
-    GPU_UTILIZATION_CRITICAL = 95.0
+    GPU_USAGE_WARNING = 80.0
+    GPU_USAGE_CRITICAL = 95.0
 
-    VRAM_UTILIZATION_WARNING = 80.0
-    VRAM_UTILIZATION_CRITICAL = 95.0
-
-    CONTAINER_WARNING = 10
-    CONTAINER_CRITICAL = 25
+    MIN_THROUGHPUT = 0.01
 
     def __init__(self) -> None:
         self.alert_history: List[Alert] = []
@@ -67,15 +61,12 @@ class AlertManager:
         self.alert_history.append(alert)
 
     def evaluate_latency(self) -> None:
-        """
-        Analyse des temps de réponse API.
-        """
 
         stats = latency_monitor.stats()
 
         avg_latency = stats.get(
             "avg_ms",
-            0.0,
+            0,
         )
 
         if avg_latency >= self.LATENCY_CRITICAL_MS:
@@ -101,15 +92,12 @@ class AlertManager:
             )
 
     def evaluate_errors(self) -> None:
-        """
-        Analyse du taux d'erreur API.
-        """
 
         stats = request_tracker.get_stats()
 
         error_rate = stats.get(
             "error_rate_percent",
-            0.0,
+            0,
         )
 
         if error_rate >= self.ERROR_RATE_CRITICAL:
@@ -135,136 +123,64 @@ class AlertManager:
             )
 
     def evaluate_gpu(self) -> None:
-        """
-        Analyse des métriques GPU Modal.
-        """
 
-        metrics = gpu_monitor.get_gpu_stats()
+        gpu_stats = gpu_monitor.get_gpu_stats()
 
-        gpu_metrics = metrics.get(
-            "gpu",
-            {},
-        )
+        if not gpu_stats["cuda_available"]:
+            return
 
-        gpu_utilization = gpu_metrics.get(
-            "gpu_utilization_percent",
-            0.0,
-        )
-
-        vram_utilization = gpu_metrics.get(
+        usage = gpu_stats.get(
             "vram_usage_percent",
-            0.0,
-        )
-
-        if (
-            gpu_utilization
-            >= self.GPU_UTILIZATION_CRITICAL
-        ):
-            self._create_alert(
-                "CRITICAL",
-                "GPU_UTILIZATION_CRITICAL",
-                (
-                    f"GPU utilization is "
-                    f"{gpu_utilization}%"
-                ),
-            )
-
-        elif (
-            gpu_utilization
-            >= self.GPU_UTILIZATION_WARNING
-        ):
-            self._create_alert(
-                "WARNING",
-                "GPU_UTILIZATION_WARNING",
-                (
-                    f"GPU utilization is "
-                    f"{gpu_utilization}%"
-                ),
-            )
-
-        if (
-            vram_utilization
-            >= self.VRAM_UTILIZATION_CRITICAL
-        ):
-            self._create_alert(
-                "CRITICAL",
-                "VRAM_UTILIZATION_CRITICAL",
-                (
-                    f"VRAM utilization is "
-                    f"{vram_utilization}%"
-                ),
-            )
-
-        elif (
-            vram_utilization
-            >= self.VRAM_UTILIZATION_WARNING
-        ):
-            self._create_alert(
-                "WARNING",
-                "VRAM_UTILIZATION_WARNING",
-                (
-                    f"VRAM utilization is "
-                    f"{vram_utilization}%"
-                ),
-            )
-
-    def evaluate_containers(self) -> None:
-        """
-        Analyse de la saturation des conteneurs Modal.
-        """
-
-        metrics = gpu_monitor.get_gpu_stats()
-
-        containers = metrics.get(
-            "containers",
-            {},
-        )
-
-        active_containers = containers.get(
-            "active_containers",
             0,
         )
 
-        if (
-            active_containers
-            >= self.CONTAINER_CRITICAL
-        ):
+        if usage >= self.GPU_USAGE_CRITICAL:
+
             self._create_alert(
                 "CRITICAL",
-                "CONTAINER_CRITICAL",
+                "GPU_CRITICAL",
                 (
-                    f"Active containers: "
-                    f"{active_containers}"
+                    f"GPU VRAM usage is "
+                    f"{usage}%"
                 ),
             )
 
-        elif (
-            active_containers
-            >= self.CONTAINER_WARNING
-        ):
+        elif usage >= self.GPU_USAGE_WARNING:
+
             self._create_alert(
                 "WARNING",
-                "CONTAINER_WARNING",
+                "GPU_WARNING",
                 (
-                    f"Active containers: "
-                    f"{active_containers}"
+                    f"GPU VRAM usage is "
+                    f"{usage}%"
+                ),
+            )
+
+    def evaluate_throughput(self) -> None:
+
+        throughput = (
+            gpu_monitor.get_throughput()
+        )
+
+        if throughput <= self.MIN_THROUGHPUT:
+
+            self._create_alert(
+                "INFO",
+                "LOW_TRAFFIC",
+                (
+                    "Low throughput detected "
+                    f"({throughput} rps)"
                 ),
             )
 
     def evaluate_all(self) -> None:
-        """
-        Lance toutes les évaluations.
-        """
 
         self.evaluate_latency()
         self.evaluate_errors()
         self.evaluate_gpu()
-        self.evaluate_containers()
+        self.evaluate_throughput()
 
     def get_alerts(self) -> List[Dict]:
-        """
-        Retourne l'historique des alertes.
-        """
 
         return [
             {
@@ -277,33 +193,30 @@ class AlertManager:
         ]
 
     def get_active_summary(self) -> Dict:
-        """
-        Résumé des alertes actives.
-        """
 
         alerts = self.get_alerts()
 
         critical = len(
             [
-                alert
-                for alert in alerts
-                if alert["level"] == "CRITICAL"
+                a
+                for a in alerts
+                if a["level"] == "CRITICAL"
             ]
         )
 
         warning = len(
             [
-                alert
-                for alert in alerts
-                if alert["level"] == "WARNING"
+                a
+                for a in alerts
+                if a["level"] == "WARNING"
             ]
         )
 
         info = len(
             [
-                alert
-                for alert in alerts
-                if alert["level"] == "INFO"
+                a
+                for a in alerts
+                if a["level"] == "INFO"
             ]
         )
 
@@ -315,9 +228,6 @@ class AlertManager:
         }
 
     def clear(self) -> None:
-        """
-        Réinitialise les alertes.
-        """
 
         self.alert_history.clear()
 
