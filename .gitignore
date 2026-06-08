@@ -151,7 +151,8 @@ mlruns/
 # LOCAL DATASETS
 # ==========================================================
 
-data/raw/
+backend/datasets/raw/data/*.jsonl
+backend/datasets/raw/standarized/*.jsonl
 data/intermediate/
 data/processed/
 
