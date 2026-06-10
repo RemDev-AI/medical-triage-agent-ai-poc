@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from services.api_client import check_api_health
+from streamlit_app.services.api_client import check_api_health
 
 
 def render_api_status() -> None:

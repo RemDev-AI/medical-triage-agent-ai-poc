@@ -2,7 +2,7 @@
 
 import requests
 
-from config.settings import API_BASE_URL
+from streamlit_app.config.settings import API_BASE_URL
 
 
 def submit_triage_request(payload: dict) -> dict:

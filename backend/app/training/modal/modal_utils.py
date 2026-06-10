@@ -16,7 +16,7 @@ from huggingface_hub import HfApi
 from huggingface_hub import login
 from huggingface_hub import snapshot_download
 
-from training.modal.modal_config import (
+from app.training.modal.modal_config import (
     CHECKPOINT_DIR,
     DATASET_DIR,
     HF_DATASET_REPO,

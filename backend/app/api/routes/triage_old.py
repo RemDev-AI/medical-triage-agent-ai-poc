@@ -7,7 +7,7 @@ import time
 from fastapi import APIRouter
 from fastapi import HTTPException
 
-from api.schemas import (
+from app.api.schemas import (
     TriageRequest,
     TriageResponse,
 )

@@ -4,7 +4,7 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from api.schemas import (
+from app.api.schemas import (
     GenerateRequest,
     GenerateResponse
 )

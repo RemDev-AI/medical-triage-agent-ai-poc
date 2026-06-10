@@ -8,7 +8,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from api.schemas import (
+from app.api.schemas import (
     GenerateRequest,
     GenerateResponse,
 )

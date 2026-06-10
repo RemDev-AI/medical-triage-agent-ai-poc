@@ -2,7 +2,7 @@
 
 import requests
 
-from config.settings import (
+from streamlit_app.config.settings import (
     API_BASE_URL,
     REQUEST_TIMEOUT,
 )

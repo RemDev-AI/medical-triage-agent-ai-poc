@@ -27,9 +27,9 @@ from transformers import (
     TrainingArguments,
 )
 
-from training.lora.peft_setup import setup_peft_model
+from app.training.lora.peft_setup import setup_peft_model
 
-from training.modal.modal_utils import (
+from app.training.modal.modal_utils import (
     build_training_metadata,
     save_training_metadata,
     upload_final_model,

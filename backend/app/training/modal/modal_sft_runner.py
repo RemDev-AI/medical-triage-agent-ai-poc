@@ -8,7 +8,7 @@ from pathlib import Path
 
 import modal
 
-from training.modal.modal_config import (
+from app.training.modal.modal_config import (
     app,
     config,
     hf_secret,
@@ -17,7 +17,7 @@ from training.modal.modal_config import (
     training_volume,
     wandb_secret,
 )
-from training.modal.modal_utils import (
+from app.training.modal.modal_utils import (
     build_training_metadata,
     commit_volume,
     download_project_dataset,

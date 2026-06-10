@@ -2,8 +2,8 @@
 
 import streamlit as st
 
-from services.history_api import get_triage_history
-from components.history_table import render_history_table
+from streamlit_app.services.history_api import get_triage_history
+from streamlit_app.components.history_table import render_history_table
 
 
 st.set_page_config(

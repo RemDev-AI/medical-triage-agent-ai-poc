@@ -20,7 +20,7 @@ from peft import (
 )
 from transformers import AutoModelForCausalLM
 
-from lora.lora_config import (
+from app.training.lora.lora_config import (
     DEFAULT_LORA_CONFIG,
 )
 

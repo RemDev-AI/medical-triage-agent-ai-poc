@@ -33,7 +33,7 @@ from transformers import (
 
 from trl import DPOTrainer
 
-from training.lora.peft_setup import setup_peft_model
+from app.training.lora.peft_setup import setup_peft_model
 
 logger = logging.getLogger(__name__)
 
