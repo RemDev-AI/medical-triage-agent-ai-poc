@@ -6,19 +6,28 @@ Validation conformité anonymisation RGPD.
 
 from __future__ import annotations
 
-from anonymization.presidio_analyzer import (
+from backend.app.anonymization.presidio_analyzer import (
     detect_pii,
 )
 
-from anonymization.audit_logger import (
+from backend.app.anonymization.audit_logger import (
     audit_logger,
 )
 
 
 def validate_no_pii(text: str) -> bool:
     """
-    Vérifie qu'aucun PII n'est encore présent.
+    Vérifie qu'aucune donnée personnelle identifiable
+    (PII) n'est encore présente dans le texte.
     """
+
+    if not text or not text.strip():
+
+        audit_logger.info(
+            "Validation success | empty text"
+        )
+
+        return True
 
     findings = detect_pii(text)
 
@@ -41,7 +50,12 @@ if __name__ == "__main__":
 
     sample = """
     Bonjour,
+
     mon email est [REDACTED]
+
+    mon téléphone est [REDACTED]
+
+    MRN : [REDACTED]
     """
 
     is_valid = validate_no_pii(sample)

@@ -12,23 +12,50 @@ from presidio_analyzer import (
     PatternRecognizer,
 )
 
-from anonymization.spacy_setup import (
-    load_spacy_model,
+from presidio_analyzer.nlp_engine import (
+    NlpEngineProvider,
 )
 
-from anonymization.pii_patterns import (
+from backend.app.anonymization.pii_patterns import (
     MEDICAL_PII_PATTERNS,
 )
 
-from anonymization.audit_logger import (
+from backend.app.anonymization.audit_logger import (
     audit_logger,
 )
 
-nlp = load_spacy_model()
+# ==========================================================
+# NLP ENGINE CONFIGURATION
+# ==========================================================
+
+NLP_CONFIGURATION = {
+    "nlp_engine_name": "spacy",
+    "models": [
+        {
+            "lang_code": "fr",
+            "model_name": "fr_core_news_md",
+        }
+    ],
+}
+
+provider = NlpEngineProvider(
+    nlp_configuration=NLP_CONFIGURATION
+)
+
+nlp_engine = provider.create_engine()
+
+# ==========================================================
+# ANALYZER
+# ==========================================================
 
 analyzer = AnalyzerEngine(
+    nlp_engine=nlp_engine,
     supported_languages=["fr"],
 )
+
+# ==========================================================
+# CUSTOM MEDICAL PATTERNS
+# ==========================================================
 
 for pii_pattern in MEDICAL_PII_PATTERNS:
 
@@ -46,6 +73,9 @@ for pii_pattern in MEDICAL_PII_PATTERNS:
 
     analyzer.registry.add_recognizer(recognizer)
 
+# ==========================================================
+# DEFAULT ENTITIES
+# ==========================================================
 
 DEFAULT_ENTITIES = [
     "PERSON",
@@ -56,6 +86,10 @@ DEFAULT_ENTITIES = [
     "PATIENT_ID",
     "FRENCH_SOCIAL_SECURITY",
 ]
+
+# ==========================================================
+# PUBLIC API
+# ==========================================================
 
 
 def detect_pii(
@@ -79,16 +113,27 @@ def detect_pii(
     return results
 
 
+# ==========================================================
+# LOCAL TEST
+# ==========================================================
+
 if __name__ == "__main__":
 
     sample = """
     Bonjour,
+
     Je suis Jean Dupont.
+
     Mon email est jean.dupont@gmail.com
+
+    Mon téléphone est 06 12 34 56 78
+
     MRN-458796
     """
 
     detections = detect_pii(sample)
+
+    print("\nDetected entities:\n")
 
     for item in detections:
         print(item)

@@ -2,12 +2,12 @@
 
 import streamlit as st
 
-from config.settings import APP_TITLE, PAGE_ICON, LAYOUT
-from config.theme import GLOBAL_CSS
-from components.sidebar import render_sidebar
-from components.navbar import render_navbar
-from components.api_status import render_api_status
-from components.footer import render_footer
+from streamlit_app.config.settings import APP_TITLE, PAGE_ICON, LAYOUT
+from streamlit_app.config.theme import GLOBAL_CSS
+from streamlit_app.components.sidebar import render_sidebar
+from streamlit_app.components.navbar import render_navbar
+from streamlit_app.components.api_status import render_api_status
+from streamlit_app.components.footer import render_footer
 
 
 st.set_page_config(

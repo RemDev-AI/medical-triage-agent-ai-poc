@@ -9,16 +9,23 @@ from __future__ import annotations
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
-from anonymization.presidio_analyzer import (
+from backend.app.anonymization.presidio_analyzer import (
     detect_pii,
 )
 
-from anonymization.audit_logger import (
+from backend.app.anonymization.audit_logger import (
     audit_logger,
 )
 
+# ==========================================================
+# ANONYMIZER ENGINE
+# ==========================================================
+
 anonymizer = AnonymizerEngine()
 
+# ==========================================================
+# ANONYMIZATION STRATEGIES
+# ==========================================================
 
 ANONYMIZATION_OPERATORS = {
     "mask": OperatorConfig(
@@ -41,14 +48,21 @@ ANONYMIZATION_OPERATORS = {
     ),
 }
 
+# ==========================================================
+# PUBLIC API
+# ==========================================================
+
 
 def anonymize_text(
     text: str,
     strategy: str = "replace",
-):
+) -> str:
     """
-    Anonymise un texte médical.
+    Anonymise un texte médical contenant des PII.
     """
+
+    if not text:
+        return text
 
     if strategy not in ANONYMIZATION_OPERATORS:
         raise ValueError(
@@ -56,6 +70,14 @@ def anonymize_text(
         )
 
     analyzer_results = detect_pii(text)
+
+    if not analyzer_results:
+
+        audit_logger.info(
+            "Anonymization skipped | findings=0"
+        )
+
+        return text
 
     anonymized_result = anonymizer.anonymize(
         text=text,
@@ -68,23 +90,37 @@ def anonymize_text(
     )
 
     audit_logger.info(
-        f"Anonymization applied | strategy={strategy}"
+        "Anonymization applied | "
+        f"strategy={strategy} | "
+        f"findings={len(analyzer_results)}"
     )
 
     return anonymized_result.text
 
 
+# ==========================================================
+# LOCAL TEST
+# ==========================================================
+
 if __name__ == "__main__":
 
-    text = """
+    sample = """
     Patient Jean Dupont
+
     Email : jean@gmail.com
+
+    Téléphone : 06 12 34 56 78
+
     MRN-458796
     """
 
     output = anonymize_text(
-        text=text,
+        text=sample,
         strategy="replace",
     )
 
+    print("\nOriginal:\n")
+    print(sample)
+
+    print("\nAnonymized:\n")
     print(output)

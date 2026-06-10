@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from services.metrics_api import get_metrics
-from components.metrics_cards import render_metrics_cards
+from streamlit_app.services.metrics_api import get_metrics
+from streamlit_app.components.metrics_cards import render_metrics_cards
 
 st.set_page_config(
     page_title="Metrics",

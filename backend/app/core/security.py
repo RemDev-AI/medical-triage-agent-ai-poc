@@ -6,7 +6,7 @@ from typing import Optional
 from jose import jwt, JWTError
 from fastapi import HTTPException, status
 
-from ore.config import settings
+from app.core.config import settings
 
 
 def create_access_token(

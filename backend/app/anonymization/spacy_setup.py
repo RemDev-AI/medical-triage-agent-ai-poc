@@ -7,7 +7,6 @@ Configuration SpaCy FR.
 from __future__ import annotations
 
 import spacy
-from spacy.cli import download
 
 MODEL_NAME = "fr_core_news_md"
 
@@ -18,14 +17,13 @@ def load_spacy_model():
     """
 
     try:
-        nlp = spacy.load(MODEL_NAME)
+        return spacy.load(MODEL_NAME)
 
-    except OSError:
-        print(f"Downloading SpaCy model: {MODEL_NAME}")
-        download(MODEL_NAME)
-        nlp = spacy.load(MODEL_NAME)
-
-    return nlp
+    except OSError as exc:
+        raise RuntimeError(
+            f"SpaCy model '{MODEL_NAME}' is not installed. "
+            "Install project dependencies from requirements.txt."
+        ) from exc
 
 
 if __name__ == "__main__":

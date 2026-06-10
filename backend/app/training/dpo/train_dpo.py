@@ -27,9 +27,9 @@ from transformers import (
 
 from trl import DPOTrainer
 
-from training.lora.peft_setup import setup_peft_model
+from app.training.lora.peft_setup import setup_peft_model
 
-from training.modal.modal_utils import (
+from app.training.modal.modal_utils import (
     build_training_metadata,
     download_latest_model_snapshot,
     save_training_metadata,

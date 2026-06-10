@@ -2,9 +2,9 @@
 
 import streamlit as st
 
-from components.patient_form import render_patient_form
-from components.triage_result import render_triage_result
-from services.triage_api import submit_triage_request
+from streamlit_app.components.patient_form import render_patient_form
+from streamlit_app.components.triage_result import render_triage_result
+from streamlit_app.services.triage_api import submit_triage_request
 
 
 st.set_page_config(

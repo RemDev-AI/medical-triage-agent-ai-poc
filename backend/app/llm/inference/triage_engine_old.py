@@ -11,13 +11,13 @@ import re
 import time
 from typing import Dict, List, Optional
 
-from inference.generate import (
+from app.llm.inference.generate import (
     build_generation_metadata,
     clean_response,
     generate_response,
 )
 
-from inference.prompt_builder import (
+from app.llm.inference.prompt_builder import (
     SYSTEM_PROMPT,
     build_triage_prompt,
 )

@@ -24,7 +24,7 @@ from transformers import (
     AutoModelForCausalLM,
 )
 
-from loaders.quantization_loader import (
+from app.llm.loaders.quantization_loader import (
     build_quantization_config,
 )
 
