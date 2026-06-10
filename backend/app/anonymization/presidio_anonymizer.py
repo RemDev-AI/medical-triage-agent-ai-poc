@@ -1,7 +1,13 @@
 # medical-triage-agent-ai-poc/backend/app/anonymization/presidio_anonymizer.py
 
 """
-Anonymisation RGPD datasets médicaux.
+Anonymisation RGPD des datasets médicaux.
+
+Support :
+- Français (FR)
+- Anglais (EN)
+
+Compatible avec le pipeline d'anonymisation médical bilingue.
 """
 
 from __future__ import annotations
@@ -9,12 +15,12 @@ from __future__ import annotations
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
-from backend.app.anonymization.presidio_analyzer import (
-    detect_pii,
-)
-
 from backend.app.anonymization.audit_logger import (
     audit_logger,
+)
+from backend.app.anonymization.presidio_analyzer import (
+    detect_language,
+    detect_pii,
 )
 
 # ==========================================================
@@ -56,9 +62,26 @@ ANONYMIZATION_OPERATORS = {
 def anonymize_text(
     text: str,
     strategy: str = "replace",
+    language: str | None = None,
 ) -> str:
     """
     Anonymise un texte médical contenant des PII.
+
+    Args:
+        text:
+            Texte source.
+
+        strategy:
+            Stratégie d'anonymisation :
+            - replace
+            - redact
+            - mask
+
+        language:
+            "fr", "en" ou None pour auto-détection.
+
+    Returns:
+        Texte anonymisé.
     """
 
     if not text:
@@ -69,12 +92,19 @@ def anonymize_text(
             f"Unknown strategy: {strategy}"
         )
 
-    analyzer_results = detect_pii(text)
+    language = language or detect_language(text)
+
+    analyzer_results = detect_pii(
+        text=text,
+        language=language,
+    )
 
     if not analyzer_results:
 
         audit_logger.info(
-            "Anonymization skipped | findings=0"
+            "Anonymization skipped | "
+            f"language={language} | "
+            "findings=0"
         )
 
         return text
@@ -91,6 +121,7 @@ def anonymize_text(
 
     audit_logger.info(
         "Anonymization applied | "
+        f"language={language} | "
         f"strategy={strategy} | "
         f"findings={len(analyzer_results)}"
     )
@@ -104,23 +135,44 @@ def anonymize_text(
 
 if __name__ == "__main__":
 
-    sample = """
-    Patient Jean Dupont
+    french_sample = """
+    Bonjour,
 
-    Email : jean@gmail.com
+    Je suis Jean Dupont.
 
-    Téléphone : 06 12 34 56 78
+    Mon email est jean.dupont@gmail.com
+
+    Mon téléphone est 06 12 34 56 78
 
     MRN-458796
     """
 
-    output = anonymize_text(
-        text=sample,
-        strategy="replace",
+    english_sample = """
+    Hello,
+
+    My name is John Smith.
+
+    My email is john.smith@gmail.com
+
+    My phone number is +1 555 123 4567
+
+    MRN-458796
+    """
+
+    print("\n=== FRENCH SAMPLE ===\n")
+
+    print(
+        anonymize_text(
+            text=french_sample,
+            strategy="replace",
+        )
     )
 
-    print("\nOriginal:\n")
-    print(sample)
+    print("\n=== ENGLISH SAMPLE ===\n")
 
-    print("\nAnonymized:\n")
-    print(output)
+    print(
+        anonymize_text(
+            text=english_sample,
+            strategy="replace",
+        )
+    )

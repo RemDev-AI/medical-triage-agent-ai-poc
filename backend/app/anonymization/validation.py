@@ -1,24 +1,48 @@
 # medical-triage-agent-ai-poc/backend/app/anonymization/validation.py
 
 """
-Validation conformité anonymisation RGPD.
+Validation de conformité RGPD après anonymisation.
+
+Support :
+- Français (FR)
+- Anglais (EN)
+
+Vérifie qu'aucune entité PII détectable ne subsiste
+après anonymisation.
 """
 
 from __future__ import annotations
 
-from backend.app.anonymization.presidio_analyzer import (
-    detect_pii,
-)
-
 from backend.app.anonymization.audit_logger import (
     audit_logger,
 )
+from backend.app.anonymization.presidio_analyzer import (
+    detect_language,
+    detect_pii,
+)
+
+# ==========================================================
+# PUBLIC API
+# ==========================================================
 
 
-def validate_no_pii(text: str) -> bool:
+def validate_no_pii(
+    text: str,
+    language: str | None = None,
+) -> bool:
     """
     Vérifie qu'aucune donnée personnelle identifiable
     (PII) n'est encore présente dans le texte.
+
+    Args:
+        text:
+            Texte à valider.
+
+        language:
+            "fr", "en" ou None pour auto-détection.
+
+    Returns:
+        True si aucune PII résiduelle n'est détectée.
     """
 
     if not text or not text.strip():
@@ -29,26 +53,39 @@ def validate_no_pii(text: str) -> bool:
 
         return True
 
-    findings = detect_pii(text)
+    language = language or detect_language(text)
+
+    findings = detect_pii(
+        text=text,
+        language=language,
+    )
 
     if findings:
 
         audit_logger.warning(
-            f"Residual PII detected | count={len(findings)}"
+            "Residual PII detected | "
+            f"language={language} | "
+            f"count={len(findings)}"
         )
 
         return False
 
     audit_logger.info(
-        "Validation success | no residual PII"
+        "Validation success | "
+        f"language={language} | "
+        "no residual PII"
     )
 
     return True
 
 
+# ==========================================================
+# LOCAL TEST
+# ==========================================================
+
 if __name__ == "__main__":
 
-    sample = """
+    french_sample = """
     Bonjour,
 
     mon email est [REDACTED]
@@ -58,6 +95,28 @@ if __name__ == "__main__":
     MRN : [REDACTED]
     """
 
-    is_valid = validate_no_pii(sample)
+    english_sample = """
+    Hello,
 
-    print(f"Validation: {is_valid}")
+    my email is [REDACTED]
+
+    my phone number is [REDACTED]
+
+    MRN : [REDACTED]
+    """
+
+    print("\n=== FRENCH SAMPLE ===\n")
+
+    print(
+        validate_no_pii(
+            french_sample
+        )
+    )
+
+    print("\n=== ENGLISH SAMPLE ===\n")
+
+    print(
+        validate_no_pii(
+            english_sample
+        )
+    )
