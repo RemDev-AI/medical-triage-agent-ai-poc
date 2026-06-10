@@ -9,7 +9,13 @@ prompt
 chosen
 rejected
 
-à partir du dataset SFT.
+à partir du dataset SFT anonymisé.
+
+Garanties :
+- Ré-anonymisation défensive
+- Validation PII résiduelle
+- Conservation des métadonnées
+- Compatibilité RGPD
 """
 
 from __future__ import annotations
@@ -17,9 +23,14 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
+
+from backend.app.anonymization.presidio_anonymizer import (
+    anonymize_text,
+)
 
 INPUT_DIR = Path(
     "backend/app/datasets/processed/sft"
@@ -37,6 +48,33 @@ OUTPUT_DIR.mkdir(
 RANDOM_SEED = 42
 
 random.seed(RANDOM_SEED)
+
+
+def contains_residual_pii(
+    text: str,
+) -> bool:
+    """
+    Validation légère post-anonymisation.
+    """
+
+    if not text:
+        return False
+
+    email_pattern = re.compile(
+        r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+    )
+
+    phone_pattern = re.compile(
+        r"(?:\+?\d[\d\s().-]{7,}\d)"
+    )
+
+    if email_pattern.search(text):
+        return True
+
+    if phone_pattern.search(text):
+        return True
+
+    return False
 
 
 def generate_rejected_response(
@@ -171,6 +209,35 @@ def safety_score(
     return max(score, 0.0)
 
 
+def anonymize_preference_fields(
+    prompt: str,
+    chosen: str,
+    rejected: str,
+    language: str,
+) -> tuple[str, str, str]:
+
+    prompt = anonymize_text(
+        prompt,
+        language=language,
+    )
+
+    chosen = anonymize_text(
+        chosen,
+        language=language,
+    )
+
+    rejected = anonymize_text(
+        rejected,
+        language=language,
+    )
+
+    return (
+        prompt,
+        chosen,
+        rejected,
+    )
+
+
 def build_preferences():
 
     sft_train = (
@@ -178,6 +245,8 @@ def build_preferences():
     )
 
     preferences = []
+
+    skipped_residual_pii = 0
 
     with open(
         sft_train,
@@ -189,14 +258,19 @@ def build_preferences():
 
             item = json.loads(line)
 
-            chosen = (
-                item["response"]
-                .strip()
-            )
-
             language = item.get(
                 "language",
                 "unknown",
+            )
+
+            prompt = (
+                item["instruction"]
+                .strip()
+            )
+
+            chosen = (
+                item["response"]
+                .strip()
             )
 
             rejected = (
@@ -209,19 +283,44 @@ def build_preferences():
             if rejected == chosen:
                 continue
 
+            (
+                prompt,
+                chosen,
+                rejected,
+            ) = anonymize_preference_fields(
+                prompt=prompt,
+                chosen=chosen,
+                rejected=rejected,
+                language=language,
+            )
+
+            if (
+                contains_residual_pii(prompt)
+                or contains_residual_pii(chosen)
+                or contains_residual_pii(rejected)
+            ):
+                skipped_residual_pii += 1
+                continue
+
+            metadata = dict(
+                item.get(
+                    "metadata",
+                    {},
+                )
+            )
+
+            metadata["anonymized"] = True
+
             preference_record = {
                 "id": hashlib.md5(
                     (
-                        item["instruction"]
-                        + chosen
+                        prompt + chosen
                     ).encode(
                         "utf-8"
                     )
                 ).hexdigest(),
                 "prompt":
-                    item[
-                        "instruction"
-                    ],
+                    prompt,
                 "chosen":
                     chosen,
                 "rejected":
@@ -242,15 +341,17 @@ def build_preferences():
                         "unknown",
                     ),
                 "metadata":
-                    item.get(
-                        "metadata",
-                        {},
-                    ),
+                    metadata,
             }
 
             preferences.append(
                 preference_record
             )
+
+    print(
+        f"Skipped preference pairs due to residual PII: "
+        f"{skipped_residual_pii}"
+    )
 
     return preferences
 
