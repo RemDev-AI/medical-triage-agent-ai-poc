@@ -8,6 +8,12 @@ Support :
 - Anglais (EN)
 
 Compatible avec le pipeline d'anonymisation médical bilingue.
+
+Mode recommandé pour SFT/DPO :
+    PERSON -> [PERSON]
+    EMAIL_ADDRESS -> [EMAIL]
+    PHONE_NUMBER -> [PHONE]
+    MEDICAL_RECORD_NUMBER -> [MEDICAL_RECORD_NUMBER]
 """
 
 from __future__ import annotations
@@ -30,7 +36,7 @@ from backend.app.anonymization.presidio_analyzer import (
 anonymizer = AnonymizerEngine()
 
 # ==========================================================
-# ANONYMIZATION STRATEGIES
+# GENERIC STRATEGIES
 # ==========================================================
 
 ANONYMIZATION_OPERATORS = {
@@ -46,11 +52,48 @@ ANONYMIZATION_OPERATORS = {
         "redact",
         {},
     ),
-    "replace": OperatorConfig(
+}
+
+# ==========================================================
+# ENTITY-SPECIFIC REPLACEMENTS
+# ==========================================================
+
+ENTITY_REPLACEMENT_OPERATORS = {
+    "PERSON": OperatorConfig(
         "replace",
-        {
-            "new_value": "[REDACTED]",
-        },
+        {"new_value": "[PERSON]"},
+    ),
+    "EMAIL_ADDRESS": OperatorConfig(
+        "replace",
+        {"new_value": "[EMAIL]"},
+    ),
+    "PHONE_NUMBER": OperatorConfig(
+        "replace",
+        {"new_value": "[PHONE]"},
+    ),
+    "LOCATION": OperatorConfig(
+        "replace",
+        {"new_value": "[LOCATION]"},
+    ),
+    "MEDICAL_RECORD_NUMBER": OperatorConfig(
+        "replace",
+        {"new_value": "[MEDICAL_RECORD_NUMBER]"},
+    ),
+    "PATIENT_ID": OperatorConfig(
+        "replace",
+        {"new_value": "[PATIENT_ID]"},
+    ),
+    "FRENCH_SOCIAL_SECURITY": OperatorConfig(
+        "replace",
+        {"new_value": "[FRENCH_SOCIAL_SECURITY]"},
+    ),
+    "US_SOCIAL_SECURITY": OperatorConfig(
+        "replace",
+        {"new_value": "[US_SOCIAL_SECURITY]"},
+    ),
+    "DEFAULT": OperatorConfig(
+        "replace",
+        {"new_value": "[REDACTED]"},
     ),
 }
 
@@ -65,20 +108,17 @@ def anonymize_text(
     language: str | None = None,
 ) -> str:
     """
-    Anonymise un texte médical contenant des PII.
+    Anonymise un texte contenant des données personnelles.
 
     Args:
         text:
             Texte source.
 
         strategy:
-            Stratégie d'anonymisation :
-            - replace
-            - redact
-            - mask
+            replace | redact | mask
 
         language:
-            "fr", "en" ou None pour auto-détection.
+            fr | en | None
 
     Returns:
         Texte anonymisé.
@@ -87,7 +127,11 @@ def anonymize_text(
     if not text:
         return text
 
-    if strategy not in ANONYMIZATION_OPERATORS:
+    if strategy not in {
+        "replace",
+        "redact",
+        "mask",
+    }:
         raise ValueError(
             f"Unknown strategy: {strategy}"
         )
@@ -109,14 +153,22 @@ def anonymize_text(
 
         return text
 
-    anonymized_result = anonymizer.anonymize(
-        text=text,
-        analyzer_results=analyzer_results,
-        operators={
+    if strategy == "replace":
+
+        operators = ENTITY_REPLACEMENT_OPERATORS
+
+    else:
+
+        operators = {
             "DEFAULT": ANONYMIZATION_OPERATORS[
                 strategy
             ]
-        },
+        }
+
+    anonymized_result = anonymizer.anonymize(
+        text=text,
+        analyzer_results=analyzer_results,
+        operators=operators,
     )
 
     audit_logger.info(
@@ -145,6 +197,8 @@ if __name__ == "__main__":
     Mon téléphone est 06 12 34 56 78
 
     MRN-458796
+
+    185067512345678
     """
 
     english_sample = """
@@ -157,6 +211,8 @@ if __name__ == "__main__":
     My phone number is +1 555 123 4567
 
     MRN-458796
+
+    123-45-6789
     """
 
     print("\n=== FRENCH SAMPLE ===\n")

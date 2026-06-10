@@ -82,73 +82,6 @@ for language in SUPPORTED_LANGUAGES:
         )
 
 # ==========================================================
-# CUSTOM PHONE RECOGNIZER
-# ==========================================================
-
-PHONE_PATTERNS = [
-    Pattern(
-        name="fr_phone",
-        regex=(
-            r"(?<!\d)"
-            r"(?:0[1-9])"
-            r"(?:[\s.-]?\d{2}){4}"
-            r"(?!\d)"
-        ),
-        score=0.90,
-    ),
-    Pattern(
-        name="international_phone",
-        regex=(
-            r"(?<!\d)"
-            r"\+\d{1,3}"
-            r"(?:[\s.-]?\d{1,4}){2,6}"
-            r"(?!\d)"
-        ),
-        score=0.90,
-    ),
-    Pattern(
-        name="us_phone",
-        regex=(
-            r"(?<!\d)"
-            r"(?:\(\d{3}\)|\d{3})"
-            r"[\s.-]?"
-            r"\d{3}"
-            r"[\s.-]?"
-            r"\d{4}"
-            r"(?!\d)"
-        ),
-        score=0.90,
-    ),
-]
-
-for language in SUPPORTED_LANGUAGES:
-
-    phone_recognizer = PatternRecognizer(
-        supported_entity="PHONE_NUMBER",
-        patterns=PHONE_PATTERNS,
-        supported_language=language,
-    )
-
-    analyzer.registry.add_recognizer(
-        phone_recognizer
-    )
-
-# ==========================================================
-# ENTITY PRIORITY
-# ==========================================================
-
-ENTITY_PRIORITY = {
-    "EMAIL_ADDRESS": 100,
-    "FRENCH_SOCIAL_SECURITY": 99,
-    "US_SOCIAL_SECURITY": 99,
-    "MEDICAL_RECORD_NUMBER": 95,
-    "PATIENT_ID": 90,
-    "PHONE_NUMBER": 85,
-    "PERSON": 50,
-    "LOCATION": 40,
-}
-
-# ==========================================================
 # DEFAULT ENTITIES
 # ==========================================================
 
@@ -171,6 +104,13 @@ DEFAULT_ENTITIES = [
 def detect_language(text: str) -> str:
     """
     Détection automatique de langue.
+
+    Args:
+        text:
+            Texte à analyser.
+
+    Returns:
+        "fr" ou "en"
     """
 
     if not text or not text.strip():
@@ -186,66 +126,6 @@ def detect_language(text: str) -> str:
         return "en"
 
     return language
-
-
-# ==========================================================
-# OVERLAP RESOLUTION
-# ==========================================================
-
-
-def _entities_overlap(
-    entity_a: RecognizerResult,
-    entity_b: RecognizerResult,
-) -> bool:
-    """
-    Détecte tout recouvrement partiel ou total.
-    """
-
-    return (
-        entity_a.start < entity_b.end
-        and entity_b.start < entity_a.end
-    )
-
-
-def _resolve_overlaps(
-    results: list[RecognizerResult],
-) -> list[RecognizerResult]:
-    """
-    Conserve uniquement l'entité la plus prioritaire
-    lorsqu'il existe un chevauchement.
-    """
-
-    sorted_results = sorted(
-        results,
-        key=lambda item: (
-            ENTITY_PRIORITY.get(
-                item.entity_type,
-                0,
-            ),
-            item.score,
-        ),
-        reverse=True,
-    )
-
-    filtered: list[RecognizerResult] = []
-
-    for candidate in sorted_results:
-
-        has_conflict = any(
-            _entities_overlap(
-                candidate,
-                existing,
-            )
-            for existing in filtered
-        )
-
-        if not has_conflict:
-            filtered.append(candidate)
-
-    return sorted(
-        filtered,
-        key=lambda item: item.start,
-    )
 
 
 # ==========================================================
@@ -265,7 +145,7 @@ def detect_pii(
             Texte à analyser.
 
         language:
-            "fr", "en" ou None.
+            "fr", "en" ou None pour auto-détection.
 
     Returns:
         Liste des entités détectées.
@@ -280,10 +160,7 @@ def detect_pii(
         text=text,
         entities=DEFAULT_ENTITIES,
         language=language,
-        score_threshold=0.65,
     )
-
-    results = _resolve_overlaps(results)
 
     audit_logger.info(
         "PII detection executed | "
