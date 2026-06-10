@@ -5,6 +5,7 @@ Construction dataset SFT médical bilingue.
 
 Objectifs :
 - Consolidation des datasets standardisés
+- Anonymisation PII systématique
 - Déduplication
 - Préservation des métadonnées
 - Échantillonnage bilingue FR/EN
@@ -16,10 +17,15 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 from collections import defaultdict
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
+
+from backend.app.anonymization.presidio_anonymizer import (
+    anonymize_text,
+)
 
 INPUT_DIR = Path(
     "backend/app/datasets/raw/standardized"
@@ -42,14 +48,12 @@ random.seed(RANDOM_SEED)
 
 
 def generate_id(text: str) -> str:
-
     return hashlib.md5(
         text.encode("utf-8")
     ).hexdigest()
 
 
 def confidence_score(record: dict) -> float:
-
     score = 0.80
 
     response = record.get(
@@ -73,7 +77,6 @@ def confidence_score(record: dict) -> float:
 
 
 def clinical_tags(record: dict) -> list[str]:
-
     text = (
         record.get("instruction", "")
         + " "
@@ -150,9 +153,63 @@ def deduplicate(
     return unique
 
 
+def contains_residual_pii(
+    text: str,
+) -> bool:
+    """
+    Validation légère post-anonymisation.
+
+    Détecte des patterns résiduels
+    qui ne devraient plus apparaître.
+    """
+
+    if not text:
+        return False
+
+    email_pattern = re.compile(
+        r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+    )
+
+    phone_pattern = re.compile(
+        r"(?:\+?\d[\d\s().-]{7,}\d)"
+    )
+
+    if email_pattern.search(text):
+        return True
+
+    if phone_pattern.search(text):
+        return True
+
+    return False
+
+
+def anonymize_record(
+    instruction: str,
+    response: str,
+    language: str | None,
+) -> tuple[str, str]:
+
+    anonymized_instruction = anonymize_text(
+        instruction,
+        language=language,
+    )
+
+    anonymized_response = anonymize_text(
+        response,
+        language=language,
+    )
+
+    return (
+        anonymized_instruction,
+        anonymized_response,
+    )
+
+
 def load_standardized_datasets():
 
     records = []
+
+    skipped_residual_pii = 0
 
     for file_path in sorted(
         INPUT_DIR.glob("*.jsonl")
@@ -167,6 +224,21 @@ def load_standardized_datasets():
             for line in f:
 
                 item = json.loads(line)
+
+                metadata = dict(
+                    item.get(
+                        "metadata",
+                        {},
+                    )
+                )
+
+                language = item.get(
+                    "language",
+                    metadata.get(
+                        "language",
+                        None,
+                    ),
+                )
 
                 instruction = (
                     item.get(
@@ -188,10 +260,26 @@ def load_standardized_datasets():
                 if not response:
                     continue
 
-                metadata = item.get(
-                    "metadata",
-                    {},
+                instruction, response = (
+                    anonymize_record(
+                        instruction=instruction,
+                        response=response,
+                        language=language,
+                    )
                 )
+
+                if (
+                    contains_residual_pii(
+                        instruction
+                    )
+                    or contains_residual_pii(
+                        response
+                    )
+                ):
+                    skipped_residual_pii += 1
+                    continue
+
+                metadata["anonymized"] = True
 
                 sft_record = {
                     "id": generate_id(
@@ -206,20 +294,19 @@ def load_standardized_datasets():
                             "source"
                         ),
                     "language":
-                        item.get(
-                            "language",
-                            metadata.get(
-                                "language",
-                                "unknown",
-                            ),
-                        ),
+                        language,
                     "confidence_score":
                         confidence_score(
                             item
                         ),
                     "clinical_tags":
                         clinical_tags(
-                            item
+                            {
+                                "instruction":
+                                    instruction,
+                                "response":
+                                    response,
+                            }
                         ),
                     "metadata":
                         metadata,
@@ -228,6 +315,11 @@ def load_standardized_datasets():
                 records.append(
                     sft_record
                 )
+
+    print(
+        f"Records skipped due to residual PII: "
+        f"{skipped_residual_pii}"
+    )
 
     return records
 
