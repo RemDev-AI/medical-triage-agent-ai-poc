@@ -1,7 +1,14 @@
 # medical-triage-agent-ai-poc/backend/app/training/sft/dataset_builder.py
 
 """
-Construction dataset SFT médical.
+Construction dataset SFT médical bilingue.
+
+Objectifs :
+- Consolidation des datasets standardisés
+- Déduplication
+- Préservation des métadonnées
+- Échantillonnage bilingue FR/EN
+- Préparation SFT
 """
 
 from __future__ import annotations
@@ -9,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+from collections import defaultdict
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
@@ -21,11 +29,16 @@ OUTPUT_DIR = Path(
     "backend/app/datasets/processed/sft"
 )
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
 
 TARGET_SAMPLE_SIZE = 5000
 
-random.seed(42)
+RANDOM_SEED = 42
+
+random.seed(RANDOM_SEED)
 
 
 def generate_id(text: str) -> str:
@@ -37,58 +50,101 @@ def generate_id(text: str) -> str:
 
 def confidence_score(record: dict) -> float:
 
-    base_score = 0.80
+    score = 0.80
 
-    if len(record["response"]) > 120:
-        base_score += 0.05
+    response = record.get(
+        "response",
+        "",
+    )
 
-    if "source" in record:
-        base_score += 0.05
+    if len(response) > 120:
+        score += 0.05
 
-    return min(base_score, 0.99)
+    if record.get("source"):
+        score += 0.05
+
+    if record.get("language") in {
+        "fr",
+        "en",
+    }:
+        score += 0.03
+
+    return min(score, 0.99)
 
 
 def clinical_tags(record: dict) -> list[str]:
 
     text = (
-        record["instruction"] +
-        " " +
-        record["response"]
+        record.get("instruction", "")
+        + " "
+        + record.get("response", "")
     ).lower()
+
+    keywords = {
+        "cardiology": [
+            "coeur",
+            "heart",
+            "cardiac",
+            "thoracique",
+            "chest pain",
+        ],
+        "respiratory": [
+            "respiration",
+            "breathing",
+            "toux",
+            "cough",
+            "lung",
+        ],
+        "emergency": [
+            "urgence",
+            "emergency",
+            "critical",
+            "douleur sévère",
+            "severe pain",
+        ],
+        "neurology": [
+            "migraine",
+            "stroke",
+            "brain",
+            "cerveau",
+            "neurolog",
+        ],
+    }
 
     tags = []
 
-    keywords = {
-        "cardiology": ["coeur", "thoracique"],
-        "respiratory": ["respiration", "toux"],
-        "emergency": ["urgence", "douleur"],
-        "neurology": ["migraine", "cerveau"],
-    }
-
     for tag, words in keywords.items():
 
-        if any(word in text for word in words):
+        if any(
+            word in text
+            for word in words
+        ):
             tags.append(tag)
 
     return tags
 
 
-def deduplicate(records: list[dict]) -> list[dict]:
+def deduplicate(
+    records: list[dict],
+) -> list[dict]:
 
     seen = set()
+
     unique = []
 
     for record in records:
 
         signature = hashlib.md5(
             (
-                record["instruction"] +
-                record["response"]
+                record["instruction"]
+                + record["response"]
             ).encode("utf-8")
         ).hexdigest()
 
         if signature not in seen:
+
             seen.add(signature)
+
             unique.append(record)
 
     return unique
@@ -98,81 +154,199 @@ def load_standardized_datasets():
 
     records = []
 
-    for file_path in INPUT_DIR.glob("*.jsonl"):
+    for file_path in sorted(
+        INPUT_DIR.glob("*.jsonl")
+    ):
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(
+            file_path,
+            "r",
+            encoding="utf-8",
+        ) as f:
 
             for line in f:
 
                 item = json.loads(line)
 
-                instruction = item.get(
-                    "instruction",
-                    ""
-                ).strip()
+                instruction = (
+                    item.get(
+                        "instruction",
+                        "",
+                    ).strip()
+                )
 
-                response = item.get(
-                    "response",
-                    ""
-                ).strip()
+                response = (
+                    item.get(
+                        "response",
+                        "",
+                    ).strip()
+                )
 
-                if not instruction or not response:
+                if not instruction:
                     continue
+
+                if not response:
+                    continue
+
+                metadata = item.get(
+                    "metadata",
+                    {},
+                )
 
                 sft_record = {
                     "id": generate_id(
                         instruction + response
                     ),
-                    "instruction": instruction,
-                    "response": response,
-                    "source": item.get("source"),
-                    "language": item.get(
-                        "language",
-                        "fr",
-                    ),
+                    "instruction":
+                        instruction,
+                    "response":
+                        response,
+                    "source":
+                        item.get(
+                            "source"
+                        ),
+                    "language":
+                        item.get(
+                            "language",
+                            metadata.get(
+                                "language",
+                                "unknown",
+                            ),
+                        ),
                     "confidence_score":
-                        confidence_score(item),
+                        confidence_score(
+                            item
+                        ),
                     "clinical_tags":
-                        clinical_tags(item),
-                    "metadata": item.get(
-                        "metadata",
-                        {},
-                    ),
+                        clinical_tags(
+                            item
+                        ),
+                    "metadata":
+                        metadata,
                 }
 
-                records.append(sft_record)
+                records.append(
+                    sft_record
+                )
 
     return records
 
 
-def save_jsonl(records, path):
+def balanced_sampling(
+    records: list[dict],
+) -> list[dict]:
+    """
+    Garantit la présence FR + EN.
+    """
 
-    with open(path, "w", encoding="utf-8") as f:
+    by_language = defaultdict(list)
+
+    for record in records:
+
+        language = record.get(
+            "language",
+            "unknown",
+        )
+
+        by_language[
+            language
+        ].append(record)
+
+    for lang_records in (
+        by_language.values()
+    ):
+        random.shuffle(
+            lang_records
+        )
+
+    fr_records = by_language.get(
+        "fr",
+        [],
+    )
+
+    en_records = by_language.get(
+        "en",
+        [],
+    )
+
+    if not fr_records or not en_records:
+
+        random.shuffle(records)
+
+        return records[
+            :TARGET_SAMPLE_SIZE
+        ]
+
+    fr_target = min(
+        len(fr_records),
+        TARGET_SAMPLE_SIZE // 2,
+    )
+
+    en_target = min(
+        len(en_records),
+        TARGET_SAMPLE_SIZE - fr_target,
+    )
+
+    sampled = (
+        fr_records[:fr_target]
+        + en_records[:en_target]
+    )
+
+    random.shuffle(sampled)
+
+    return sampled
+
+
+def save_jsonl(
+    records,
+    path,
+):
+
+    with open(
+        path,
+        "w",
+        encoding="utf-8",
+    ) as f:
 
         for record in records:
+
             f.write(
                 json.dumps(
                     record,
                     ensure_ascii=False,
-                ) + "\n"
+                )
+                + "\n"
             )
 
 
-def build_splits(records):
+def build_splits(
+    records,
+):
 
-    train, temp = train_test_split(
-        records,
-        test_size=0.20,
-        random_state=42,
+    train, temp = (
+        train_test_split(
+            records,
+            test_size=0.20,
+            random_state=RANDOM_SEED,
+            shuffle=True,
+        )
     )
 
-    validation, test = train_test_split(
-        temp,
-        test_size=0.50,
-        random_state=42,
+    validation, test = (
+        train_test_split(
+            temp,
+            test_size=0.50,
+            random_state=RANDOM_SEED,
+            shuffle=True,
+        )
     )
 
-    clinical_eval = test[: min(100, len(test))]
+    clinical_eval = test[
+        : min(
+            100,
+            len(test),
+        )
+    ]
 
     return (
         train,
@@ -184,46 +358,92 @@ def build_splits(records):
 
 def main():
 
-    print("\nLoading standardized datasets...")
+    print(
+        "\nLoading standardized datasets..."
+    )
 
-    records = load_standardized_datasets()
+    records = (
+        load_standardized_datasets()
+    )
 
-    print(f"Loaded records: {len(records)}")
+    print(
+        f"Loaded records: "
+        f"{len(records)}"
+    )
 
-    records = deduplicate(records)
+    records = deduplicate(
+        records
+    )
 
-    print(f"After deduplication: {len(records)}")
+    print(
+        f"After deduplication: "
+        f"{len(records)}"
+    )
 
-    records = records[:TARGET_SAMPLE_SIZE]
+    records = balanced_sampling(
+        records
+    )
+
+    language_stats = defaultdict(
+        int
+    )
+
+    for record in records:
+
+        language_stats[
+            record.get(
+                "language",
+                "unknown",
+            )
+        ] += 1
+
+    print(
+        "\nLanguage distribution:"
+    )
+
+    for lang, count in sorted(
+        language_stats.items()
+    ):
+        print(
+            f"  {lang}: {count}"
+        )
 
     (
         train,
         validation,
         test,
         clinical_eval,
-    ) = build_splits(records)
+    ) = build_splits(
+        records
+    )
 
     save_jsonl(
         train,
-        OUTPUT_DIR / "train.jsonl",
+        OUTPUT_DIR
+        / "train.jsonl",
     )
 
     save_jsonl(
         validation,
-        OUTPUT_DIR / "validation.jsonl",
+        OUTPUT_DIR
+        / "validation.jsonl",
     )
 
     save_jsonl(
         test,
-        OUTPUT_DIR / "test.jsonl",
+        OUTPUT_DIR
+        / "test.jsonl",
     )
 
     save_jsonl(
         clinical_eval,
-        OUTPUT_DIR / "clinical_eval.jsonl",
+        OUTPUT_DIR
+        / "clinical_eval.jsonl",
     )
 
-    print("\nSFT dataset build completed")
+    print(
+        "\nSFT dataset build completed"
+    )
 
 
 if __name__ == "__main__":
