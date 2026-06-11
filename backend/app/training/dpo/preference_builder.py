@@ -5,17 +5,18 @@ Construction dataset DPO médical bilingue.
 
 Produit des paires :
 
-prompt
-chosen
-rejected
+- prompt
+- chosen
+- rejected
 
 à partir du dataset SFT anonymisé.
 
 Garanties :
-- Ré-anonymisation défensive
 - Validation PII résiduelle
-- Conservation des métadonnées
 - Compatibilité RGPD
+- Monitoring complet
+- Profilage détaillé
+- Ré-anonymisation optionnelle
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import hashlib
 import json
 import random
 import re
+import time
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
@@ -50,31 +52,93 @@ RANDOM_SEED = 42
 random.seed(RANDOM_SEED)
 
 
+# ==========================================================
+# DPO CONFIG
+# ==========================================================
+
+REANONYMIZE_DPO = False
+
+PROGRESS_INTERVAL = 500
+
+SLOW_PAIR_THRESHOLD = 0.5
+
+
+# ==========================================================
+# COMPILED REGEX
+# ==========================================================
+
+
+EMAIL_PATTERN = re.compile(
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+)
+
+PHONE_PATTERN = re.compile(
+    r"(?:\+?\d[\d\s().-]{7,}\d)"
+)
+
+IP_PATTERN = re.compile(
+    r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+)
+
+URL_PATTERN = re.compile(
+    r"https?://[^\s]+|www\.[^\s]+",
+    re.IGNORECASE,
+)
+
+SSN_PATTERN = re.compile(
+    r"\b\d{3}-\d{2}-\d{4}\b"
+)
+
+MRN_PATTERN = re.compile(
+    r"\b(?:MRN|mrn)[:\s#-]*[A-Z0-9]{5,20}\b"
+)
+
+PATIENT_ID_PATTERN = re.compile(
+    r"\b(?:PATIENT|Patient|patient)[-_ ]?(?:ID|Id|id)?[:\s#-]*[A-Z0-9]{4,20}\b"
+)
+
+
+# ==========================================================
+# PII VALIDATION
+# ==========================================================
+
+
 def contains_residual_pii(
     text: str,
 ) -> bool:
     """
-    Validation légère post-anonymisation.
+    Validation défensive post-anonymisation.
+
+    Objectif :
+    détecter une éventuelle fuite résiduelle
+    qui aurait échappé à Presidio.
+
+    Cette validation ne remplace pas
+    Presidio/spaCy.
     """
 
     if not text:
         return False
 
-    email_pattern = re.compile(
-        r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+    patterns = (
+        EMAIL_PATTERN,
+        PHONE_PATTERN,
+        IP_PATTERN,
+        URL_PATTERN,
+        SSN_PATTERN,
+        MRN_PATTERN,
+        PATIENT_ID_PATTERN,
     )
 
-    phone_pattern = re.compile(
-        r"(?:\+?\d[\d\s().-]{7,}\d)"
+    return any(
+        pattern.search(text)
+        for pattern in patterns
     )
 
-    if email_pattern.search(text):
-        return True
 
-    if phone_pattern.search(text):
-        return True
-
-    return False
+# ==========================================================
+# REJECTED GENERATION
+# ==========================================================
 
 
 def generate_rejected_response(
@@ -88,9 +152,8 @@ def generate_rejected_response(
 
     degraded = response
 
-    if language == "fr":
-
-        replacements = {
+    replacements = {
+        "fr": {
             "urgence": "attendre",
             "urgent": "non urgent",
             "médecin": "internet",
@@ -98,11 +161,8 @@ def generate_rejected_response(
             "consultation": "automédication",
             "traitement": "solution",
             "diagnostic": "supposition",
-        }
-
-    else:
-
-        replacements = {
+        },
+        "en": {
             "emergency": "minor issue",
             "urgent": "optional",
             "doctor": "internet",
@@ -111,7 +171,8 @@ def generate_rejected_response(
             "treatment": "general advice",
             "diagnosis": "guess",
             "medical attention": "wait and see",
-        }
+        },
+    }.get(language, {})
 
     for source, target in replacements.items():
 
@@ -143,12 +204,17 @@ def generate_rejected_response(
         else:
 
             degraded = (
-                "Limited information available."
-                if language == "en"
-                else "Informations limitées."
+                "Informations limitées."
+                if language == "fr"
+                else "Limited information available."
             )
 
     return degraded.strip()
+
+
+# ==========================================================
+# SCORING
+# ==========================================================
 
 
 def clinical_quality_score(
@@ -209,6 +275,11 @@ def safety_score(
     return max(score, 0.0)
 
 
+# ==========================================================
+# OPTIONAL RE-ANONYMIZATION
+# ==========================================================
+
+
 def anonymize_preference_fields(
     prompt: str,
     chosen: str,
@@ -216,26 +287,32 @@ def anonymize_preference_fields(
     language: str,
 ) -> tuple[str, str, str]:
 
-    prompt = anonymize_text(
-        prompt,
-        language=language,
-    )
-
-    chosen = anonymize_text(
-        chosen,
-        language=language,
-    )
-
-    rejected = anonymize_text(
-        rejected,
-        language=language,
-    )
+    if not REANONYMIZE_DPO:
+        return (
+            prompt,
+            chosen,
+            rejected,
+        )
 
     return (
-        prompt,
-        chosen,
-        rejected,
+        anonymize_text(
+            prompt,
+            language=language,
+        ),
+        anonymize_text(
+            chosen,
+            language=language,
+        ),
+        anonymize_text(
+            rejected,
+            language=language,
+        ),
     )
+
+
+# ==========================================================
+# BUILD
+# ==========================================================
 
 
 def build_preferences():
@@ -247,6 +324,14 @@ def build_preferences():
     preferences = []
 
     skipped_residual_pii = 0
+    processed = 0
+    slow_pairs = 0
+
+    rejected_time = 0.0
+    anonymization_time = 0.0
+    pii_time = 0.0
+
+    build_start = time.time()
 
     with open(
         sft_train,
@@ -256,6 +341,10 @@ def build_preferences():
 
         for line in f:
 
+            pair_start = time.time()
+
+            processed += 1
+
             item = json.loads(line)
 
             language = item.get(
@@ -263,15 +352,15 @@ def build_preferences():
                 "unknown",
             )
 
-            prompt = (
-                item["instruction"]
-                .strip()
-            )
+            prompt = item["instruction"].strip()
 
-            chosen = (
-                item["response"]
-                .strip()
-            )
+            chosen = item["response"].strip()
+
+            # --------------------------------------
+            # rejected
+            # --------------------------------------
+
+            t0 = time.time()
 
             rejected = (
                 generate_rejected_response(
@@ -280,26 +369,54 @@ def build_preferences():
                 )
             )
 
+            rejected_time += (
+                time.time() - t0
+            )
+
             if rejected == chosen:
                 continue
+
+            # --------------------------------------
+            # optional anonymization
+            # --------------------------------------
+
+            t0 = time.time()
 
             (
                 prompt,
                 chosen,
                 rejected,
             ) = anonymize_preference_fields(
-                prompt=prompt,
-                chosen=chosen,
-                rejected=rejected,
-                language=language,
+                prompt,
+                chosen,
+                rejected,
+                language,
             )
 
-            if (
+            anonymization_time += (
+                time.time() - t0
+            )
+
+            # --------------------------------------
+            # pii validation
+            # --------------------------------------
+
+            t0 = time.time()
+
+            has_pii = (
                 contains_residual_pii(prompt)
                 or contains_residual_pii(chosen)
                 or contains_residual_pii(rejected)
-            ):
+            )
+
+            pii_time += (
+                time.time() - t0
+            )
+
+            if has_pii:
+
                 skipped_residual_pii += 1
+
                 continue
 
             metadata = dict(
@@ -319,14 +436,10 @@ def build_preferences():
                         "utf-8"
                     )
                 ).hexdigest(),
-                "prompt":
-                    prompt,
-                "chosen":
-                    chosen,
-                "rejected":
-                    rejected,
-                "language":
-                    language,
+                "prompt": prompt,
+                "chosen": chosen,
+                "rejected": rejected,
+                "language": language,
                 "clinical_quality_score":
                     clinical_quality_score(
                         chosen
@@ -348,12 +461,95 @@ def build_preferences():
                 preference_record
             )
 
-    print(
-        f"Skipped preference pairs due to residual PII: "
-        f"{skipped_residual_pii}"
+            elapsed_pair = (
+                time.time()
+                - pair_start
+            )
+
+            if (
+                elapsed_pair
+                > SLOW_PAIR_THRESHOLD
+            ):
+                slow_pairs += 1
+
+                print(
+                    f"[SLOW] Pair "
+                    f"{processed:,} "
+                    f"processed in "
+                    f"{elapsed_pair:.2f}s"
+                )
+
+            if (
+                processed
+                % PROGRESS_INTERVAL
+                == 0
+            ):
+
+                elapsed = (
+                    time.time()
+                    - build_start
+                )
+
+                print(
+                    f"[PROGRESS] "
+                    f"{processed:,} pairs | "
+                    f"{elapsed:.1f}s | "
+                    f"{elapsed/processed:.4f}s/pair"
+                )
+
+    total_time = (
+        time.time()
+        - build_start
     )
 
+    print("\n" + "=" * 60)
+    print("DPO PIPELINE SUMMARY")
+    print("=" * 60)
+    print(f"Pairs processed: {processed:,}")
+    print(
+        f"Preferences generated: "
+        f"{len(preferences):,}"
+    )
+    print(
+        f"Residual PII removed: "
+        f"{skipped_residual_pii:,}"
+    )
+    print(
+        f"Slow pairs (>0.5s): "
+        f"{slow_pairs:,}"
+    )
+    print(
+        f"REANONYMIZE_DPO: "
+        f"{REANONYMIZE_DPO}"
+    )
+    print(
+        f"generate_rejected_response(): "
+        f"{rejected_time:.2f}s"
+    )
+    print(
+        f"anonymize_preference_fields(): "
+        f"{anonymization_time:.2f}s"
+    )
+    print(
+        f"contains_residual_pii(): "
+        f"{pii_time:.2f}s"
+    )
+    print(
+        f"Average time per pair: "
+        f"{total_time/max(processed, 1):.4f}s"
+    )
+    print(
+        f"Total build time: "
+        f"{total_time:.2f}s"
+    )
+    print("=" * 60)
+
     return preferences
+
+
+# ==========================================================
+# SAVE
+# ==========================================================
 
 
 def save_jsonl(
@@ -378,26 +574,27 @@ def save_jsonl(
             )
 
 
+# ==========================================================
+# SPLIT
+# ==========================================================
+
+
 def split_preferences(
     records,
 ):
 
-    train, temp = (
-        train_test_split(
-            records,
-            test_size=0.20,
-            random_state=RANDOM_SEED,
-            shuffle=True,
-        )
+    train, temp = train_test_split(
+        records,
+        test_size=0.20,
+        random_state=RANDOM_SEED,
+        shuffle=True,
     )
 
-    validation, test = (
-        train_test_split(
-            temp,
-            test_size=0.50,
-            random_state=RANDOM_SEED,
-            shuffle=True,
-        )
+    validation, test = train_test_split(
+        temp,
+        test_size=0.50,
+        random_state=RANDOM_SEED,
+        shuffle=True,
     )
 
     clinical_eval = test[
@@ -415,7 +612,14 @@ def split_preferences(
     )
 
 
+# ==========================================================
+# MAIN
+# ==========================================================
+
+
 def main():
+
+    pipeline_start = time.time()
 
     print(
         "\nBuilding DPO preferences..."
@@ -425,47 +629,44 @@ def main():
         build_preferences()
     )
 
-    print(
-        f"Generated "
-        f"{len(preferences)} "
-        f"preference pairs"
-    )
-
-    (
-        train,
-        validation,
-        test,
-        clinical_eval,
-    ) = split_preferences(
-        preferences
+    train, validation, test, clinical_eval = (
+        split_preferences(
+            preferences
+        )
     )
 
     save_jsonl(
         train,
-        OUTPUT_DIR
-        / "train.jsonl",
+        OUTPUT_DIR / "train.jsonl",
     )
 
     save_jsonl(
         validation,
-        OUTPUT_DIR
-        / "validation.jsonl",
+        OUTPUT_DIR / "validation.jsonl",
     )
 
     save_jsonl(
         test,
-        OUTPUT_DIR
-        / "test.jsonl",
+        OUTPUT_DIR / "test.jsonl",
     )
 
     save_jsonl(
         clinical_eval,
-        OUTPUT_DIR
-        / "clinical_eval.jsonl",
+        OUTPUT_DIR / "clinical_eval.jsonl",
+    )
+
+    total_pipeline = (
+        time.time()
+        - pipeline_start
     )
 
     print(
-        "\nDPO dataset build completed"
+        f"\nTotal pipeline time: "
+        f"{total_pipeline:.2f}s"
+    )
+
+    print(
+        "DPO dataset build completed"
     )
 
 

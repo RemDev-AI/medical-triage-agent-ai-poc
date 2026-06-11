@@ -3,13 +3,13 @@
 """
 Construction dataset SFT médical bilingue.
 
-Objectifs :
-- Consolidation des datasets standardisés
-- Anonymisation PII systématique
+Pipeline optimisé :
+- Chargement des datasets standardisés
 - Déduplication
-- Préservation des métadonnées
 - Échantillonnage bilingue FR/EN
-- Préparation SFT
+- Anonymisation uniquement sur l'échantillon retenu
+- Validation PII résiduelle
+- Génération des splits SFT
 """
 
 from __future__ import annotations
@@ -18,48 +18,33 @@ import hashlib
 import json
 import random
 import re
+import time
 from collections import defaultdict
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 
-from backend.app.anonymization.presidio_anonymizer import (
-    anonymize_text,
-)
+from backend.app.anonymization.presidio_anonymizer import anonymize_text
 
-INPUT_DIR = Path(
-    "backend/app/datasets/raw/standardized"
-)
+INPUT_DIR = Path("backend/app/datasets/raw/standardized")
+OUTPUT_DIR = Path("backend/app/datasets/processed/sft")
 
-OUTPUT_DIR = Path(
-    "backend/app/datasets/processed/sft"
-)
-
-OUTPUT_DIR.mkdir(
-    parents=True,
-    exist_ok=True,
-)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 TARGET_SAMPLE_SIZE = 5000
-
 RANDOM_SEED = 42
 
 random.seed(RANDOM_SEED)
 
 
 def generate_id(text: str) -> str:
-    return hashlib.md5(
-        text.encode("utf-8")
-    ).hexdigest()
+    return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
 def confidence_score(record: dict) -> float:
     score = 0.80
 
-    response = record.get(
-        "response",
-        "",
-    )
+    response = record.get("response", "")
 
     if len(response) > 120:
         score += 0.05
@@ -67,10 +52,7 @@ def confidence_score(record: dict) -> float:
     if record.get("source"):
         score += 0.05
 
-    if record.get("language") in {
-        "fr",
-        "en",
-    }:
+    if record.get("language") in {"fr", "en"}:
         score += 0.03
 
     return min(score, 0.99)
@@ -78,38 +60,27 @@ def confidence_score(record: dict) -> float:
 
 def clinical_tags(record: dict) -> list[str]:
     text = (
-        record.get("instruction", "")
-        + " "
-        + record.get("response", "")
+        record.get("instruction", "") + " " +
+        record.get("response", "")
     ).lower()
 
     keywords = {
         "cardiology": [
-            "coeur",
-            "heart",
-            "cardiac",
-            "thoracique",
-            "chest pain",
+            "coeur", "heart", "cardiac",
+            "thoracique", "chest pain",
         ],
         "respiratory": [
-            "respiration",
-            "breathing",
-            "toux",
-            "cough",
-            "lung",
+            "respiration", "breathing",
+            "toux", "cough", "lung",
         ],
         "emergency": [
-            "urgence",
-            "emergency",
-            "critical",
-            "douleur sévère",
+            "urgence", "emergency",
+            "critical", "douleur sévère",
             "severe pain",
         ],
         "neurology": [
-            "migraine",
-            "stroke",
-            "brain",
-            "cerveau",
+            "migraine", "stroke",
+            "brain", "cerveau",
             "neurolog",
         ],
     }
@@ -117,52 +88,32 @@ def clinical_tags(record: dict) -> list[str]:
     tags = []
 
     for tag, words in keywords.items():
-
-        if any(
-            word in text
-            for word in words
-        ):
+        if any(word in text for word in words):
             tags.append(tag)
 
     return tags
 
 
-def deduplicate(
-    records: list[dict],
-) -> list[dict]:
-
+def deduplicate(records: list[dict]) -> list[dict]:
     seen = set()
-
     unique = []
 
     for record in records:
-
         signature = hashlib.md5(
             (
-                record["instruction"]
-                + record["response"]
+                record["instruction"] +
+                record["response"]
             ).encode("utf-8")
         ).hexdigest()
 
         if signature not in seen:
-
             seen.add(signature)
-
             unique.append(record)
 
     return unique
 
 
-def contains_residual_pii(
-    text: str,
-) -> bool:
-    """
-    Validation légère post-anonymisation.
-
-    Détecte des patterns résiduels
-    qui ne devraient plus apparaître.
-    """
-
+def contains_residual_pii(text: str) -> bool:
     if not text:
         return False
 
@@ -174,13 +125,10 @@ def contains_residual_pii(
         r"(?:\+?\d[\d\s().-]{7,}\d)"
     )
 
-    if email_pattern.search(text):
-        return True
-
-    if phone_pattern.search(text):
-        return True
-
-    return False
+    return bool(
+        email_pattern.search(text)
+        or phone_pattern.search(text)
+    )
 
 
 def anonymize_record(
@@ -189,31 +137,26 @@ def anonymize_record(
     language: str | None,
 ) -> tuple[str, str]:
 
-    anonymized_instruction = anonymize_text(
-        instruction,
-        language=language,
-    )
-
-    anonymized_response = anonymize_text(
-        response,
-        language=language,
-    )
-
     return (
-        anonymized_instruction,
-        anonymized_response,
+        anonymize_text(
+            instruction,
+            language=language,
+        ),
+        anonymize_text(
+            response,
+            language=language,
+        ),
     )
 
 
-def load_standardized_datasets():
-
+def load_standardized_datasets() -> list[dict]:
     records = []
+    total_records = 0
+    start_time = time.time()
 
-    skipped_residual_pii = 0
+    for file_path in sorted(INPUT_DIR.glob("*.jsonl")):
 
-    for file_path in sorted(
-        INPUT_DIR.glob("*.jsonl")
-    ):
+        print(f"\nProcessing file: {file_path.name}")
 
         with open(
             file_path,
@@ -222,14 +165,15 @@ def load_standardized_datasets():
         ) as f:
 
             for line in f:
+                total_records += 1
 
-                item = json.loads(line)
+                try:
+                    item = json.loads(line)
+                except Exception:
+                    continue
 
                 metadata = dict(
-                    item.get(
-                        "metadata",
-                        {},
-                    )
+                    item.get("metadata", {})
                 )
 
                 language = item.get(
@@ -254,72 +198,39 @@ def load_standardized_datasets():
                     ).strip()
                 )
 
-                if not instruction:
+                if not instruction or not response:
                     continue
-
-                if not response:
-                    continue
-
-                instruction, response = (
-                    anonymize_record(
-                        instruction=instruction,
-                        response=response,
-                        language=language,
-                    )
-                )
-
-                if (
-                    contains_residual_pii(
-                        instruction
-                    )
-                    or contains_residual_pii(
-                        response
-                    )
-                ):
-                    skipped_residual_pii += 1
-                    continue
-
-                metadata["anonymized"] = True
-
-                sft_record = {
-                    "id": generate_id(
-                        instruction + response
-                    ),
-                    "instruction":
-                        instruction,
-                    "response":
-                        response,
-                    "source":
-                        item.get(
-                            "source"
-                        ),
-                    "language":
-                        language,
-                    "confidence_score":
-                        confidence_score(
-                            item
-                        ),
-                    "clinical_tags":
-                        clinical_tags(
-                            {
-                                "instruction":
-                                    instruction,
-                                "response":
-                                    response,
-                            }
-                        ),
-                    "metadata":
-                        metadata,
-                }
 
                 records.append(
-                    sft_record
+                    {
+                        "id": generate_id(
+                            instruction + response
+                        ),
+                        "instruction": instruction,
+                        "response": response,
+                        "source": item.get("source"),
+                        "language": language,
+                        "confidence_score": confidence_score(item),
+                        "clinical_tags": clinical_tags(
+                            {
+                                "instruction": instruction,
+                                "response": response,
+                            }
+                        ),
+                        "metadata": metadata,
+                    }
                 )
 
-    print(
-        f"Records skipped due to residual PII: "
-        f"{skipped_residual_pii}"
-    )
+                if total_records % 10000 == 0:
+                    elapsed = time.time() - start_time
+
+                    print(
+                        f"[PROGRESS] "
+                        f"{total_records:,} records loaded | "
+                        f"{elapsed:.1f}s"
+                    )
+
+    print(f"\nLoaded {len(records):,} valid records")
 
     return records
 
@@ -327,47 +238,26 @@ def load_standardized_datasets():
 def balanced_sampling(
     records: list[dict],
 ) -> list[dict]:
-    """
-    Garantit la présence FR + EN.
-    """
 
     by_language = defaultdict(list)
 
     for record in records:
-
-        language = record.get(
-            "language",
-            "unknown",
-        )
-
         by_language[
-            language
+            record.get(
+                "language",
+                "unknown",
+            )
         ].append(record)
 
-    for lang_records in (
-        by_language.values()
-    ):
-        random.shuffle(
-            lang_records
-        )
+    for lang_records in by_language.values():
+        random.shuffle(lang_records)
 
-    fr_records = by_language.get(
-        "fr",
-        [],
-    )
-
-    en_records = by_language.get(
-        "en",
-        [],
-    )
+    fr_records = by_language.get("fr", [])
+    en_records = by_language.get("en", [])
 
     if not fr_records or not en_records:
-
         random.shuffle(records)
-
-        return records[
-            :TARGET_SAMPLE_SIZE
-        ]
+        return records[:TARGET_SAMPLE_SIZE]
 
     fr_target = min(
         len(fr_records),
@@ -389,11 +279,67 @@ def balanced_sampling(
     return sampled
 
 
-def save_jsonl(
-    records,
-    path,
-):
+def anonymize_records(
+    records: list[dict],
+) -> list[dict]:
 
+    anonymized_records = []
+    skipped_residual_pii = 0
+    start_time = time.time()
+
+    for index, record in enumerate(
+        records,
+        start=1,
+    ):
+
+        instruction, response = anonymize_record(
+            instruction=record["instruction"],
+            response=record["response"],
+            language=record.get("language"),
+        )
+
+        if (
+            contains_residual_pii(instruction)
+            or contains_residual_pii(response)
+        ):
+            skipped_residual_pii += 1
+            continue
+
+        updated = dict(record)
+
+        updated["instruction"] = instruction
+        updated["response"] = response
+
+        metadata = dict(
+            updated.get(
+                "metadata",
+                {},
+            )
+        )
+
+        metadata["anonymized"] = True
+        updated["metadata"] = metadata
+
+        anonymized_records.append(updated)
+
+        if index % 1000 == 0:
+            elapsed = time.time() - start_time
+
+            print(
+                f"[ANONYMIZATION] "
+                f"{index:,}/{len(records):,} "
+                f"| {elapsed:.1f}s"
+            )
+
+    print(
+        f"Residual PII removed: "
+        f"{skipped_residual_pii}"
+    )
+
+    return anonymized_records
+
+
+def save_jsonl(records, path):
     with open(
         path,
         "w",
@@ -401,36 +347,28 @@ def save_jsonl(
     ) as f:
 
         for record in records:
-
             f.write(
                 json.dumps(
                     record,
                     ensure_ascii=False,
-                )
-                + "\n"
+                ) + "\n"
             )
 
 
-def build_splits(
-    records,
-):
+def build_splits(records):
 
-    train, temp = (
-        train_test_split(
-            records,
-            test_size=0.20,
-            random_state=RANDOM_SEED,
-            shuffle=True,
-        )
+    train, temp = train_test_split(
+        records,
+        test_size=0.20,
+        random_state=RANDOM_SEED,
+        shuffle=True,
     )
 
-    validation, test = (
-        train_test_split(
-            temp,
-            test_size=0.50,
-            random_state=RANDOM_SEED,
-            shuffle=True,
-        )
+    validation, test = train_test_split(
+        temp,
+        test_size=0.50,
+        random_state=RANDOM_SEED,
+        shuffle=True,
     )
 
     clinical_eval = test[
@@ -450,87 +388,83 @@ def build_splits(
 
 def main():
 
-    print(
-        "\nLoading standardized datasets..."
-    )
+    pipeline_start = time.time()
 
-    records = (
-        load_standardized_datasets()
-    )
+    print("\nLoading standardized datasets...")
 
-    print(
-        f"Loaded records: "
-        f"{len(records)}"
-    )
+    records = load_standardized_datasets()
 
-    records = deduplicate(
-        records
-    )
+    print(f"\nLoaded records: {len(records):,}")
+
+    dedup_start = time.time()
+
+    records = deduplicate(records)
 
     print(
         f"After deduplication: "
-        f"{len(records)}"
+        f"{len(records):,}"
     )
-
-    records = balanced_sampling(
-        records
-    )
-
-    language_stats = defaultdict(
-        int
-    )
-
-    for record in records:
-
-        language_stats[
-            record.get(
-                "language",
-                "unknown",
-            )
-        ] += 1
 
     print(
-        "\nLanguage distribution:"
+        f"Deduplication time: "
+        f"{time.time() - dedup_start:.2f}s"
     )
 
-    for lang, count in sorted(
-        language_stats.items()
-    ):
-        print(
-            f"  {lang}: {count}"
-        )
+    sampling_start = time.time()
 
-    (
+    records = balanced_sampling(records)
+
+    print(
+        f"After sampling: "
+        f"{len(records):,}"
+    )
+
+    print(
+        f"Sampling time: "
+        f"{time.time() - sampling_start:.2f}s"
+    )
+
+    anonymization_start = time.time()
+
+    records = anonymize_records(records)
+
+    print(
+        f"Anonymization time: "
+        f"{time.time() - anonymization_start:.2f}s"
+    )
+
+    train, validation, test, clinical_eval = (
+        build_splits(records)
+    )
+
+    save_jsonl(
         train,
-        validation,
-        test,
-        clinical_eval,
-    ) = build_splits(
-        records
-    )
-
-    save_jsonl(
-        train,
-        OUTPUT_DIR
-        / "train.jsonl",
+        OUTPUT_DIR / "train.jsonl",
     )
 
     save_jsonl(
         validation,
-        OUTPUT_DIR
-        / "validation.jsonl",
+        OUTPUT_DIR / "validation.jsonl",
     )
 
     save_jsonl(
         test,
-        OUTPUT_DIR
-        / "test.jsonl",
+        OUTPUT_DIR / "test.jsonl",
     )
 
     save_jsonl(
         clinical_eval,
-        OUTPUT_DIR
-        / "clinical_eval.jsonl",
+        OUTPUT_DIR / "clinical_eval.jsonl",
+    )
+
+    total_time = (
+        time.time() - pipeline_start
+    )
+
+    print(
+        f"\nTotal pipeline time: "
+        f"{total_time:.2f}s "
+        f"({total_time / 60:.2f} min)"
     )
 
     print(
