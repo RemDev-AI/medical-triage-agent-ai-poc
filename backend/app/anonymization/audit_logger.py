@@ -44,9 +44,18 @@ audit_logger = logging.getLogger(
     LOGGER_NAME
 )
 
+# audit_logger.setLevel(
+#     logging.INFO
+# )
+
 audit_logger.setLevel(
-    logging.INFO
+    logging.ERROR
 )
+
+# audit_logger.setLevel(
+#     logging.CRITICAL
+# )
+
 
 # Évite l'ajout multiple de handlers
 if not audit_logger.handlers:

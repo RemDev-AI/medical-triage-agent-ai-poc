@@ -153,6 +153,8 @@ mlruns/
 
 backend/app/datasets/raw/data/*.jsonl
 backend/app/datasets/raw/standardized/*.jsonl
+backend/app/datasets/processed/dpo/*.jsonl
+backend/app/datasets/processed/sft/*.jsonl
 data/intermediate/
 data/processed/
 
