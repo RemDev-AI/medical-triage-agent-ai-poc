@@ -36,6 +36,80 @@ RANDOM_SEED = 42
 
 random.seed(RANDOM_SEED)
 
+# ==========================================================
+# ADDITIONAL RGPD PATTERNS
+# ==========================================================
+
+EMAIL_PATTERN = re.compile(
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+)
+
+PHONE_PATTERN = re.compile(
+    r"(?:\+?\d[\d\s().-]{7,}\d)"
+)
+
+IP_PATTERN = re.compile(
+    r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
+)
+
+URL_PATTERN = re.compile(
+    r"https?://[^\s]+|www\.[^\s]+",
+    re.IGNORECASE,
+)
+
+SSN_PATTERN = re.compile(
+    r"\b\d{3}-\d{2}-\d{4}\b"
+)
+
+MRN_PATTERN = re.compile(
+    r"\b(?:MRN|mrn)[:\s#-]*[A-Z0-9]{5,20}\b"
+)
+
+PATIENT_ID_PATTERN = re.compile(
+    r"\b(?:PATIENT|Patient|patient)[-_ ]?(?:ID|Id|id)?[:\s#-]*[A-Z0-9]{4,20}\b"
+)
+
+# Reliquats observés :
+# Monsieur CAM.
+# Monsieur RAT.
+# Monsieur BOU...
+# Dr. DUR.
+PARTIAL_NAME_PATTERN = re.compile(
+    r"\b(Monsieur|Madame|Mr\.|Mrs\.|Dr\.|Docteur)\s+[A-Z]{2,}\.(?:\s+[A-Z][a-z]+)?",  # noqa : E501
+    re.IGNORECASE,
+)
+
+# Reliquats observés :
+# LUC...Jean
+# DUR...Pierre
+TRUNCATED_NAME_PATTERN = re.compile(
+    r"\b[A-Z]{3,}\.\.\.[A-Z][a-z]+\b"
+)
+
+CORRUPTED_MEDICAL_PATTERNS = [
+    re.compile(
+        r"\[PERSON\]\s+(?:pernicieux|viscéral|de)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"Réponse correcte\s*:\s*\[",
+        re.IGNORECASE,
+    ),
+]
+
+
+def contains_corrupted_medical_content(
+    text: str,
+) -> bool:
+
+    if not text:
+        return False
+
+    return any(
+        pattern.search(text)
+        for pattern in CORRUPTED_MEDICAL_PATTERNS
+    )
+
 
 def generate_id(text: str) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
@@ -113,21 +187,28 @@ def deduplicate(records: list[dict]) -> list[dict]:
     return unique
 
 
-def contains_residual_pii(text: str) -> bool:
+def contains_residual_pii(
+    text: str,
+) -> bool:
+
     if not text:
         return False
 
-    email_pattern = re.compile(
-        r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+    patterns = (
+        EMAIL_PATTERN,
+        PHONE_PATTERN,
+        IP_PATTERN,
+        URL_PATTERN,
+        SSN_PATTERN,
+        MRN_PATTERN,
+        PATIENT_ID_PATTERN,
+        PARTIAL_NAME_PATTERN,
+        TRUNCATED_NAME_PATTERN,
     )
 
-    phone_pattern = re.compile(
-        r"(?:\+?\d[\d\s().-]{7,}\d)"
-    )
-
-    return bool(
-        email_pattern.search(text)
-        or phone_pattern.search(text)
+    return any(
+        pattern.search(text)
+        for pattern in patterns
     )
 
 
@@ -147,6 +228,36 @@ def anonymize_record(
             language=language,
         ),
     )
+
+
+def sanitize_partial_names(
+    text: str,
+) -> str:
+    """
+    Nettoyage complémentaire après Presidio.
+
+    Capture les reliquats observés :
+    - Monsieur CAM.
+    - Monsieur RAT.
+    - Madame BOU...
+    - Dr. DUR.
+    - LUC...Jean
+    """
+
+    if not text:
+        return text
+
+    text = PARTIAL_NAME_PATTERN.sub(
+        lambda m: f"{m.group(1)} [PERSON]",
+        text,
+    )
+
+    text = TRUNCATED_NAME_PATTERN.sub(
+        "[PERSON]",
+        text,
+    )
+
+    return text
 
 
 def load_standardized_datasets() -> list[dict]:
@@ -298,9 +409,28 @@ def anonymize_records(
             language=record.get("language"),
         )
 
+        instruction = sanitize_partial_names(
+            instruction
+        )
+
+        response = sanitize_partial_names(
+            response
+        )
+
         if (
             contains_residual_pii(instruction)
             or contains_residual_pii(response)
+        ):
+            skipped_residual_pii += 1
+            continue
+
+        if (
+            contains_corrupted_medical_content(
+                instruction
+            )
+            or contains_corrupted_medical_content(
+                response
+            )
         ):
             skipped_residual_pii += 1
             continue

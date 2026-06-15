@@ -91,6 +91,14 @@ ENTITY_REPLACEMENT_OPERATORS = {
         "replace",
         {"new_value": "[US_SOCIAL_SECURITY]"},
     ),
+    "IP_ADDRESS": OperatorConfig(
+        "replace",
+        {"new_value": "[IP_ADDRESS]"},
+    ),
+    "URL": OperatorConfig(
+        "replace",
+        {"new_value": "[URL]"},
+    ),
     "DEFAULT": OperatorConfig(
         "replace",
         {"new_value": "[REDACTED]"},
