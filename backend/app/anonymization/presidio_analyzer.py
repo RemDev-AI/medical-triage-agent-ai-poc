@@ -168,23 +168,104 @@ DEFAULT_ENTITIES = [
     "URL",
 ]
 
-MEDICAL_WHITELIST = {
-    "Accès",
-    "accès",
-    "Paludisme",
-    "paludisme",
-    "Primo-invasion",
-    "primo-invasion",
-    "Pernicieux",
-    "pernicieux",
-    "Hodgkin",
-    "Crohn",
-    "Parkinson",
-    "Alzheimer",
-    "Boston criteria",
-    "Paris classification",
-    "Lyon score",
+# ==========================================================
+# PERSON DETECTION TUNING
+# ==========================================================
+
+PERSON_SCORE_THRESHOLD = 0.92
+
+
+# ==========================================================
+# MEDICAL EPONYMS / SCORES / CLASSIFICATIONS
+# ==========================================================
+
+MEDICAL_EPONYMS = {
+    "hodgkin",
+    "crohn",
+    "parkinson",
+    "alzheimer",
+    "basedow",
+    "charcot",
+    "kaposi",
+    "paget",
+    "behcet",
+    "raynaud",
+    "gilbert",
+    "cushing",
+    "addison",
+    "wegener",
+    "babinski",
+    "murphy",
+    "wilson",
+    "huntington",
+    "sjogren",
+    "meniere",
+    "hashimoto",
+    "graves",
+    "berger",
+    "takayasu",
+    "ehlers-danlos",
+    "marfan",
+    "guillain-barre",
+    "tourette",
 }
+
+MEDICAL_SCORES = {
+    "lyon score",
+    "wells score",
+    "child-pugh",
+    "glasgow",
+    "apache ii",
+    "sofa score",
+    "meld score",
+    "rockall score",
+    "blatchford score",
+    "cha2ds2-vasc",
+}
+
+MEDICAL_CLASSIFICATIONS = {
+    "boston criteria",
+    "paris classification",
+    "tnm classification",
+    "gold classification",
+    "new york classification",
+}
+
+MEDICAL_SIGNS = {
+    "babinski",
+    "murphy",
+    "hoffmann",
+    "kernig",
+    "brudzinski",
+    "lasègue",
+}
+
+MEDICAL_WHITELIST = {
+    *(MEDICAL_EPONYMS),
+    *(MEDICAL_SCORES),
+    *(MEDICAL_CLASSIFICATIONS),
+    *(MEDICAL_SIGNS),
+}
+
+
+# ==========================================================
+# MEDICAL EPONYM DETECTION
+# ==========================================================
+
+def is_medical_eponym(text: str) -> bool:
+    """
+    Vérifie si un terme correspond à un
+    éponyme médical, score clinique,
+    classification ou signe médical.
+    """
+
+    normalized = (
+        text.strip()
+        .lower()
+    )
+
+    return normalized in MEDICAL_WHITELIST
+
 
 # ==========================================================
 # LANGUAGE DETECTION
@@ -313,8 +394,8 @@ def detect_pii(
         f"language={language} | "
         f"findings={len(results)}"
     )
-    
-    filtered_results = []
+
+    filtered_results: list[RecognizerResult] = []
 
     for result in results:
 
@@ -322,12 +403,39 @@ def detect_pii(
             result.start:result.end
         ]
 
-        if entity_text in MEDICAL_WHITELIST:
+        if (
+            result.entity_type == "PERSON"
+            and result.score < PERSON_SCORE_THRESHOLD
+        ):
+
+            audit_logger.debug(
+                "Low-confidence PERSON ignored | "
+                f"text={entity_text} | "
+                f"score={result.score:.2f}"
+            )
+
+            continue
+
+        if (
+            result.entity_type == "PERSON"
+            and is_medical_eponym(entity_text)
+        ):
+
+            audit_logger.debug(
+                "Medical eponym ignored | "
+                f"text={entity_text}"
+            )
+
             continue
 
         filtered_results.append(result)
 
     results = filtered_results
+
+    audit_logger.info(
+        "PII filtering completed | "
+        f"remaining_findings={len(results)}"
+    )
 
     return results
 
@@ -350,6 +458,11 @@ if __name__ == "__main__":
     MRN-458796
 
     185067512345678
+
+    Mon IP est 192.168.10.15
+
+    Documentation :
+    https://hopital.fr/patient/123
     """
 
     english_sample = """
@@ -364,6 +477,12 @@ if __name__ == "__main__":
     MRN-458796
 
     123-45-6789
+
+    Server:
+    10.0.0.15
+
+    Website:
+    https://hospital.org/report
     """
 
     print("\n=== FRENCH SAMPLE ===\n")

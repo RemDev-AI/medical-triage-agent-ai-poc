@@ -19,7 +19,7 @@ import json
 import random
 import re
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
@@ -212,6 +212,51 @@ def contains_residual_pii(
     )
 
 
+def detect_residual_pii_types(
+    text: str,
+) -> list[str]:
+    """
+    Retourne les types de PII encore présents
+    après anonymisation.
+
+    Utilisé uniquement pour audit RGPD.
+    """
+
+    if not text:
+        return []
+
+    matches = []
+
+    if EMAIL_PATTERN.search(text):
+        matches.append("EMAIL")
+
+    if PHONE_PATTERN.search(text):
+        matches.append("PHONE")
+
+    if IP_PATTERN.search(text):
+        matches.append("IP_ADDRESS")
+
+    if URL_PATTERN.search(text):
+        matches.append("URL")
+
+    if SSN_PATTERN.search(text):
+        matches.append("US_SOCIAL_SECURITY")
+
+    if MRN_PATTERN.search(text):
+        matches.append("MEDICAL_RECORD_NUMBER")
+
+    if PATIENT_ID_PATTERN.search(text):
+        matches.append("PATIENT_ID")
+
+    if PARTIAL_NAME_PATTERN.search(text):
+        matches.append("PARTIAL_NAME")
+
+    if TRUNCATED_NAME_PATTERN.search(text):
+        matches.append("TRUNCATED_NAME")
+
+    return matches
+
+
 def anonymize_record(
     instruction: str,
     response: str,
@@ -396,6 +441,7 @@ def anonymize_records(
 
     anonymized_records = []
     skipped_residual_pii = 0
+    removal_stats = Counter()
     start_time = time.time()
 
     for index, record in enumerate(
@@ -417,11 +463,32 @@ def anonymize_records(
             response
         )
 
-        if (
-            contains_residual_pii(instruction)
-            or contains_residual_pii(response)
-        ):
+        instruction_pii = (
+            detect_residual_pii_types(
+                instruction
+            )
+        )
+
+        response_pii = (
+            detect_residual_pii_types(
+                response
+            )
+        )
+
+        if instruction_pii or response_pii:
+
             skipped_residual_pii += 1
+
+            for pii_type in (
+                instruction_pii +
+                response_pii
+            ):
+                removal_stats[pii_type] += 1
+
+            print(
+                f"[PII] {instruction_pii + response_pii}"
+            )
+
             continue
 
         if (
@@ -432,7 +499,13 @@ def anonymize_records(
                 response
             )
         ):
+
             skipped_residual_pii += 1
+
+            removal_stats[
+                "CORRUPTED_MEDICAL_CONTENT"
+            ] += 1
+
             continue
 
         updated = dict(record)
@@ -462,9 +535,37 @@ def anonymize_records(
             )
 
     print(
-        f"Residual PII removed: "
+        f"\nResidual PII removed: "
         f"{skipped_residual_pii}"
     )
+
+    if removal_stats:
+
+        print(
+            "\n=== RGPD AUDIT REPORT ==="
+        )
+
+        total = sum(
+            removal_stats.values()
+        )
+
+        for pii_type, count in sorted(
+            removal_stats.items()
+        ):
+
+            percentage = (
+                count / total
+            ) * 100
+
+            print(
+                f"{pii_type:<30} "
+                f"{count:>6} "
+                f"({percentage:5.2f}%)"
+            )
+
+        print(
+            "=" * 40
+        )
 
     return anonymized_records
 

@@ -173,6 +173,24 @@ def anonymize_text(
             ]
         }
 
+#    safe_results = []
+
+#    for result in analyzer_results:
+
+#        entity_text = text[
+#            result.start:result.end
+#        ]
+
+#        if (
+#            result.entity_type == "PERSON"
+#            and entity_text.lower() in MEDICAL_WHITELIST
+#        ):
+#            continue
+
+#        safe_results.append(result)
+
+#    analyzer_results = safe_results
+
     anonymized_result = anonymizer.anonymize(
         text=text,
         analyzer_results=analyzer_results,
@@ -207,6 +225,11 @@ if __name__ == "__main__":
     MRN-458796
 
     185067512345678
+
+    Mon IP est 192.168.10.15
+
+    Documentation :
+    https://hopital.fr/patient/123
     """
 
     english_sample = """
@@ -221,6 +244,12 @@ if __name__ == "__main__":
     MRN-458796
 
     123-45-6789
+
+    Server:
+    10.0.0.15
+
+    Website:
+    https://hospital.org/report
     """
 
     print("\n=== FRENCH SAMPLE ===\n")
