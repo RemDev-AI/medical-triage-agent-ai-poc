@@ -31,8 +31,34 @@ LANGUAGE_PATTERNS = {
         },
         {
             "name": "FRENCH_SOCIAL_SECURITY",
-            "regex": r"\b[12]\d{14}\b",
+            "regex": (
+                r"\b"
+                r"[12]"
+                r"(?:[\s.-]?\d{2}){6}"
+                r"[\s.-]?\d{2}"
+                r"\b"
+            ),
             "score": 0.95,
+        },
+        {
+            "name": "IP_ADDRESS",
+            "regex": (
+                r"\b"
+                r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+                r"(?:\."
+                r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+                r"){3}"
+                r"\b"
+            ),
+            "score": 0.90,
+        },
+        {
+            "name": "URL",
+            "regex": (
+                r"(?:https?://|www\.)"
+                r"[^\s]+"
+            ),
+            "score": 0.85,
         },
     ],
     "en": [
@@ -51,6 +77,26 @@ LANGUAGE_PATTERNS = {
             "regex": r"\b\d{3}-\d{2}-\d{4}\b",
             "score": 0.95,
         },
+        {
+            "name": "IP_ADDRESS",
+            "regex": (
+                r"\b"
+                r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+                r"(?:\."
+                r"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)"
+                r"){3}"
+                r"\b"
+            ),
+            "score": 0.90,
+        },
+        {
+            "name": "URL",
+            "regex": (
+                r"(?:https?://|www\.)"
+                r"[^\s]+"
+            ),
+            "score": 0.85,
+        },
     ],
 }
 
@@ -63,10 +109,10 @@ MEDICAL_PII_PATTERNS = (
     + LANGUAGE_PATTERNS["en"]
 )
 
+
 # ==========================================================
 # PUBLIC API
 # ==========================================================
-
 
 def get_pii_patterns(
     language: str,

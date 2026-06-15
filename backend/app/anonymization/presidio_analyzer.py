@@ -143,10 +143,13 @@ ENTITY_PRIORITY = {
     "US_SOCIAL_SECURITY": 99,
     "MEDICAL_RECORD_NUMBER": 95,
     "PATIENT_ID": 90,
+    "IP_ADDRESS": 88,
+    "URL": 87,
     "PHONE_NUMBER": 85,
     "PERSON": 50,
-    "LOCATION": 40,
+    # "LOCATION": 40,
 }
+
 
 # ==========================================================
 # DEFAULT ENTITIES
@@ -156,12 +159,32 @@ DEFAULT_ENTITIES = [
     "PERSON",
     "EMAIL_ADDRESS",
     "PHONE_NUMBER",
-    "LOCATION",
+    # "LOCATION",
     "MEDICAL_RECORD_NUMBER",
     "PATIENT_ID",
     "FRENCH_SOCIAL_SECURITY",
     "US_SOCIAL_SECURITY",
+    "IP_ADDRESS",
+    "URL",
 ]
+
+MEDICAL_WHITELIST = {
+    "Accès",
+    "accès",
+    "Paludisme",
+    "paludisme",
+    "Primo-invasion",
+    "primo-invasion",
+    "Pernicieux",
+    "pernicieux",
+    "Hodgkin",
+    "Crohn",
+    "Parkinson",
+    "Alzheimer",
+    "Boston criteria",
+    "Paris classification",
+    "Lyon score",
+}
 
 # ==========================================================
 # LANGUAGE DETECTION
@@ -280,7 +303,7 @@ def detect_pii(
         text=text,
         entities=DEFAULT_ENTITIES,
         language=language,
-        score_threshold=0.65,
+        score_threshold=0.85,
     )
 
     results = _resolve_overlaps(results)
@@ -290,6 +313,21 @@ def detect_pii(
         f"language={language} | "
         f"findings={len(results)}"
     )
+    
+    filtered_results = []
+
+    for result in results:
+
+        entity_text = text[
+            result.start:result.end
+        ]
+
+        if entity_text in MEDICAL_WHITELIST:
+            continue
+
+        filtered_results.append(result)
+
+    results = filtered_results
 
     return results
 

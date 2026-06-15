@@ -22,13 +22,19 @@ DATASET_REGISTRY = {
         "subset": "mcqm",
         "description": "French multi-answer medical MCQM - QA dataset",
     },
-    
+
     "medquad": {
         "hf_path": "lavita/MedQuAD",
         "subset": None,
         "description": "English medical QA dataset",
     },
     
+    "French_Med_MCQA": {
+        "hf_path": "uy-rrodriguez/FrenchMedMCQA-extended",
+        "subset": None,
+        "description": "French medical QA dataset",
+    },
+
     "ultramedical_preference": {
         "hf_path": "TsinghuaC3I/UltraMedical-Preference",
         "subset": None,
