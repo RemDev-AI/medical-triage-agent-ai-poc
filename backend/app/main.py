@@ -4,29 +4,29 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Depends
 
-from app.api.router import api_router
+from backend.app.api.router import api_router
 
-from app.api.routes.monitoring import (
+from backend.app.api.routes.monitoring import (
     router as monitoring_router,
 )
 
-from app.api.middleware.auth_middleware import (
+from backend.app.api.middleware.auth_middleware import (
     JWTAuthMiddleware,
 )
 
-from app.api.middleware.logging_middleware import (
+from backend.app.api.middleware.logging_middleware import (
     AuditLoggingMiddleware,
 )
 
-from app.api.middleware.security_middleware import (
+from backend.app.api.middleware.security_middleware import (
     setup_cors,
 )
 
-from app.core.rate_limiter import (
+from backend.app.core.rate_limiter import (
     rate_limit,
 )
 
-from app.deployment.huggingface.hf_space_runtime import (
+from backend.app.deployment.huggingface.hf_space_runtime import (
     runtime_config,
 )
 

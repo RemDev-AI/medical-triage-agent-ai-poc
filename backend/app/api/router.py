@@ -2,23 +2,23 @@
 
 from fastapi import APIRouter
 
-from app.api.routes.health import (
+from backend.app.api.routes.health import (
     router as health_router,
 )
 
-from app.api.routes.inference import (
+from backend.app.api.routes.inference import (
     router as inference_router,
 )
 
-from app.api.routes.triage import (
+from backend.app.api.routes.triage import (
     router as triage_router,
 )
 
-from app.api.routes.audit import (
+from backend.app.api.routes.audit import (
     router as audit_router,
 )
 
-from app.api.routes.monitoring import (
+from backend.app.api.routes.monitoring import (
     router as monitoring_router,
 )
 

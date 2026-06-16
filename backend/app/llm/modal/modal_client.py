@@ -10,7 +10,7 @@ import logging
 
 import httpx
 
-from app.llm.modal.modal_exceptions import (
+from backend.app.llm.modal.modal_exceptions import (
     ModalAuthenticationError,
     ModalConfigurationError,
     ModalConnectionError,
@@ -20,7 +20,7 @@ from app.llm.modal.modal_exceptions import (
     ModalTimeoutError,
 )
 
-from app.llm.modal.modal_schema import (
+from backend.app.llm.modal.modal_schema import (
     ModalErrorResponse,
     ModalInferenceRequest,
     ModalInferenceResponse,

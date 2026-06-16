@@ -7,9 +7,9 @@ from datetime import datetime
 from typing import Dict
 from typing import List
 
-from app.monitoring.gpu_monitor import gpu_monitor
-from app.monitoring.latency_monitor import latency_monitor
-from app.monitoring.request_tracker import request_tracker
+from backend.app.monitoring.gpu_monitor import gpu_monitor
+from backend.app.monitoring.latency_monitor import latency_monitor
+from backend.app.monitoring.request_tracker import request_tracker
 
 
 @dataclass

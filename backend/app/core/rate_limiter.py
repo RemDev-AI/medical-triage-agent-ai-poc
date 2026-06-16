@@ -5,7 +5,7 @@ import time
 from collections import defaultdict
 from fastapi import HTTPException, Request
 
-from app.core.config import settings
+from backend.app.core.config import settings
 
 
 REQUEST_HISTORY = defaultdict(list)

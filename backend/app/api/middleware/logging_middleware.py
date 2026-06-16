@@ -10,10 +10,10 @@ import uuid
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.monitoring.latency_monitor import (
+from backend.app.monitoring.latency_monitor import (
     latency_monitor,
 )
-from app.monitoring.request_tracker import (
+from backend.app.monitoring.request_tracker import (
     request_tracker,
 )
 

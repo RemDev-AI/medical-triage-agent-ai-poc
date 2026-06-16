@@ -4,12 +4,12 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.schemas import (
+from backend.app.api.schemas import (
     GenerateRequest,
     GenerateResponse
 )
 
-from app.llm.inference.generate import generate_text
+from backend.app.llm.inference.generate import generate_text
 
 
 router = APIRouter(

@@ -8,25 +8,25 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from app.api.schemas import (
+from backend.app.api.schemas import (
     TriageRequest,
     TriageResponse,
 )
 
-from app.api.dependencies.modal import (
+from backend.app.api.dependencies.modal import (
     ModalInferenceClient,
     get_modal_client,
 )
 
-from app.monitoring.latency_monitor import (
+from backend.app.monitoring.latency_monitor import (
     latency_monitor,
 )
 
-from app.monitoring.request_tracker import (
+from backend.app.monitoring.request_tracker import (
     request_tracker,
 )
 
-from app.monitoring.alerting import (
+from backend.app.monitoring.alerting import (
     alert_manager,
 )
 

@@ -13,23 +13,23 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from app.llm.inference.generate import (
+from backend.app.llm.inference.generate import (
     build_generation_metadata,
     clean_response,
     generate_response,
 )
 
-from app.llm.inference.prompt_builder import (
+from backend.app.llm.inference.prompt_builder import (
     SYSTEM_PROMPT,
     build_triage_prompt,
 )
 
-from app.llm.modal.modal_inference import (
+from backend.app.llm.modal.modal_inference import (
     ModalInferenceService,
 )
 
 # PHASE 7 - Monitoring
-from app.monitoring.gpu_monitor import gpu_monitor
+from backend.app.monitoring.gpu_monitor import gpu_monitor
 
 logger = logging.getLogger(__name__)
 

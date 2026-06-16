@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/sft/train_sft.py
-# 
+
 from __future__ import annotations
 
 import json
@@ -233,10 +233,9 @@ def load_tokenizer():
         )
     )
 
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = (
-            tokenizer.eos_token
-        )
+    tokenizer.pad_token = (
+        tokenizer.eos_token
+    )
 
     return tokenizer
 
@@ -249,43 +248,19 @@ def load_model():
         "Loading base model..."
     )
 
-    has_cuda = (
-        torch.cuda.is_available()
-    )
-
-    dtype = (
-        torch.bfloat16
-        if has_cuda
-        else torch.float32
-    )
-
-    device_map = (
-        model_config["device_map"]
-        if has_cuda
-        else None
-    )
-
-    logger.info(
-        "CUDA available: %s",
-        has_cuda,
-    )
-
-    logger.info(
-        "Using dtype: %s",
-        dtype,
-    )
-
     model = (
         AutoModelForCausalLM
         .from_pretrained(
             model_config[
                 "model_name"
             ],
-            device_map=device_map,
+            device_map=model_config[
+                "device_map"
+            ],
             trust_remote_code=model_config[
                 "trust_remote_code"
             ],
-            torch_dtype=dtype,
+            torch_dtype=torch.bfloat16,
         )
     )
 
@@ -327,18 +302,16 @@ def prepare_datasets(
             "validation"
         )
     )
-    
+
     train_dataset = (
         train_dataset.map(
-            build_prompt,
-            remove_columns=train_dataset.column_names,
+            build_prompt
         )
     )
 
     validation_dataset = (
         validation_dataset.map(
-            build_prompt,
-            remove_columns=validation_dataset.column_names,
+            build_prompt
         )
     )
 
@@ -380,25 +353,12 @@ def prepare_datasets(
 # TRAINER
 # ============================================================
 
+
 def build_training_arguments():
 
     training_config = CONFIG[
         "training"
     ]
-
-    has_cuda = (
-        torch.cuda.is_available()
-    )
-
-    bf16 = (
-        training_config["bf16"]
-        and has_cuda
-    )
-
-    fp16 = (
-        training_config["fp16"]
-        and has_cuda
-    )
 
     return TrainingArguments(
         output_dir=training_config[
@@ -455,7 +415,7 @@ def build_training_arguments():
             "save_total_limit"
         ],
 
-        eval_strategy=training_config[
+        evaluation_strategy=training_config[
             "evaluation_strategy"
         ],
 
@@ -475,9 +435,9 @@ def build_training_arguments():
             "greater_is_better"
         ],
 
-        bf16=bf16,
+        bf16=training_config["bf16"],
 
-        fp16=fp16,
+        fp16=training_config["fp16"],
 
         gradient_checkpointing=training_config[
             "gradient_checkpointing"
@@ -496,8 +456,6 @@ def build_training_arguments():
         report_to=training_config[
             "report_to"
         ],
-
-        remove_unused_columns=True,
     )
 
 
@@ -527,7 +485,7 @@ def build_trainer(
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,
-        processing_class=tokenizer,
+        tokenizer=tokenizer,
         callbacks=[
             early_stopping
         ],

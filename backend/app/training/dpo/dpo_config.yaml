@@ -59,9 +59,9 @@ model:
   device_map: "auto"
 
 dataset:
-  train_path: "backend/app/datasets/processed/dpo_train.jsonl"
+  train_path: "backend/app/datasets/processed/dpo/train.jsonl"
 
-  validation_path: "backend/app/datasets/processed/dpo_validation.jsonl"
+  validation_path: "backend/app/datasets/processed/dpo/validation.jsonl"
 
 tracking:
   mlflow_experiment_name: "medical-triage-dpo"
