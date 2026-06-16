@@ -8,7 +8,7 @@ from pathlib import Path
 
 import modal
 
-from app.training.modal.modal_config import (
+from backend.app.training.modal.modal_config import (
     app,
     config,
     hf_secret,
@@ -17,7 +17,7 @@ from app.training.modal.modal_config import (
     training_volume,
     wandb_secret,
 )
-from app.training.modal.modal_utils import (
+from backend.app.training.modal.modal_utils import (
     build_training_metadata,
     commit_volume,
     download_project_dataset,
@@ -88,7 +88,7 @@ def run_sft_training() -> dict:
         len(validation_dataset),
     )
 
-    from training.sft.train_sft import (
+    from backend.app.training.sft.train_sft import (
         CONFIG,
         build_trainer,
         initialize_tracking,

@@ -56,8 +56,8 @@ model:
   use_flash_attention: false
 
 dataset:
-  train_path: "backend/app/datasets/processed/sft_train.jsonl"
-  validation_path: "backend/app/datasets/processed/sft_validation.jsonl"
+  train_path: "backend/app/datasets/processed/sft/train.jsonl"
+  validation_path: "backend/app/datasets/processed/sft/validation.jsonl"
 
   max_sequence_length: 2048
 

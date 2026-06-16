@@ -3,7 +3,7 @@
 from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.security import verify_access_token
+from backend.app.core.security import verify_access_token
 
 
 EXCLUDED_PATHS = {

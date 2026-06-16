@@ -7,24 +7,24 @@ import time
 from fastapi import APIRouter
 from fastapi import HTTPException
 
-from app.api.schemas import (
+from backend.app.api.schemas import (
     TriageRequest,
     TriageResponse,
 )
 
-from app.llm.inference.triage_engine import (
+from backend.app.llm.inference.triage_engine import (
     run_medical_triage,
 )
 
-from app.monitoring.latency_monitor import (
+from backend.app.monitoring.latency_monitor import (
     latency_monitor,
 )
 
-from app.monitoring.request_tracker import (
+from backend.app.monitoring.request_tracker import (
     request_tracker,
 )
 
-from app.monitoring.alerting import (
+from backend.app.monitoring.alerting import (
     alert_manager,
 )
 

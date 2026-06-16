@@ -32,7 +32,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from app.training.lora.peft_setup import setup_peft_model
+from backend.app.training.lora.peft_setup import setup_peft_model
 
 logger = logging.getLogger(__name__)
 

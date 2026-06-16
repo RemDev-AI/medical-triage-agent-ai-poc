@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 import time
 
-from app.llm.modal.modal_client import ModalClient
-from app.llm.modal.modal_schema import (
+from backend.app.llm.modal.modal_client import ModalClient
+from backend.app.llm.modal.modal_schema import (
     ModalGenerationParameters,
     ModalInferenceRequest,
     ModalInferenceResponse,

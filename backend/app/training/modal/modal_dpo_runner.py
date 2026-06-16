@@ -8,7 +8,7 @@ from pathlib import Path
 
 import modal
 
-from app.training.modal.modal_config import (
+from backend.app.training.modal.modal_config import (
     app,
     config,
     hf_secret,
@@ -17,7 +17,7 @@ from app.training.modal.modal_config import (
     training_volume,
     wandb_secret,
 )
-from app.training.modal.modal_utils import (
+from backend.app.training.modal.modal_utils import (
     build_training_metadata,
     commit_volume,
     download_latest_model_snapshot,
@@ -112,7 +112,7 @@ def run_dpo_training() -> dict:
             BASE_MODEL_DIR
         )
 
-    from training.dpo.train_dpo import (
+    from backend.app.training.dpo.train_dpo import (
         CONFIG,
         build_trainer,
         initialize_tracking,

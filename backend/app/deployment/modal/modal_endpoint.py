@@ -36,10 +36,10 @@ from pydantic import BaseModel, Field
 from vllm import LLM
 from vllm import SamplingParams
 
-from app.deployment.modal.modal_gpu_config import (
+from backend.app.deployment.modal.modal_gpu_config import (
     get_inference_gpu,
 )
-from app.deployment.modal.modal_image import (
+from backend.app.deployment.modal.modal_image import (
     get_modal_image,
 )
 
