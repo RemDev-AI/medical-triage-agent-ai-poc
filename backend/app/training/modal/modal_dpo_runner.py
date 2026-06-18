@@ -12,7 +12,7 @@ from backend.app.training.modal.modal_config import (
     app,
     config,
     hf_secret,
-    mlflow_secret,
+    # mlflow_secret,
     training_image,
     training_volume,
     wandb_secret,
@@ -58,7 +58,7 @@ METADATA_FILE = (
     secrets=[
         hf_secret,
         wandb_secret,
-        mlflow_secret,
+        # mlflow_secret,
     ],
 )
 def run_dpo_training() -> dict:

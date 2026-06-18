@@ -6,13 +6,13 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-import modal  # noqa : F401
+import modal
 
 from backend.app.training.modal.modal_config import (
     app,
     config,
     hf_secret,
-    # mlflow_secret,
+    mlflow_secret,
     training_image,
     training_volume,
     wandb_secret,
@@ -40,7 +40,9 @@ METADATA_FILE = (
 
 @app.function(
     image=training_image,
-    gpu=config.gpu_type,
+    gpu=modal.gpu.A100(
+        size="40GB"
+    ),
     cpu=config.cpu,
     memory=config.memory_mb,
     timeout=config.timeout,
@@ -50,7 +52,7 @@ METADATA_FILE = (
     secrets=[
         hf_secret,
         wandb_secret,
-        # mlflow_secret,
+        mlflow_secret,
     ],
 )
 def run_sft_training() -> dict:

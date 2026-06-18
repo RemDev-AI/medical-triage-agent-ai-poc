@@ -39,7 +39,7 @@ training:
   lr_scheduler_type: "cosine"
 
   report_to:
-    - "mlflow"
+    # - "mlflow"
     - "wandb"
 
   resume_from_checkpoint: null
@@ -56,13 +56,24 @@ model:
   use_flash_attention: false
 
 dataset:
-  train_path: "backend/app/datasets/processed/sft/train.jsonl"
-  validation_path: "backend/app/datasets/processed/sft/validation.jsonl"
+  hf_repo: "medical-triage-agent-ai-poc-datasets"
+  hf_config: "sft"
 
   max_sequence_length: 2048
+  
+  # hf_subset: "processed/sft"
+  # train_file: "train.jsonl"
+  # validation_file: "validation.jsonl"
+  # max_sequence_length: 2048
+
+# dataset:
+#   train_path: "backend/app/datasets/processed/sft/train.jsonl"
+#   validation_path: "backend/app/datasets/processed/sft/validation.jsonl"
+
+#   max_sequence_length: 2048
 
 tracking:
-  mlflow_experiment_name: "medical-triage-sft"
+  # mlflow_experiment_name: "medical-triage-sft"
 
   wandb_project: "medical-triage-llm"
 

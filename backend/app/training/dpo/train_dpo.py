@@ -10,7 +10,7 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
-import mlflow
+# import mlflow
 import torch
 import wandb
 import yaml
@@ -29,7 +29,7 @@ from trl import DPOTrainer
 
 from backend.app.training.lora.peft_setup import setup_peft_model
 
-from backend.app.training.modal.modal_utils import (
+from backend.app.training.modal.modal_utils import (  # noqa : F401
     build_training_metadata,
     download_latest_model_snapshot,
     save_training_metadata,
@@ -91,11 +91,11 @@ def initialize_tracking():
 
     tracking = CONFIG["tracking"]
 
-    mlflow.set_experiment(
-        tracking[
-            "mlflow_experiment_name"
-        ]
-    )
+    # mlflow.set_experiment(
+    #     tracking[
+    #         "mlflow_experiment_name"
+    #     ]
+    # )
 
     wandb.init(
         project=tracking[
@@ -134,11 +134,13 @@ def load_jsonl_dataset(
 
 def load_hf_dataset(
     dataset_repo: str,
+    dataset_config: str,
     split: str,
 ) -> Dataset:
 
     return load_dataset(
         dataset_repo,
+        dataset_config,
         split=split,
     )
 
@@ -152,7 +154,11 @@ def load_dataset_source(
     ]
 
     hf_repo = dataset_config.get(
-        "hf_dataset_repo"
+        "hf_repo"
+    )
+
+    hf_config = dataset_config.get(
+        "hf_config"
     )
 
     if hf_repo:
@@ -163,8 +169,9 @@ def load_dataset_source(
         )
 
         return load_hf_dataset(
-            hf_repo,
-            split,
+            dataset_repo=hf_repo,
+            dataset_config=hf_config,
+            split=split,
         )
 
     path_key = (
@@ -565,10 +572,10 @@ def publish_training_artifacts():
         / "training_metadata.json",
     )
 
-    upload_final_model(
-        model_path=output_dir,
-        stage="dpo",
-    )
+    # upload_final_model(
+    #     model_path=output_dir,
+    #     stage="dpo",
+    # )
 
 
 # ============================================================
