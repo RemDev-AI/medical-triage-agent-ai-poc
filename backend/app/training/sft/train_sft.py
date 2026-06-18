@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/sft/train_sft.py
-# 
+
 from __future__ import annotations
 
 import json
@@ -11,7 +11,7 @@ from typing import List
 from typing import Optional  # noqa : F401
 from typing import Tuple
 
-import mlflow
+# import mlflow
 import torch
 import wandb
 import yaml
@@ -29,7 +29,7 @@ from transformers import (
 
 from backend.app.training.lora.peft_setup import setup_peft_model
 
-from backend.app.training.modal.modal_utils import (
+from backend.app.training.modal.modal_utils import ( # noqa : F401
     build_training_metadata,
     save_training_metadata,
     upload_final_model,
@@ -76,11 +76,11 @@ def set_seed(seed: int):
 def initialize_tracking():
     tracking_config = CONFIG["tracking"]
 
-    mlflow.set_experiment(
-        tracking_config[
-            "mlflow_experiment_name"
-        ]
-    )
+    # mlflow.set_experiment(
+    #     tracking_config[
+    #         "mlflow_experiment_name"
+    #     ]
+    # )
 
     wandb.init(
         project=tracking_config[
@@ -119,14 +119,23 @@ def load_jsonl_dataset(
 
 def load_hf_dataset(
     dataset_repo: str,
+    dataset_config: str,
     split: str,
 ) -> Dataset:
     """
-    Load dataset from HF Datasets.
+    Load dataset from Hugging Face Dataset Config.
+
+    Example:
+        load_dataset(
+            "medical-triage-agent-ai-poc-datasets",
+            "sft",
+            split="train",
+        )
     """
 
     return load_dataset(
         dataset_repo,
+        dataset_config,
         split=split,
     )
 
@@ -145,7 +154,11 @@ def load_dataset_source(
     dataset_config = CONFIG["dataset"]
 
     hf_repo = dataset_config.get(
-        "hf_dataset_repo"
+        "hf_repo"
+    )
+
+    hf_config = dataset_config.get(
+        "hf_config"
     )
 
     if hf_repo:
@@ -156,8 +169,9 @@ def load_dataset_source(
         )
 
         return load_hf_dataset(
-            hf_repo,
-            split,
+            dataset_repo=hf_repo,
+            dataset_config=hf_config,
+            split=split,
         )
 
     path_key = (
@@ -327,7 +341,7 @@ def prepare_datasets(
             "validation"
         )
     )
-    
+
     train_dataset = (
         train_dataset.map(
             build_prompt,
@@ -570,10 +584,10 @@ def publish_training_artifacts():
         / "training_metadata.json",
     )
 
-    upload_final_model(
-        model_path=output_dir,
-        stage="sft",
-    )
+    # upload_final_model(
+    #     model_path=output_dir,
+    #     stage="sft",
+    # )
 
 
 # ============================================================

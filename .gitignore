@@ -59,6 +59,8 @@ Thumbs.db
 cache/
 huggingface/
 .huggingface/
+medical-triage-agent-ai-poc-datasets/
+medical-triage-agent-ai-poc-models/
 
 # ==========================================================
 # MODELS

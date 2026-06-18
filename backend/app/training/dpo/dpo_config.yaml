@@ -38,7 +38,7 @@ training:
   lr_scheduler_type: "cosine"
 
   report_to:
-    - "mlflow"
+    # - "mlflow"
     - "wandb"
 
   resume_from_checkpoint: null
@@ -59,12 +59,20 @@ model:
   device_map: "auto"
 
 dataset:
-  train_path: "backend/app/datasets/processed/dpo/train.jsonl"
+  hf_repo: "medical-triage-agent-ai-poc-datasets"
+  hf_config: "dpo"
 
-  validation_path: "backend/app/datasets/processed/dpo/validation.jsonl"
+  # hf_subset: "processed/dpo"
+  # train_file: "train.jsonl"
+  # validation_file: "validation.jsonl"
+
+# dataset:
+#   train_path: "backend/app/datasets/processed/dpo/train.jsonl"
+
+#   validation_path: "backend/app/datasets/processed/dpo/validation.jsonl"
 
 tracking:
-  mlflow_experiment_name: "medical-triage-dpo"
+  # mlflow_experiment_name: "medical-triage-dpo"
 
   wandb_project: "medical-triage-llm"
 

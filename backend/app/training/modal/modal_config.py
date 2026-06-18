@@ -22,7 +22,7 @@ APP_NAME = "medical-triage-agent-ai-poc-training"
 
 HF_SECRET_NAME = "huggingface-secret"
 WANDB_SECRET_NAME = "wandb-secret"
-MLFLOW_SECRET_NAME = "mlflow-secret"
+# MLFLOW_SECRET_NAME = "mlflow-secret"
 
 TRAINING_VOLUME_NAME = (
     "medical-triage-agent-ai-poc-training-volume"
@@ -31,13 +31,27 @@ TRAINING_VOLUME_NAME = (
 CHECKPOINT_DIR = "/training/checkpoints"
 DATASET_DIR = "/training/datasets"
 
+# HF_DATASET_REPO = (
+#     "medical-triage-agent-ai-poc-datasets"
+# )
+
+# HF_MODEL_REPO = (
+#     "medical-triage-agent-ai-poc-models"
+# )
+
+HF_NAMESPACE = "RemDev-AI"
+
 HF_DATASET_REPO = (
-    "medical-triage-agent-ai-poc-datasets"
+    f"{HF_NAMESPACE}/medical-triage-agent-ai-poc-datasets"
 )
 
 HF_MODEL_REPO = (
-    "medical-triage-agent-ai-poc-models"
+    f"{HF_NAMESPACE}/medical-triage-agent-ai-poc-models"
 )
+
+HF_DATASET_REVISION = "main"
+
+HF_MODEL_REVISION = "main"
 
 DEFAULT_GPU = "A100-40GB"
 
@@ -95,14 +109,15 @@ training_image = (
         "bitsandbytes",
         "huggingface_hub",
         "wandb",
-        "mlflow",
+        # "mlflow",
         "pyyaml",
     )
 )
 
 
 hf_secret = modal.Secret.from_name(
-    HF_SECRET_NAME
+    HF_SECRET_NAME,
+    required_keys=["HF_TOKEN_06"],
 )
 
 wandb_secret = modal.Secret.from_name(
@@ -110,9 +125,9 @@ wandb_secret = modal.Secret.from_name(
     required_keys=["WANDB_API_KEY"],
 )
 
-mlflow_secret = modal.Secret.from_name(
-    MLFLOW_SECRET_NAME,
-    required_keys=[
-        "MLFLOW_TRACKING_URI",
-    ],
-)
+# mlflow_secret = modal.Secret.from_name(
+#     MLFLOW_SECRET_NAME,
+#     required_keys=[
+#         "MLFLOW_TRACKING_URI",
+#     ],
+# )
