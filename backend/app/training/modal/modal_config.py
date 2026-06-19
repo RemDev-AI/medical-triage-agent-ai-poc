@@ -96,23 +96,13 @@ training_volume = modal.Volume.from_name(
     create_if_missing=True,
 )
 
-
-from pathlib import Path  # noqa : E402
+from pathlib import Path  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 training_image = (
     modal.Image.debian_slim(
         python_version="3.11"
-    )
-    .add_local_dir(
-        local_path=str(PROJECT_ROOT / "backend"),
-        remote_path="/root/backend",
-    )
-    .env(
-        {
-            "PYTHONPATH": "/root",
-        }
     )
     .pip_install(
         "torch",
@@ -126,6 +116,16 @@ training_image = (
         "wandb",
         # "mlflow",
         "pyyaml",
+    )
+    .env(
+        {
+            "PYTHONPATH": "/root",
+        }
+    )
+    .add_local_dir(
+        local_path=str(PROJECT_ROOT / "backend"),
+        remote_path="/root/backend",
+        copy=True,
     )
 )
 
