@@ -80,17 +80,24 @@ def run_sft_training() -> dict:
     )
 
     logger.info(
-        "Downloading dataset from Hugging Face..."
+        "Downloading SFT datasets from Hugging Face..."
     )
+
+    DATASET_CONFIG = "sft"
 
     train_dataset = download_project_dataset(
-        split="train"
+        dataset_config=DATASET_CONFIG,
+        split="train",
     )
 
-    validation_dataset = (
-        download_project_dataset(
-            split="validation"
-        )
+    validation_dataset = download_project_dataset(
+        dataset_config=DATASET_CONFIG,
+        split="validation",
+    )
+
+    logger.info(
+        "Dataset config: %s",
+        DATASET_CONFIG,
     )
 
     logger.info(
@@ -174,6 +181,7 @@ def run_sft_training() -> dict:
             ],
             dataset_name=config.dataset_repo,
             extra={
+                "dataset_config": "sft",
                 "training_date":
                 datetime.utcnow().isoformat(),
                 "output_dir":
@@ -207,6 +215,7 @@ def run_sft_training() -> dict:
     return {
         "status": "success",
         "training_type": "sft",
+        "dataset_config": "sft",
         "model_repo":
         config.model_repo,
         "dataset_repo":

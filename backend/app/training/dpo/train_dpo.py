@@ -137,12 +137,70 @@ def load_hf_dataset(
     dataset_config: str,
     split: str,
 ) -> Dataset:
+    """
+    Load dataset from Hugging Face.
 
-    return load_dataset(
+    Supported configs:
+        - sft
+        - dpo
+
+    Supported splits:
+        - train
+        - validation
+        - test
+        - clinical_eval
+    """
+
+    supported_configs = {
+        "sft",
+        "dpo",
+    }
+
+    supported_splits = {
+        "train",
+        "validation",
+        "test",
+        "clinical_eval",
+    }
+
+    if dataset_config not in supported_configs:
+        raise ValueError(
+            f"Unsupported dataset config: "
+            f"{dataset_config}. "
+            f"Supported configs: "
+            f"{sorted(supported_configs)}"
+        )
+
+    if split not in supported_splits:
+        raise ValueError(
+            f"Unsupported dataset split: "
+            f"{split}. "
+            f"Supported splits: "
+            f"{sorted(supported_splits)}"
+        )
+
+    logger.info(
+        "Loading HF dataset "
+        "(repo=%s, config=%s, split=%s)",
         dataset_repo,
         dataset_config,
+        split,
+    )
+
+    dataset = load_dataset(
+        path=dataset_repo,
+        name=dataset_config,
         split=split,
     )
+
+    logger.info(
+        "Loaded %s samples from %s/%s",
+        len(dataset),
+        dataset_config,
+        split,
+    )
+
+    return dataset
 
 
 def load_dataset_source(
@@ -158,14 +216,18 @@ def load_dataset_source(
     )
 
     hf_config = dataset_config.get(
-        "hf_config"
+        "hf_config",
+        "dpo",
     )
 
     if hf_repo:
 
         logger.info(
-            "Loading HF dataset: %s",
+            "Loading HF dataset "
+            "(repo=%s, config=%s, split=%s)",
             hf_repo,
+            hf_config,
+            split,
         )
 
         return load_hf_dataset(
@@ -279,16 +341,26 @@ def prepare_datasets() -> Tuple[
     Dataset,
 ]:
 
-    train_dataset = (
-        load_dataset_source(
-            "train"
-        )
+    logger.info(
+        "Preparing DPO datasets..."
     )
 
-    validation_dataset = (
-        load_dataset_source(
-            "validation"
-        )
+    train_dataset = load_dataset_source(
+        "train"
+    )
+
+    validation_dataset = load_dataset_source(
+        "validation"
+    )
+
+    logger.info(
+        "Raw train samples: %s",
+        len(train_dataset),
+    )
+
+    logger.info(
+        "Raw validation samples: %s",
+        len(validation_dataset),
     )
 
     train_dataset = (
@@ -301,6 +373,16 @@ def prepare_datasets() -> Tuple[
         validate_clinical_safety(
             validation_dataset
         )
+    )
+
+    logger.info(
+        "Filtered train samples: %s",
+        len(train_dataset),
+    )
+
+    logger.info(
+        "Filtered validation samples: %s",
+        len(validation_dataset),
     )
 
     return (
@@ -560,6 +642,7 @@ def publish_training_artifacts():
                 "local_dataset",
             ),
             extra={
+                "dataset_config": "dpo",
                 "output_dir":
                 str(output_dir),
             },

@@ -58,7 +58,7 @@ def get_hf_token() -> str:
     Hugging Face access token.
     """
 
-    return get_env("HF_TOKEN")
+    return get_env("HF_TOKEN_06")
 
 
 def get_wandb_api_key() -> str:
@@ -167,26 +167,58 @@ def prepare_training_directories() -> Dict[str, Path]:
 # ============================================================
 
 
+# ============================================================
+# Dataset management
+# ============================================================
+
 def download_dataset(
     dataset_name: str,
+    dataset_config: str,
     split: Optional[str] = None,
 ):
     """
     Download HF dataset.
 
+    Args:
+        dataset_name:
+            Hugging Face dataset repository.
+
+        dataset_config:
+            Dataset configuration name.
+
+            Supported:
+                - sft
+                - dpo
+
+        split:
+            Dataset split.
+
+            Examples:
+                - train
+                - validation
+                - test
+                - clinical_eval
+
     Example:
-        medical-triage-agent-ai-poc-datasets
+        download_dataset(
+            dataset_name="RemDev-AI/medical-triage-agent-ai-poc-datasets",
+            dataset_config="sft",
+            split="train",
+        )
     """
 
     authenticate_huggingface()
 
     logger.info(
-        "Downloading dataset %s",
+        "Downloading dataset '%s' (config=%s, split=%s)",
         dataset_name,
+        dataset_config,
+        split,
     )
 
     dataset = load_dataset(
-        dataset_name,
+        path=dataset_name,
+        name=dataset_config,
         split=split,
         token=get_hf_token(),
     )
@@ -199,14 +231,27 @@ def download_dataset(
 
 
 def download_project_dataset(
+    dataset_config: str = "sft",
     split: Optional[str] = None,
 ):
     """
     Download project dataset.
+
+    Args:
+        dataset_config:
+            Dataset configuration.
+
+            Supported:
+                - sft
+                - dpo
+
+        split:
+            Dataset split.
     """
 
     return download_dataset(
-        HF_DATASET_REPO,
+        dataset_name=HF_DATASET_REPO,
+        dataset_config=dataset_config,
         split=split,
     )
 

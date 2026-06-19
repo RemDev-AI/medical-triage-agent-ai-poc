@@ -86,21 +86,26 @@ def run_dpo_training() -> dict:
     logger.info(
         "Starting Modal DPO training..."
     )
-
+    
     logger.info(
         "Downloading DPO datasets..."
     )
 
-    train_dataset = (
-        download_project_dataset(
-            split="train"
-        )
+    DATASET_CONFIG = "dpo"
+
+    train_dataset = download_project_dataset(
+        dataset_config=DATASET_CONFIG,
+        split="train",
     )
 
-    validation_dataset = (
-        download_project_dataset(
-            split="validation"
-        )
+    validation_dataset = download_project_dataset(
+        dataset_config=DATASET_CONFIG,
+        split="validation",
+    )
+
+    logger.info(
+        "Dataset config: %s",
+        DATASET_CONFIG,
     )
 
     logger.info(
@@ -198,6 +203,7 @@ def run_dpo_training() -> dict:
             ],
             dataset_name=config.dataset_repo,
             extra={
+                "dataset_config": "dpo",
                 "training_date":
                 datetime.utcnow().isoformat(),
                 "modal_gpu":
@@ -234,6 +240,7 @@ def run_dpo_training() -> dict:
     return {
         "status": "success",
         "training_type": "dpo",
+        "dataset_config": "dpo",
         "model_repo":
         config.model_repo,
         "dataset_repo":

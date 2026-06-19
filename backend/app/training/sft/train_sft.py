@@ -123,21 +123,69 @@ def load_hf_dataset(
     split: str,
 ) -> Dataset:
     """
-    Load dataset from Hugging Face Dataset Config.
+    Load dataset from Hugging Face.
 
-    Example:
-        load_dataset(
-            "medical-triage-agent-ai-poc-datasets",
-            "sft",
-            split="train",
-        )
+    Supported configs:
+        - sft
+        - dpo
+
+    Supported splits:
+        - train
+        - validation
+        - test
+        - clinical_eval
     """
 
-    return load_dataset(
+    supported_configs = {
+        "sft",
+        "dpo",
+    }
+
+    supported_splits = {
+        "train",
+        "validation",
+        "test",
+        "clinical_eval",
+    }
+
+    if dataset_config not in supported_configs:
+        raise ValueError(
+            f"Unsupported dataset config: "
+            f"{dataset_config}. "
+            f"Supported configs: "
+            f"{sorted(supported_configs)}"
+        )
+
+    if split not in supported_splits:
+        raise ValueError(
+            f"Unsupported dataset split: "
+            f"{split}. "
+            f"Supported splits: "
+            f"{sorted(supported_splits)}"
+        )
+
+    logger.info(
+        "Loading HF dataset "
+        "(repo=%s, config=%s, split=%s)",
         dataset_repo,
         dataset_config,
+        split,
+    )
+
+    dataset = load_dataset(
+        path=dataset_repo,
+        name=dataset_config,
         split=split,
     )
+
+    logger.info(
+        "Loaded %s samples from %s/%s",
+        len(dataset),
+        dataset_config,
+        split,
+    )
+
+    return dataset
 
 
 def load_dataset_source(
@@ -158,14 +206,18 @@ def load_dataset_source(
     )
 
     hf_config = dataset_config.get(
-        "hf_config"
+        "hf_config",
+        "sft",
     )
 
     if hf_repo:
-
+        
         logger.info(
-            "Loading HF dataset: %s",
+            "Loading HF dataset "
+            "(repo=%s, config=%s, split=%s)",
             hf_repo,
+            hf_config,
+            split,
         )
 
         return load_hf_dataset(
