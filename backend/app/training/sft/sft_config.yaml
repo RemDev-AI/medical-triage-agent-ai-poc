@@ -56,21 +56,22 @@ model:
   use_flash_attention: false
 
 dataset:
-  hf_repo: "medical-triage-agent-ai-poc-datasets"
+  hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
+
+  # Hugging Face dataset configuration
   hf_config: "sft"
 
+  # Supported splits:
+  # train
+  # validation
+  # test
+  # clinical_eval
+
   max_sequence_length: 2048
-  
-  # hf_subset: "processed/sft"
-  # train_file: "train.jsonl"
-  # validation_file: "validation.jsonl"
-  # max_sequence_length: 2048
 
-# dataset:
-#   train_path: "backend/app/datasets/processed/sft/train.jsonl"
-#   validation_path: "backend/app/datasets/processed/sft/validation.jsonl"
-
-#   max_sequence_length: 2048
+  # Optional local fallback
+  # train_path: "backend/app/datasets/processed/sft/train.jsonl"
+  # validation_path: "backend/app/datasets/processed/sft/validation.jsonl"
 
 tracking:
   # mlflow_experiment_name: "medical-triage-sft"

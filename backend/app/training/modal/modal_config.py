@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/modal/modal_config.py
-
+# 
 """
 Central Modal configuration.
 
@@ -53,6 +53,14 @@ HF_DATASET_REVISION = "main"
 
 HF_MODEL_REVISION = "main"
 
+HF_DATASET_CONFIG_SFT = "sft"
+HF_DATASET_CONFIG_DPO = "dpo"
+
+SUPPORTED_DATASET_CONFIGS = {
+    HF_DATASET_CONFIG_SFT,
+    HF_DATASET_CONFIG_DPO,
+}
+
 DEFAULT_GPU = "A100-40GB"
 
 DEFAULT_TIMEOUT = 60 * 60 * 24
@@ -88,6 +96,30 @@ class ModalTrainingConfig:
 config = ModalTrainingConfig()
 
 
+def validate_modal_config() -> None:
+    """
+    Validate shared Modal configuration.
+    """
+
+    if not HF_DATASET_REPO.startswith(
+        f"{HF_NAMESPACE}/"
+    ):
+        raise ValueError(
+            f"Invalid HF_DATASET_REPO: "
+            f"{HF_DATASET_REPO}"
+        )
+
+    if not HF_MODEL_REPO.startswith(
+        f"{HF_NAMESPACE}/"
+    ):
+        raise ValueError(
+            f"Invalid HF_MODEL_REPO: "
+            f"{HF_MODEL_REPO}"
+        )
+
+
+validate_modal_config()
+
 app = modal.App(APP_NAME)
 
 
@@ -105,21 +137,24 @@ training_image = (
         python_version="3.11"
     )
     .pip_install(
-        "torch",
-        "transformers",
-        "datasets",
-        "trl",
-        "peft",
-        "accelerate",
-        "bitsandbytes",
-        "huggingface_hub",
-        "wandb",
+        "torch>=2.4.0",
+        "transformers>=4.52.0",
+        "datasets>=3.0.0",
+        "trl>=0.9.6",
+        "peft>=0.12.0",
+        "accelerate>=1.0.1",
+        "bitsandbytes>=0.45.0",
+        "huggingface_hub>=0.34.0",
+        "sentencepiece>=0.2.0",
+        "wandb>=0.19.0",
         # "mlflow",
-        "pyyaml",
+        "pyyaml>=6.0.2",
     )
     .env(
         {
             "PYTHONPATH": "/root",
+            "HF_HUB_ENABLE_HF_TRANSFER": "1",
+            "TOKENIZERS_PARALLELISM": "false",
         }
     )
     .add_local_dir(

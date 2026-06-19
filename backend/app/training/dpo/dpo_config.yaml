@@ -59,17 +59,20 @@ model:
   device_map: "auto"
 
 dataset:
-  hf_repo: "medical-triage-agent-ai-poc-datasets"
+  hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
+
+  # Hugging Face dataset configuration
   hf_config: "dpo"
 
-  # hf_subset: "processed/dpo"
-  # train_file: "train.jsonl"
-  # validation_file: "validation.jsonl"
+  # Supported splits:
+  # train
+  # validation
+  # test
+  # clinical_eval
 
-# dataset:
-#   train_path: "backend/app/datasets/processed/dpo/train.jsonl"
-
-#   validation_path: "backend/app/datasets/processed/dpo/validation.jsonl"
+  # Optional local fallback
+  # train_path: "backend/app/datasets/processed/dpo/train.jsonl"
+  # validation_path: "backend/app/datasets/processed/dpo/validation.jsonl"
 
 tracking:
   # mlflow_experiment_name: "medical-triage-dpo"
