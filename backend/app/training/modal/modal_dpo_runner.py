@@ -3,21 +3,37 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import sys
 from pathlib import Path
 
-import modal
+# ------------------------------------------------------------------
+# Ensure project root is available in PYTHONPATH
+# ------------------------------------------------------------------
 
-from backend.app.training.modal.modal_config import (
+CURRENT_FILE = Path(__file__).resolve()
+
+PROJECT_ROOT = CURRENT_FILE.parent.parent.parent.parent.parent
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# ------------------------------------------------------------------
+
+from datetime import datetime  # noqa : E402
+
+import modal  # noqa : F401
+
+from backend.app.training.modal.modal_config import (  # noqa : E402
     app,
     config,
     hf_secret,
-    # mlflow_secret,
     training_image,
     training_volume,
     wandb_secret,
+    # mlflow_secret,
 )
-from backend.app.training.modal.modal_utils import (
+
+from backend.app.training.modal.modal_utils import (  # noqa : E402
     build_training_metadata,
     commit_volume,
     download_latest_model_snapshot,
@@ -27,6 +43,7 @@ from backend.app.training.modal.modal_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 DPO_OUTPUT_DIR = (
     Path(config.checkpoint_dir)
