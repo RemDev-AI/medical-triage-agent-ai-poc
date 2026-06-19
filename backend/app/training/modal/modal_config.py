@@ -97,8 +97,23 @@ training_volume = modal.Volume.from_name(
 )
 
 
+from pathlib import Path  # noqa : E402
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
 training_image = (
-    modal.Image.debian_slim(python_version="3.11")
+    modal.Image.debian_slim(
+        python_version="3.11"
+    )
+    .add_local_dir(
+        local_path=str(PROJECT_ROOT / "backend"),
+        remote_path="/root/backend",
+    )
+    .env(
+        {
+            "PYTHONPATH": "/root",
+        }
+    )
     .pip_install(
         "torch",
         "transformers",
@@ -113,7 +128,6 @@ training_image = (
         "pyyaml",
     )
 )
-
 
 hf_secret = modal.Secret.from_name(
     HF_SECRET_NAME,
