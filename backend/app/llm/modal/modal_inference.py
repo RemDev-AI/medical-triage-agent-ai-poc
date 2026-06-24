@@ -10,11 +10,7 @@ import logging
 import time
 
 from backend.app.llm.modal.modal_client import ModalClient
-from backend.app.llm.modal.modal_schema import (
-    ModalGenerationParameters,
-    ModalInferenceRequest,
-    ModalInferenceResponse,
-)
+from backend.app.llm.modal.modal_schema import ModalGenerationParameters, ModalInferenceRequest, ModalInferenceResponse  # noqa : E501
 
 logger = logging.getLogger(__name__)
 

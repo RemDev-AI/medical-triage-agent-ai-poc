@@ -10,21 +10,9 @@ import logging
 
 import httpx
 
-from backend.app.llm.modal.modal_exceptions import (
-    ModalAuthenticationError,
-    ModalConfigurationError,
-    ModalConnectionError,
-    ModalInvalidResponseError,
-    ModalRateLimitError,
-    ModalServerError,
-    ModalTimeoutError,
-)
+from backend.app.llm.modal.modal_exceptions import ModalAuthenticationError, ModalConfigurationError, ModalConnectionError, ModalInvalidResponseError, ModalRateLimitError, ModalServerError, ModalTimeoutError  # noqa : E501
 
-from backend.app.llm.modal.modal_schema import (
-    ModalErrorResponse,
-    ModalInferenceRequest,
-    ModalInferenceResponse,
-)
+from backend.app.llm.modal.modal_schema import ModalErrorResponse, ModalInferenceRequest, ModalInferenceResponse  # noqa : E501
 
 logger = logging.getLogger(__name__)
 

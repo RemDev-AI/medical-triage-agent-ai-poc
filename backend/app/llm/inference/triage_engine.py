@@ -13,20 +13,11 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from backend.app.llm.inference.generate import (
-    build_generation_metadata,
-    clean_response,
-    generate_response,
-)
+from backend.app.llm.inference.generate import build_generation_metadata, clean_response, generate_response  # noqa : E501
 
-from backend.app.llm.inference.prompt_builder import (
-    SYSTEM_PROMPT,
-    build_triage_prompt,
-)
+from backend.app.llm.inference.prompt_builder import SYSTEM_PROMPT, build_triage_prompt  # noqa : E501
 
-from backend.app.llm.modal.modal_inference import (
-    ModalInferenceService,
-)
+from backend.app.llm.modal.modal_inference import ModalInferenceService
 
 # PHASE 7 - Monitoring
 from backend.app.monitoring.gpu_monitor import gpu_monitor

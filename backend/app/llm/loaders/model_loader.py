@@ -20,13 +20,9 @@ from typing import Optional
 
 import torch
 from peft import PeftModel
-from transformers import (
-    AutoModelForCausalLM,
-)
+from transformers import AutoModelForCausalLM
 
-from backend.app.llm.loaders.quantization_loader import (
-    build_quantization_config,
-)
+from backend.app.llm.loaders.quantization_loader import build_quantization_config  # noqa : E501
 
 logger = logging.getLogger(__name__)
 

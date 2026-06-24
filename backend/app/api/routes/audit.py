@@ -3,10 +3,7 @@
 from datetime import datetime
 from fastapi import APIRouter
 
-from backend.app.api.schemas import (
-    AuditLogEntry,
-    AuditResponse
-)
+from backend.app.api.schemas import AuditLogEntry, AuditResponse
 
 router = APIRouter(
     prefix="/audit",

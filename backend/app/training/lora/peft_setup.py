@@ -20,9 +20,7 @@ from peft import (
 )
 from transformers import AutoModelForCausalLM
 
-from backend.app.training.lora.lora_config import (
-    DEFAULT_LORA_CONFIG,
-)
+from backend.app.training.lora.lora_config import DEFAULT_LORA_CONFIG
 
 logger = logging.getLogger(__name__)
 

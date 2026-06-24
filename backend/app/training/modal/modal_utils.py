@@ -16,13 +16,7 @@ from huggingface_hub import HfApi
 from huggingface_hub import login
 from huggingface_hub import snapshot_download
 
-from backend.app.training.modal.modal_config import (
-    CHECKPOINT_DIR,
-    DATASET_DIR,
-    HF_DATASET_REPO,
-    HF_MODEL_REPO,
-    training_volume,
-)
+from backend.app.training.modal.modal_config import CHECKPOINT_DIR, DATASET_DIR, HF_DATASET_REPO, HF_MODEL_REPO, training_volume  # noqa : E501
 
 logger = logging.getLogger(__name__)
 

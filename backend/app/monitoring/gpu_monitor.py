@@ -5,15 +5,9 @@ from __future__ import annotations
 from typing import Any
 from typing import Dict
 
-from backend.app.monitoring.modal_monitor import (
-    get_active_containers,
-)
-from backend.app.monitoring.modal_monitor import (
-    get_gpu_usage,
-)
-from backend.app.monitoring.modal_monitor import (
-    get_inference_latency,
-)
+from backend.app.monitoring.modal_monitor import get_active_containers
+from backend.app.monitoring.modal_monitor import get_gpu_usage
+from backend.app.monitoring.modal_monitor import get_inference_latency
 
 
 class GPUMonitor:
