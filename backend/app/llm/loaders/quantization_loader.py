@@ -18,6 +18,33 @@ import torch
 from transformers import BitsAndBytesConfig
 
 
+_ALLOWED_DTYPES = {
+    "float16": torch.float16,
+    "bfloat16": torch.bfloat16,
+    "float32": torch.float32,
+}
+
+_ALLOWED_QUANT_TYPES = {
+    "nf4",
+    "fp4",
+}
+
+
+def _get_torch_dtype(
+    compute_dtype: str,
+) -> torch.dtype:
+    """
+    Convert string dtype into torch dtype.
+    """
+
+    if compute_dtype not in _ALLOWED_DTYPES:
+        raise ValueError(
+            f"Unsupported compute dtype: {compute_dtype}"
+        )
+
+    return _ALLOWED_DTYPES[compute_dtype]
+
+
 def build_quantization_config(
     load_in_4bit: bool = True,
     load_in_8bit: bool = False,
@@ -48,18 +75,23 @@ def build_quantization_config(
         BitsAndBytesConfig or None.
     """
 
+    if load_in_4bit and load_in_8bit:
+        raise ValueError(
+            "4-bit and 8-bit quantization "
+            "cannot be enabled simultaneously."
+        )
+
     if not load_in_4bit and not load_in_8bit:
         return None
 
-    dtype_mapping = {
-        "float16": torch.float16,
-        "bfloat16": torch.bfloat16,
-        "float32": torch.float32,
-    }
+    if bnb_4bit_quant_type not in _ALLOWED_QUANT_TYPES:
+        raise ValueError(
+            f"Unsupported quantization type: "
+            f"{bnb_4bit_quant_type}"
+        )
 
-    torch_dtype = dtype_mapping.get(
-        compute_dtype,
-        torch.bfloat16,
+    torch_dtype = _get_torch_dtype(
+        compute_dtype
     )
 
     return BitsAndBytesConfig(
