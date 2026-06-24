@@ -9,9 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Dict
 
-from backend.app.llm.modal.modal_inference import (
-    ModalInferenceService,
-)
+from backend.app.llm.modal.modal_inference import ModalInferenceService
 
 logger = logging.getLogger(__name__)
 

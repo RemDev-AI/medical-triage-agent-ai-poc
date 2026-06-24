@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/modal/modal_config.py
-# 
+
 """
 Central Modal configuration.
 

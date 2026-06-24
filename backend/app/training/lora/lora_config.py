@@ -84,6 +84,7 @@ def build_lora_config(
         use_rslora=params.use_rslora,
         use_dora=params.use_dora,
         init_lora_weights=params.init_lora_weights,
+        # ensure_weight_tying=True,
     )
 
 

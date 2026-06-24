@@ -8,27 +8,15 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from backend.app.api.schemas import (
-    TriageRequest,
-    TriageResponse,
-)
+from backend.app.api.schemas import TriageRequest, TriageResponse
 
-from backend.app.api.dependencies.modal import (
-    ModalInferenceClient,
-    get_modal_client,
-)
+from backend.app.api.dependencies.modal import ModalInferenceClient, get_modal_client  # noqa : E501
 
-from backend.app.monitoring.latency_monitor import (
-    latency_monitor,
-)
+from backend.app.monitoring.latency_monitor import latency_monitor
 
-from backend.app.monitoring.request_tracker import (
-    request_tracker,
-)
+from backend.app.monitoring.request_tracker import request_tracker
 
-from backend.app.monitoring.alerting import (
-    alert_manager,
-)
+from backend.app.monitoring.alerting import alert_manager
 
 
 router = APIRouter(
