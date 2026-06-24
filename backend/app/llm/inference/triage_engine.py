@@ -13,11 +13,19 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from backend.app.llm.inference.generate import build_generation_metadata, clean_response, generate_response  # noqa : E501
+from transformers import PreTrainedModel
+from transformers import PreTrainedTokenizerBase
 
-from backend.app.llm.inference.prompt_builder import SYSTEM_PROMPT, build_triage_prompt  # noqa : E501
+from backend.app.llm.inference.generate import (
+    build_generation_metadata,
+    clean_response,
+    generate_response,
+)
 
-from backend.app.llm.modal.modal_inference import ModalInferenceService
+from backend.app.llm.inference.prompt_builder import (
+    SYSTEM_PROMPT,
+    build_triage_prompt,
+)
 
 # PHASE 7 - Monitoring
 from backend.app.monitoring.gpu_monitor import gpu_monitor
@@ -36,14 +44,19 @@ VALID_PRIORITIES = {
 class TriageEngine:
     """
     Clinical triage inference engine.
+
+    Uses a locally loaded Hugging Face model
+    and tokenizer (Google Colab / Hugging Face Hub).
     """
 
     def __init__(
         self,
-        modal_service: ModalInferenceService,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
         model_name: str,
     ) -> None:
-        self.modal_service = modal_service
+        self.model = model
+        self.tokenizer = tokenizer
         self.model_name = model_name
 
     async def run_triage(
@@ -69,7 +82,8 @@ class TriageEngine:
             )
 
             raw_response = await generate_response(
-                modal_service=self.modal_service,
+                model=self.model,
+                tokenizer=self.tokenizer,
                 system_prompt=SYSTEM_PROMPT,
                 user_prompt=prompt,
             )
@@ -150,7 +164,7 @@ class TriageEngine:
         field_name: str,
     ) -> str:
         """
-        Extract section field.
+        Extract section field from model output.
         """
 
         pattern = (

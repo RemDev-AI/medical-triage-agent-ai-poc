@@ -6,42 +6,53 @@ Prompt builder for medical triage inference.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict
+from typing import List
+from typing import Optional
 
 
 SYSTEM_PROMPT = """
 Tu es un assistant IA spécialisé en triage médical.
 
-Objectifs :
-- analyser les symptômes patients ;
-- identifier le niveau de priorité ;
-- produire une justification clinique concise ;
-- proposer des recommandations prudentes ;
-- éviter les hallucinations médicales ;
-- ne jamais produire de diagnostic définitif.
+Mission :
+Analyser les informations patient fournies et attribuer un niveau
+de priorité clinique adapté.
 
-Règles :
-- rester factuel ;
-- signaler les urgences vitales ;
-- recommander une consultation médicale si nécessaire ;
-- ne jamais inventer de données patient ;
-- utiliser un ton clinique professionnel.
+Contraintes importantes :
+- Ne jamais produire de diagnostic médical définitif.
+- Ne jamais inventer de symptômes ou d'informations absentes.
+- Utiliser uniquement les données fournies.
+- Rester prudent en cas d'informations incomplètes.
+- Privilégier la sécurité du patient.
+- Signaler immédiatement toute urgence potentielle.
 
 Niveaux de priorité autorisés :
-- CRITIQUE
-- URGENT
-- MODÉRÉ
-- FAIBLE
 
-Format de réponse obligatoire :
+CRITIQUE
+URGENT
+MODÉRÉ
+FAIBLE
+
+Tu dois toujours répondre EXACTEMENT avec le format suivant :
 
 PRIORITÉ:
+<CRITIQUE|URGENT|MODÉRÉ|FAIBLE>
+
 JUSTIFICATION:
+<justification clinique concise>
+
 RECOMMANDATIONS:
+<recommandations prudentes et adaptées>
+
+Ne jamais ajouter d'autres sections.
+Ne jamais ajouter d'introduction.
+Ne jamais ajouter de conclusion.
 """.strip()
 
 
-def format_symptoms(symptoms: List[str]) -> str:
+def format_symptoms(
+    symptoms: List[str],
+) -> str:
     """
     Format symptoms list.
     """
@@ -71,6 +82,22 @@ def format_medical_history(
     )
 
 
+def format_vital_signs(
+    vital_signs: Optional[Dict[str, str]],
+) -> str:
+    """
+    Format vital signs.
+    """
+
+    if not vital_signs:
+        return "- Non renseignés"
+
+    return "\n".join(
+        f"- {key}: {value}"
+        for key, value in vital_signs.items()
+    )
+
+
 def build_triage_prompt(
     patient_age: int,
     symptoms: List[str],
@@ -81,22 +108,12 @@ def build_triage_prompt(
     Build final medical triage prompt.
     """
 
-    vital_signs = vital_signs or {}
-
-    vitals_text = "\n".join(
-        f"- {key}: {value}"
-        for key, value in vital_signs.items()
-    )
-
-    if not vitals_text:
-        vitals_text = "- Non renseignés"
-
     prompt = f"""
-Analyse ce cas patient.
+Analyse le cas clinique suivant.
 
 === PATIENT ===
 
-Âge :
+ÂGE :
 {patient_age}
 
 === SYMPTÔMES ===
@@ -109,16 +126,22 @@ Analyse ce cas patient.
 
 === SIGNES VITAUX ===
 
-{vitals_text}
+{format_vital_signs(vital_signs)}
 
-=== OBJECTIF ===
+=== TÂCHE ===
 
 Déterminer :
-1. la priorité clinique ;
-2. une justification courte ;
-3. les recommandations adaptées.
 
-Respecte STRICTEMENT le format demandé.
+1. Le niveau de priorité clinique.
+2. Une justification clinique concise.
+3. Les recommandations adaptées.
+
+Rappel :
+
+- Utiliser uniquement les informations fournies.
+- Ne jamais inventer de données.
+- Ne jamais poser de diagnostic définitif.
+- Respecter STRICTEMENT le format demandé.
 """.strip()
 
     return prompt
