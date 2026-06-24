@@ -15,36 +15,41 @@ training:
 
   warmup_ratio: 0.05
 
+  lr_scheduler_type: "cosine"
+
+  max_grad_norm: 1.0
+
+  gradient_checkpointing: true
+
   logging_steps: 10
   eval_steps: 100
   save_steps: 100
 
-  save_total_limit: 3
-
   evaluation_strategy: "steps"
   save_strategy: "steps"
+
+  save_total_limit: 3
+  save_safetensors: true
 
   load_best_model_at_end: true
 
   metric_for_best_model: "eval_loss"
   greater_is_better: false
 
+  early_stopping_patience: 3
+
   fp16: false
   bf16: true
 
-  max_grad_norm: 1.0
-
-  gradient_checkpointing: true
-
-  lr_scheduler_type: "cosine"
+  dataloader_num_workers: 2
 
   report_to:
-    # - "mlflow"
     - "wandb"
+    # - "mlflow"
 
   resume_from_checkpoint: null
 
-  early_stopping_patience: 3
+  push_to_hub: true
 
 model:
   model_name: "Qwen/Qwen3-1.7B-Base"
@@ -55,30 +60,32 @@ model:
 
   use_flash_attention: false
 
+  hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
+
 dataset:
   hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
 
-  # Hugging Face dataset configuration
   hf_config: "sft"
 
-  # Supported splits:
-  # train
-  # validation
-  # test
-  # clinical_eval
+  train_split: "train"
+  validation_split: "validation"
+  test_split: "test"
+  clinical_eval_split: "clinical_eval"
 
   max_sequence_length: 2048
+
+  packing: false
 
   # Optional local fallback
   # train_path: "backend/app/datasets/processed/sft/train.jsonl"
   # validation_path: "backend/app/datasets/processed/sft/validation.jsonl"
 
 tracking:
-  # mlflow_experiment_name: "medical-triage-sft"
-
   wandb_project: "medical-triage-llm"
 
   wandb_run_name: "qwen3-1.7b-sft"
+
+  # mlflow_experiment_name: "medical-triage-sft"
 
 system:
   seed: 42
