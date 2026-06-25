@@ -7,9 +7,15 @@ from datetime import datetime
 from typing import Dict
 from typing import List
 
-from backend.app.monitoring.gpu_monitor import gpu_monitor
-from backend.app.monitoring.latency_monitor import latency_monitor
-from backend.app.monitoring.request_tracker import request_tracker
+from backend.app.monitoring.gpu_monitor import (
+    gpu_monitor,
+)
+from backend.app.monitoring.latency_monitor import (
+    latency_monitor,
+)
+from backend.app.monitoring.request_tracker import (
+    request_tracker,
+)
 
 
 @dataclass
@@ -27,7 +33,7 @@ class AlertManager:
     Compatible :
 
     - Hugging Face Spaces
-    - Modal GPU
+    - Backend d'inférence
     - FastAPI
     - Streamlit Dashboard
     """
@@ -66,37 +72,59 @@ class AlertManager:
 
         self.alert_history.append(alert)
 
-    def evaluate_latency(self) -> None:
+    def raise_alert(
+        self,
+        category: str,
+        message: str,
+        level: str = "ERROR",
+    ) -> None:
         """
-        Analyse des temps de réponse API.
+        API utilisée par les routes FastAPI.
         """
 
-        stats = latency_monitor.stats()
-
-        avg_latency = stats.get(
-            "avg_ms",
-            0.0,
+        self._create_alert(
+            level=level,
+            code=category,
+            message=message,
         )
 
-        if avg_latency >= self.LATENCY_CRITICAL_MS:
+    def evaluate_latency(
+        self,
+        latency_ms: float | None = None,
+    ) -> None:
+        """
+        Analyse des temps de réponse.
+        Compatible avec les routes FastAPI.
+        """
+
+        if latency_ms is None:
+
+            stats = latency_monitor.stats()
+
+            latency_ms = stats.get(
+                "avg_ms",
+                0.0,
+            )
+
+        if latency_ms >= self.LATENCY_CRITICAL_MS:
 
             self._create_alert(
                 "CRITICAL",
                 "LATENCY_CRITICAL",
                 (
-                    f"Average latency is "
-                    f"{avg_latency} ms"
+                    f"Latency is "
+                    f"{latency_ms:.2f} ms"
                 ),
             )
 
-        elif avg_latency >= self.LATENCY_WARNING_MS:
+        elif latency_ms >= self.LATENCY_WARNING_MS:
 
             self._create_alert(
                 "WARNING",
                 "LATENCY_WARNING",
                 (
-                    f"Average latency is "
-                    f"{avg_latency} ms"
+                    f"Latency is "
+                    f"{latency_ms:.2f} ms"
                 ),
             )
 
@@ -136,7 +164,7 @@ class AlertManager:
 
     def evaluate_gpu(self) -> None:
         """
-        Analyse des métriques GPU Modal.
+        Analyse des métriques GPU.
         """
 
         metrics = gpu_monitor.get_gpu_stats()
@@ -210,7 +238,8 @@ class AlertManager:
 
     def evaluate_containers(self) -> None:
         """
-        Analyse de la saturation des conteneurs Modal.
+        Analyse de la charge du backend
+        d'inférence.
         """
 
         metrics = gpu_monitor.get_gpu_stats()
@@ -252,9 +281,6 @@ class AlertManager:
             )
 
     def evaluate_all(self) -> None:
-        """
-        Lance toutes les évaluations.
-        """
 
         self.evaluate_latency()
         self.evaluate_errors()
@@ -262,9 +288,6 @@ class AlertManager:
         self.evaluate_containers()
 
     def get_alerts(self) -> List[Dict]:
-        """
-        Retourne l'historique des alertes.
-        """
 
         return [
             {
@@ -277,33 +300,30 @@ class AlertManager:
         ]
 
     def get_active_summary(self) -> Dict:
-        """
-        Résumé des alertes actives.
-        """
 
         alerts = self.get_alerts()
 
         critical = len(
             [
-                alert
-                for alert in alerts
-                if alert["level"] == "CRITICAL"
+                a
+                for a in alerts
+                if a["level"] == "CRITICAL"
             ]
         )
 
         warning = len(
             [
-                alert
-                for alert in alerts
-                if alert["level"] == "WARNING"
+                a
+                for a in alerts
+                if a["level"] == "WARNING"
             ]
         )
 
         info = len(
             [
-                alert
-                for alert in alerts
-                if alert["level"] == "INFO"
+                a
+                for a in alerts
+                if a["level"] == "INFO"
             ]
         )
 
@@ -315,9 +335,6 @@ class AlertManager:
         }
 
     def clear(self) -> None:
-        """
-        Réinitialise les alertes.
-        """
 
         self.alert_history.clear()
 

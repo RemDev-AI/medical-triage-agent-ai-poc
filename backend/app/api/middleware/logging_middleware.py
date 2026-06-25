@@ -7,14 +7,22 @@ import logging
 import time
 import uuid
 
+from datetime import datetime
+
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend.app.monitoring.latency_monitor import latency_monitor
-from backend.app.monitoring.request_tracker import request_tracker
+from backend.app.monitoring.latency_monitor import (
+    latency_monitor,
+)
+from backend.app.monitoring.request_tracker import (
+    request_tracker,
+)
 
 
-logger = logging.getLogger("audit_logger")
+logger = logging.getLogger(
+    "audit_logger"
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,18 +30,37 @@ logging.basicConfig(
 )
 
 
-class AuditLoggingMiddleware(BaseHTTPMiddleware):
+class AuditLoggingMiddleware(
+    BaseHTTPMiddleware
+):
+    """
+    Middleware de journalisation.
+
+    Responsabilités :
+
+    - audit des requêtes
+    - mesure de latence
+    - suivi du trafic
+    - attribution d'un Request ID
+    - alimentation du monitoring
+    """
 
     async def dispatch(
         self,
         request: Request,
         call_next,
     ):
-        request_id = str(uuid.uuid4())
 
-        start_time = time.perf_counter()
+        request_id = str(
+            uuid.uuid4()
+        )
+
+        start_time = (
+            time.perf_counter()
+        )
 
         endpoint = request.url.path
+
         method = request.method
 
         request_tracker.start_request(
@@ -42,17 +69,19 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         )
 
         try:
-            response = await call_next(request)
+
+            response = await call_next(
+                request
+            )
 
             latency_ms = round(
-                (time.perf_counter() - start_time)
+                (
+                    time.perf_counter()
+                    - start_time
+                )
                 * 1000,
                 2,
             )
-
-            # ==================================================
-            # MONITORING
-            # ==================================================
 
             latency_monitor.record(
                 latency_ms
@@ -68,12 +97,15 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
             audit_log = {
                 "request_id": request_id,
-                "timestamp": time.strftime(
-                    "%Y-%m-%dT%H:%M:%S"
+                "timestamp": (
+                    datetime.utcnow()
+                    .isoformat()
                 ),
                 "method": method,
                 "path": endpoint,
-                "status_code": response.status_code,
+                "status_code": (
+                    response.status_code
+                ),
                 "client_ip": (
                     request.client.host
                     if request.client
@@ -98,14 +130,13 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
         except Exception:
 
             latency_ms = round(
-                (time.perf_counter() - start_time)
+                (
+                    time.perf_counter()
+                    - start_time
+                )
                 * 1000,
                 2,
             )
-
-            # ==================================================
-            # MONITORING
-            # ==================================================
 
             latency_monitor.record(
                 latency_ms
@@ -117,8 +148,9 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
             audit_log = {
                 "request_id": request_id,
-                "timestamp": time.strftime(
-                    "%Y-%m-%dT%H:%M:%S"
+                "timestamp": (
+                    datetime.utcnow()
+                    .isoformat()
                 ),
                 "method": method,
                 "path": endpoint,
