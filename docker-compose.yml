@@ -1,9 +1,6 @@
-
 # ==========================================================
 # medical-triage-agent-ai-poc/docker-compose.yml
 # ==========================================================
-
-# version: "3.9"
 
 services:
 
@@ -23,13 +20,19 @@ services:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
 
+      # Hugging Face
       HF_TOKEN: ${HF_TOKEN}
       HF_MODEL_ID: ${HF_MODEL_ID}
       HF_SPACE_API_URL: ${HF_SPACE_API_URL}
 
-      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
-      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
-      MODAL_ENDPOINT_URL: ${MODAL_ENDPOINT_URL}
+      # Google Colab GPU Free (future remote inference endpoint)
+      COLAB_API_URL: ${COLAB_API_URL:-}
+      COLAB_API_TOKEN: ${COLAB_API_TOKEN:-}
+
+      # Weights & Biases
+      WANDB_API_KEY: ${WANDB_API_KEY:-}
+      WANDB_PROJECT: ${WANDB_PROJECT:-medical-triage-agent-ai-poc}
+      WANDB_ENTITY: ${WANDB_ENTITY:-}
 
     ports:
       - "8000:8000"
@@ -67,7 +70,9 @@ services:
 
     environment:
       APP_ENV: ${APP_ENV:-development}
+
       API_BASE_URL: http://backend:8000
+
       HF_SPACE_API_URL: ${HF_SPACE_API_URL}
 
     ports:
@@ -78,51 +83,7 @@ services:
 
     depends_on:
       backend:
-        condition: service_started
-
-    networks:
-      - medical-triage-network
-
-  mlflow:
-    container_name: medical-triage-mlflow
-
-    image: ghcr.io/mlflow/mlflow:v3.1.0
-
-    restart: unless-stopped
-
-    command: >
-      mlflow server
-      --host 0.0.0.0
-      --port 5000
-
-    ports:
-      - "5000:5000"
-
-    networks:
-      - medical-triage-network
-
-  prometheus:
-    container_name: medical-triage-prometheus
-
-    image: prom/prometheus
-
-    restart: unless-stopped
-
-    ports:
-      - "9090:9090"
-
-    networks:
-      - medical-triage-network
-
-  grafana:
-    container_name: medical-triage-grafana
-
-    image: grafana/grafana
-
-    restart: unless-stopped
-
-    ports:
-      - "3000:3000"
+        condition: service_healthy
 
     networks:
       - medical-triage-network

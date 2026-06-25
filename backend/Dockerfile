@@ -1,5 +1,7 @@
 # ==========================================================
 # medical-triage-agent-ai-poc/backend/Dockerfile
+# Backend FastAPI
+# Google Colab GPU Free compatible
 # ==========================================================
 
 FROM python:3.11-slim
@@ -12,9 +14,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 ENV APP_HOME=/app
-
-# Modal endpoint configuration
-ENV MODAL_ENDPOINT_URL=""
 
 WORKDIR ${APP_HOME}
 

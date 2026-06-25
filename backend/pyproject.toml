@@ -32,7 +32,7 @@ dependencies = [
     "trl",
     "vllm",
 
-    "modal",
+    # "modal",
     "httpx",
     "requests",
 

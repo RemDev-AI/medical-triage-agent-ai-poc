@@ -32,10 +32,16 @@ from backend.app.deployment.huggingface.hf_space_runtime import (
 
 
 # =========================================================
-# HUGGING FACE SPACE RUNTIME
+# RUNTIME DETECTION
 # =========================================================
 
 IS_HF_SPACE = runtime_config.hf_space
+
+ENVIRONMENT = (
+    "huggingface-space"
+    if IS_HF_SPACE
+    else "local"
+)
 
 
 # =========================================================
@@ -76,7 +82,6 @@ app.include_router(
     ],
 )
 
-# Monitoring / Observability
 app.include_router(
     monitoring_router,
     tags=["Monitoring"],
@@ -144,6 +149,23 @@ async def startup_event() -> None:
 
 
 # =========================================================
+# HEALTHCHECK
+# =========================================================
+
+@app.get(
+    "/health",
+    tags=["System"],
+)
+async def health() -> dict:
+
+    return {
+        "status": "healthy",
+        "service": "Medical Triage AI",
+        "version": app.version,
+    }
+
+
+# =========================================================
 # ROOT ENDPOINT
 # =========================================================
 
@@ -157,11 +179,7 @@ async def root() -> dict:
         "service": "Medical Triage AI",
         "status": "running",
         "version": app.version,
-        "environment": (
-            "huggingface-space"
-            if IS_HF_SPACE
-            else "local"
-        ),
+        "environment": ENVIRONMENT,
         "model_repository": (
             runtime_config.model_repository
             if IS_HF_SPACE
@@ -182,11 +200,7 @@ async def system_info() -> dict:
 
     return {
         "service": "Medical Triage AI",
-        "environment": (
-            "huggingface-space"
-            if IS_HF_SPACE
-            else "local"
-        ),
+        "environment": ENVIRONMENT,
         "model_repository": (
             runtime_config.model_repository
         ),
