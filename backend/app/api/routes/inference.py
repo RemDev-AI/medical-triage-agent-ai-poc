@@ -8,15 +8,27 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from backend.app.api.schemas import GenerateRequest, GenerateResponse
+from backend.app.api.schemas import (
+    GenerateRequest,
+    GenerateResponse,
+)
 
-from backend.app.api.dependencies.modal import ModalInferenceClient, get_modal_client  # noqa : E501
+from backend.app.api.dependencies.inference import (
+    InferenceClient,
+    get_inference_client,
+)
 
-from backend.app.monitoring.latency_monitor import latency_monitor
+from backend.app.monitoring.latency_monitor import (
+    latency_monitor,
+)
 
-from backend.app.monitoring.request_tracker import request_tracker
+from backend.app.monitoring.request_tracker import (
+    request_tracker,
+)
 
-from backend.app.monitoring.alerting import alert_manager
+from backend.app.monitoring.alerting import (
+    alert_manager,
+)
 
 
 router = APIRouter(
@@ -31,22 +43,22 @@ router = APIRouter(
 )
 async def generate_route(
     payload: GenerateRequest,
-    modal_client: ModalInferenceClient = Depends(
-        get_modal_client
+    inference_client: InferenceClient = Depends(
+        get_inference_client,
     ),
 ):
     """
     Endpoint de génération générique.
 
-    Nouveau flux :
+    Flux d'exécution :
 
     Request
         ↓
     Validation Pydantic
         ↓
-    Modal Client
+    InferenceClient
         ↓
-    Modal GPU
+    Backend d'inférence
         ↓
     Monitoring
         ↓
@@ -59,11 +71,13 @@ async def generate_route(
 
     try:
 
-        modal_response = await modal_client.generate(
-            prompt=payload.prompt,
-            max_new_tokens=payload.max_new_tokens,
-            temperature=payload.temperature,
-            top_p=payload.top_p,
+        inference_response = (
+            await inference_client.generate(
+                prompt=payload.prompt,
+                max_new_tokens=payload.max_new_tokens,
+                temperature=payload.temperature,
+                top_p=payload.top_p,
+            )
         )
 
         latency_seconds = (
@@ -85,21 +99,27 @@ async def generate_route(
         except Exception:
             pass
 
-        generated_text = modal_response.get(
-            "generated_text",
-            "",
+        generated_text = (
+            inference_response.get(
+                "generated_text",
+                "",
+            )
         )
 
-        model_name = modal_response.get(
-            "model_name",
-            "Qwen3-Medical-Triage",
+        model_name = (
+            inference_response.get(
+                "model_name",
+                "Qwen3-Medical-Triage",
+            )
         )
 
-        timestamp = modal_response.get(
-            "timestamp",
-            time.strftime(
-                "%Y-%m-%dT%H:%M:%S"
-            ),
+        timestamp = (
+            inference_response.get(
+                "timestamp",
+                time.strftime(
+                    "%Y-%m-%dT%H:%M:%S"
+                ),
+            )
         )
 
         return GenerateResponse(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+
 from collections import defaultdict
 from datetime import datetime
 from typing import Dict
@@ -13,6 +14,7 @@ class RequestTracker:
     Suivi du trafic API.
 
     Métriques :
+
     - total requests
     - success requests
     - failed requests
@@ -20,6 +22,13 @@ class RequestTracker:
     - error rate
     - endpoint usage
     - HTTP methods usage
+
+    Compatible avec :
+
+    - FastAPI
+    - Streamlit
+    - Monitoring API
+    - Alerting
     """
 
     def __init__(self) -> None:
@@ -34,7 +43,12 @@ class RequestTracker:
         self.active_requests = 0
 
         self.endpoint_counter = defaultdict(int)
+
         self.method_counter = defaultdict(int)
+
+    #
+    # API utilisée par les middlewares
+    #
 
     def start_request(
         self,
@@ -45,10 +59,16 @@ class RequestTracker:
         with self.lock:
 
             self.total_requests += 1
+
             self.active_requests += 1
 
-            self.endpoint_counter[endpoint] += 1
-            self.method_counter[method.upper()] += 1
+            self.endpoint_counter[
+                endpoint
+            ] += 1
+
+            self.method_counter[
+                method.upper()
+            ] += 1
 
     def end_request(
         self,
@@ -67,13 +87,44 @@ class RequestTracker:
             else:
                 self.failed_requests += 1
 
+    #
+    # API utilisée par les routes
+    #
+
+    def increment_total_requests(
+        self,
+    ) -> None:
+
+        with self.lock:
+
+            self.total_requests += 1
+
+    def increment_success_requests(
+        self,
+    ) -> None:
+
+        with self.lock:
+
+            self.success_requests += 1
+
+    def increment_error_requests(
+        self,
+    ) -> None:
+
+        with self.lock:
+
+            self.failed_requests += 1
+
     def get_error_rate(self) -> float:
 
         if self.total_requests == 0:
             return 0.0
 
         return round(
-            (self.failed_requests / self.total_requests)
+            (
+                self.failed_requests
+                / self.total_requests
+            )
             * 100,
             2,
         )
@@ -83,26 +134,44 @@ class RequestTracker:
         with self.lock:
 
             self.total_requests = 0
+
             self.success_requests = 0
+
             self.failed_requests = 0
+
             self.active_requests = 0
 
             self.endpoint_counter.clear()
+
             self.method_counter.clear()
 
-            self.started_at = datetime.utcnow()
+            self.started_at = (
+                datetime.utcnow()
+            )
 
     def get_stats(self) -> Dict:
 
         with self.lock:
 
             return {
-                "started_at": self.started_at.isoformat(),
-                "total_requests": self.total_requests,
-                "success_requests": self.success_requests,
-                "failed_requests": self.failed_requests,
-                "active_requests": self.active_requests,
-                "error_rate_percent": self.get_error_rate(),
+                "started_at": (
+                    self.started_at.isoformat()
+                ),
+                "total_requests": (
+                    self.total_requests
+                ),
+                "success_requests": (
+                    self.success_requests
+                ),
+                "failed_requests": (
+                    self.failed_requests
+                ),
+                "active_requests": (
+                    self.active_requests
+                ),
+                "error_rate_percent": (
+                    self.get_error_rate()
+                ),
                 "endpoint_usage": dict(
                     self.endpoint_counter
                 ),
@@ -117,15 +186,18 @@ class RequestTracker:
 
         return {
             "status": "healthy",
-            "total_requests": stats[
-                "total_requests"
-            ],
-            "active_requests": stats[
-                "active_requests"
-            ],
-            "error_rate_percent": stats[
-                "error_rate_percent"
-            ],
+            "total_requests": stats.get(
+                "total_requests",
+                0,
+            ),
+            "active_requests": stats.get(
+                "active_requests",
+                0,
+            ),
+            "error_rate_percent": stats.get(
+                "error_rate_percent",
+                0.0,
+            ),
         }
 
 
