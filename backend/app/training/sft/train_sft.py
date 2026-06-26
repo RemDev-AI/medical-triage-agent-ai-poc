@@ -15,6 +15,9 @@ from transformers import (
     TrainingArguments,
 )
 
+from backend.app.training.colab.colab_environment import (
+    apply_precision_arguments,
+)
 from backend.app.training.shared.training_model_loader import (
     TrainingModelLoader,
 )
@@ -40,9 +43,11 @@ CONFIG = load_config()
 
 def load_jsonl_dataset(path: str) -> Dataset:
     records: List[Dict] = []
+
     with open(path, "r", encoding="utf-8") as file:
         for line in file:
             records.append(json.loads(line))
+
     return Dataset.from_list(records)
 
 
@@ -110,6 +115,7 @@ def tokenize_function(
     )
 
     outputs["labels"] = outputs["input_ids"].copy()
+
     return outputs
 
 
@@ -157,32 +163,69 @@ def build_training_arguments() -> TrainingArguments:
 
     training_config = CONFIG["training"]
 
-    return TrainingArguments(
-        output_dir=training_config["output_dir"],
-        num_train_epochs=training_config["num_train_epochs"],
-        per_device_train_batch_size=training_config["per_device_train_batch_size"],  # noqa : E501
-        per_device_eval_batch_size=training_config["per_device_eval_batch_size"],  # noqa : E501
-        gradient_accumulation_steps=training_config["gradient_accumulation_steps"],  # noqa : E501
-        learning_rate=float(training_config["learning_rate"]),
-        weight_decay=float(training_config["weight_decay"]),
-        warmup_ratio=float(training_config["warmup_ratio"]),
-        logging_steps=training_config["logging_steps"],
-        eval_steps=training_config["eval_steps"],
-        save_steps=training_config["save_steps"],
-        save_total_limit=training_config["save_total_limit"],
-        eval_strategy=training_config["evaluation_strategy"],
-        save_strategy=training_config["save_strategy"],
-        load_best_model_at_end=training_config["load_best_model_at_end"],
-        metric_for_best_model=training_config["metric_for_best_model"],
-        greater_is_better=training_config["greater_is_better"],
-        bf16=training_config.get("bf16", True),
-        fp16=training_config.get("fp16", False),
-        gradient_checkpointing=training_config["gradient_checkpointing"],
-        lr_scheduler_type=training_config["lr_scheduler_type"],
-        max_grad_norm=float(training_config["max_grad_norm"]),
-        report_to=training_config.get("report_to", ["wandb"]),
-        remove_unused_columns=True,
+    training_args = {
+        "output_dir": training_config["output_dir"],
+        "num_train_epochs": training_config["num_train_epochs"],
+        "per_device_train_batch_size": training_config[
+            "per_device_train_batch_size"
+        ],
+        "per_device_eval_batch_size": training_config[
+            "per_device_eval_batch_size"
+        ],
+        "gradient_accumulation_steps": training_config[
+            "gradient_accumulation_steps"
+        ],
+        "learning_rate": float(
+            training_config["learning_rate"]
+        ),
+        "weight_decay": float(
+            training_config["weight_decay"]
+        ),
+        "warmup_ratio": float(
+            training_config["warmup_ratio"]
+        ),
+        "logging_steps": training_config["logging_steps"],
+        "eval_steps": training_config["eval_steps"],
+        "save_steps": training_config["save_steps"],
+        "save_total_limit": training_config[
+            "save_total_limit"
+        ],
+        "eval_strategy": training_config[
+            "evaluation_strategy"
+        ],
+        "save_strategy": training_config[
+            "save_strategy"
+        ],
+        "load_best_model_at_end": training_config[
+            "load_best_model_at_end"
+        ],
+        "metric_for_best_model": training_config[
+            "metric_for_best_model"
+        ],
+        "greater_is_better": training_config[
+            "greater_is_better"
+        ],
+        "gradient_checkpointing": training_config[
+            "gradient_checkpointing"
+        ],
+        "lr_scheduler_type": training_config[
+            "lr_scheduler_type"
+        ],
+        "max_grad_norm": float(
+            training_config["max_grad_norm"]
+        ),
+        "report_to": training_config.get(
+            "report_to",
+            ["wandb"],
+        ),
+        "remove_unused_columns": True,
+    }
+
+    training_args = apply_precision_arguments(
+        training_args
     )
+
+    return TrainingArguments(**training_args)
 
 
 def build_trainer(
