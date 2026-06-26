@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/shared/training_model_loader.py
-
+# model = setup_peft_model(
 from __future__ import annotations
 
 import logging
@@ -106,7 +106,7 @@ class TrainingModelLoader:
 
         model = setup_peft_model(
             model=model,
-            config=self.config,
+            # config=self.config,
         )
 
         logger.info("LoRA adapters applied successfully")
