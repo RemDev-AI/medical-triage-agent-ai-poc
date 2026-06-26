@@ -6,7 +6,7 @@ Hugging Face Authentication Utilities for Google Colab
 Features
 --------
 - Secure Hugging Face authentication
-- HF_TOKEN environment variable support
+- HF_TOKEN_06 environment variable support
 - Interactive Colab login support
 - Repository access validation
 - Authentication status checks
@@ -69,10 +69,10 @@ def get_hf_token() -> Optional[str]:
     Return HF token from environment.
 
     Expected variable:
-        HF_TOKEN
+        HF_TOKEN_06
     """
 
-    token = os.getenv("HF_TOKEN")
+    token = os.getenv("HF_TOKEN_06")
 
     if token:
         token = token.strip()
@@ -89,7 +89,7 @@ def login_to_huggingface(
 
     Priority:
     1. Explicit token argument
-    2. HF_TOKEN environment variable
+    2. HF_TOKEN_06 environment variable
     3. Interactive login
     """
 
@@ -103,13 +103,13 @@ def login_to_huggingface(
             )
 
             logger.info(
-                "Successfully authenticated using HF_TOKEN."
+                "Successfully authenticated using HF_TOKEN_06."
             )
 
             return True
 
         logger.info(
-            "No HF_TOKEN found. Starting interactive login."
+            "No HF_TOKEN_06 found. Starting interactive login."
         )
 
         login(

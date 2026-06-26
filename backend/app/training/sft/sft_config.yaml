@@ -52,7 +52,9 @@ training:
   push_to_hub: true
 
 model:
-  model_name: "Qwen/Qwen3-1.7B-Base"
+  base_model: "Qwen/Qwen3-1.7B-Base"
+
+  torch_dtype: "bfloat16"
 
   trust_remote_code: true
 
@@ -61,6 +63,15 @@ model:
   use_flash_attention: false
 
   hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
+
+tokenizer:
+  use_fast: true
+
+  padding_side: "right"
+
+  model_max_length: 2048
+
+special_tokens: {}
 
 dataset:
   hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"

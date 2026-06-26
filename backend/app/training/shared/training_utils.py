@@ -1,5 +1,4 @@
-# medical-triage-agent-ai-poc/
-# backend/app/training/shared/training_utils.py
+# medical-triage-agent-ai-poc/backend/app/training/shared/training_utils.py
 
 from __future__ import annotations
 
