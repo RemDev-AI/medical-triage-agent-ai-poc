@@ -9,8 +9,8 @@ Features
 - Detect CUDA availability
 - Detect BF16 support
 - Detect FP16 support
-- Expose unified training environment settings
-- Centralized BF16 logic via colab_gpu_detector.py
+- Resolve runtime device and dtype
+- Build Hugging Face TrainingArguments precision policy
 
 Used by:
 - backend/app/training/sft/train_sft.py
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 
@@ -32,7 +33,7 @@ from backend.app.training.colab.colab_gpu_detector import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class ColabEnvironment:
     """
     Runtime environment description.
@@ -83,11 +84,7 @@ def get_gpu_name() -> str | None:
 def is_bf16_supported() -> bool:
     """
     Detect BF16 capability using validated
-    GPU profiles from colab_gpu_detector.py.
-
-    Supported BF16 GPUs:
-    - NVIDIA L4
-    - NVIDIA A100
+    GPU profiles.
     """
 
     if not torch.cuda.is_available():
@@ -98,14 +95,13 @@ def is_bf16_supported() -> bool:
         return gpu_info.bf16_recommended
 
     except Exception:
+        logger.exception("Unable to determine BF16 support.")
         return False
 
 
 def is_fp16_supported() -> bool:
     """
-    FP16 fallback support.
-
-    Any CUDA-enabled GPU used in Colab can run FP16.
+    Detect FP16 capability.
     """
 
     return torch.cuda.is_available()
@@ -113,10 +109,10 @@ def is_fp16_supported() -> bool:
 
 def get_training_dtype() -> torch.dtype:
     """
-    Return optimal training dtype.
+    Resolve optimal torch dtype.
 
     Priority:
-    BF16 -> FP16 -> FP32
+        BF16 -> FP16 -> FP32
     """
 
     if is_bf16_supported():
@@ -141,12 +137,6 @@ def detect_environment() -> ColabEnvironment:
     Build runtime environment descriptor.
     """
 
-    cuda_version = (
-        torch.version.cuda
-        if torch.cuda.is_available()
-        else None
-    )
-
     return ColabEnvironment(
         is_colab=is_running_in_colab(),
         cuda_available=torch.cuda.is_available(),
@@ -154,7 +144,11 @@ def detect_environment() -> ColabEnvironment:
         bf16_supported=is_bf16_supported(),
         fp16_supported=is_fp16_supported(),
         torch_version=torch.__version__,
-        cuda_version=cuda_version,
+        cuda_version=(
+            torch.version.cuda
+            if torch.cuda.is_available()
+            else None
+        ),
         gpu_name=get_gpu_name(),
     )
 
@@ -167,54 +161,45 @@ def log_environment_info() -> ColabEnvironment:
     env = detect_environment()
 
     logger.info("========== TRAINING ENVIRONMENT ==========")
-    logger.info("Google Colab: %s", env.is_colab)
-    logger.info("Device: %s", env.device)
+    logger.info("Google Colab : %s", env.is_colab)
+    logger.info("Device        : %s", env.device)
     logger.info("CUDA Available: %s", env.cuda_available)
-    logger.info("GPU: %s", env.gpu_name)
-    logger.info("BF16 Supported: %s", env.bf16_supported)
-    logger.info("FP16 Supported: %s", env.fp16_supported)
-    logger.info("Torch Version: %s", env.torch_version)
-    logger.info("CUDA Version: %s", env.cuda_version)
+    logger.info("GPU           : %s", env.gpu_name)
+    logger.info("BF16          : %s", env.bf16_supported)
+    logger.info("FP16          : %s", env.fp16_supported)
+    logger.info("Torch Version : %s", env.torch_version)
+    logger.info("CUDA Version  : %s", env.cuda_version)
     logger.info("Training DType: %s", get_training_dtype())
     logger.info("==========================================")
 
     return env
 
 
-def get_training_arguments_precision() -> dict[str, bool]:
+def get_training_arguments_precision() -> dict[str, Any]:
     """
-    Return Hugging Face Trainer precision arguments.
+    Return precision arguments compatible with
+    Hugging Face TrainingArguments.
 
-    Example:
-        trainer_args.update(
-            get_training_arguments_precision()
-        )
+    The returned dictionary can safely be merged
+    into the TrainingArguments keyword arguments.
     """
 
+    cuda_available = torch.cuda.is_available()
     bf16 = is_bf16_supported()
 
     return {
         "bf16": bf16,
-        "fp16": (
-            torch.cuda.is_available()
-            and not bf16
-        ),
+        "fp16": cuda_available and not bf16,
+        "use_cpu": not cuda_available,
     }
 
 
 def apply_precision_arguments(
-    training_args: dict,
-) -> dict:
+    training_args: dict[str, Any],
+) -> dict[str, Any]:
     """
-    Inject precision configuration into a
+    Inject runtime precision policy into a
     TrainingArguments configuration dictionary.
-
-    Example:
-        args = {
-            "per_device_train_batch_size": 4,
-        }
-
-        args = apply_precision_arguments(args)
     """
 
     training_args.update(
