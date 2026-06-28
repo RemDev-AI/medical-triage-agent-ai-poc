@@ -1,11 +1,11 @@
 # medical-triage-agent-ai-poc/backend/app/training/shared/training_model_loader.py
+# Corrections : bug #2 (config LoRA passée), bug #3 (torch_dtype auto),
+#               bug #4 (use_reentrant=False pour Qwen3)
 
 from __future__ import annotations
 
 import logging
-from typing import Any
-from typing import Dict
-from typing import Optional  # noqa : F401
+from typing import Any, Dict, Optional  # noqa: F401
 
 import torch
 from transformers import AutoModelForCausalLM
@@ -17,77 +17,41 @@ logger = logging.getLogger(__name__)
 
 class TrainingModelLoader:
     """
-    Shared model loader used by all training pipelines.
-
-    Supported pipelines:
-        - SFT
-        - DPO
-
-    Responsibilities:
-        - Load base model
-        - Configure torch dtype
-        - Enable gradient checkpointing
-        - Apply PEFT / LoRA
-        - Prepare model for training
-
-    Non-responsibilities:
-        - Tokenizer loading
-        - Dataset loading
-        - WandB
-        - Checkpoints
-        - HF Hub uploads
-        - Clinical evaluation
+    Shared model loader — SFT & DPO pipelines.
     """
 
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
 
     def load_base_model(self) -> AutoModelForCausalLM:
-        """
-        Load the base causal language model.
-        """
-
         model_name = self.config["model"]["base_model"]
 
-        logger.info(
-            "Loading base model for training: %s",
-            model_name,
-        )
+        logger.info("Loading base model: %s", model_name)
 
         model = AutoModelForCausalLM.from_pretrained(
             pretrained_model_name_or_path=model_name,
             torch_dtype=self._resolve_torch_dtype(),
-            trust_remote_code=self.config["model"].get(
-                "trust_remote_code",
-                True,
-            ),
-            device_map=self.config["model"].get(
-                "device_map",
-                "auto",
-            ),
+            trust_remote_code=self.config["model"].get("trust_remote_code", True),  # noqa: E501
+            device_map=self.config["model"].get("device_map", "auto"),
         )
 
-        logger.info("Base model loaded successfully")
-
+        logger.info("Base model loaded successfully.")
         return model
 
     def apply_gradient_checkpointing(
         self,
         model: AutoModelForCausalLM,
     ) -> AutoModelForCausalLM:
-        """
-        Enable gradient checkpointing if configured.
-        """
-
-        enabled = self.config["training"].get(
-            "gradient_checkpointing",
-            True,
-        )
+        enabled = self.config["training"].get("gradient_checkpointing", True)
 
         if enabled:
-            logger.info("Enabling gradient checkpointing")
+            logger.info("Enabling gradient checkpointing (use_reentrant=False).")  # noqa: E501
 
-            model.gradient_checkpointing_enable()
+            # FIX BUG #4 — use_reentrant=False requis pour Qwen3
+            # + DataCollatorForSeq2Seq (évite NaN silencieux sur certaines versions)  # noqa: E501
+            model.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs={"use_reentrant": False}
+            )
 
             if hasattr(model, "enable_input_require_grads"):
                 model.enable_input_require_grads()
@@ -98,52 +62,36 @@ class TrainingModelLoader:
         self,
         model: AutoModelForCausalLM,
     ) -> AutoModelForCausalLM:
-        """
-        Apply LoRA adapters through PEFT setup.
-        """
+        logger.info("Applying LoRA adapters.")
 
-        logger.info("Applying LoRA adapters")
-
+        # FIX BUG #2 — config passée à setup_peft_model (était commentée)
         model = setup_peft_model(
             model=model,
-            # config=self.config,
+            config=self.config,     # ← décommenté : la config YAML est lue
         )
 
-        logger.info("LoRA adapters applied successfully")
-
+        logger.info("LoRA adapters applied successfully.")
         return model
 
     def prepare_for_training(self) -> AutoModelForCausalLM:
-        """
-        Complete training preparation pipeline.
-
-        Returns:
-            PEFT model ready for SFT or DPO training.
-        """
-
         model = self.load_base_model()
-
-        model = self.apply_gradient_checkpointing(
-            model=model,
-        )
-
-        model = self.apply_lora(
-            model=model,
-        )
-
+        model = self.apply_gradient_checkpointing(model=model)
+        model = self.apply_lora(model=model)
         self._log_trainable_parameters(model)
-
         return model
 
+    # FIX BUG #3 — torch_dtype "auto" délégué à colab_environment
     def _resolve_torch_dtype(self) -> torch.dtype:
-        """
-        Resolve dtype from configuration.
-        """
+        dtype = self.config["model"].get("torch_dtype", "auto")
 
-        dtype = self.config["model"].get(
-            "torch_dtype",
-            "bfloat16",
-        )
+        if dtype == "auto":
+            # Source unique de vérité : même logique que apply_precision_arguments()  # noqa: E501
+            from backend.app.training.colab.colab_environment import (
+                get_training_dtype,
+            )
+            resolved = get_training_dtype()
+            logger.info("torch_dtype=auto → résolu par runtime : %s", resolved)
+            return resolved
 
         mapping = {
             "float16": torch.float16,
@@ -153,40 +101,22 @@ class TrainingModelLoader:
             "float32": torch.float32,
             "fp32": torch.float32,
         }
-
-        resolved_dtype = mapping.get(
-            dtype.lower(),
-            torch.bfloat16,
-        )
-
-        logger.info(
-            "Using torch dtype: %s",
-            resolved_dtype,
-        )
-
-        return resolved_dtype
+        resolved = mapping.get(dtype.lower(), torch.float16)
+        logger.info("torch_dtype=%s → %s", dtype, resolved)
+        return resolved
 
     @staticmethod
-    def _log_trainable_parameters(
-        model: AutoModelForCausalLM,
-    ) -> None:
-        """
-        Log trainable parameters after LoRA injection.
-        """
-
+    def _log_trainable_parameters(model: AutoModelForCausalLM) -> None:
         trainable_params = 0
         total_params = 0
 
         for parameter in model.parameters():
             total_params += parameter.numel()
-
             if parameter.requires_grad:
                 trainable_params += parameter.numel()
 
         percentage = (
-            100 * trainable_params / total_params
-            if total_params > 0
-            else 0.0
+            100 * trainable_params / total_params if total_params > 0 else 0.0
         )
 
         logger.info(
@@ -197,15 +127,5 @@ class TrainingModelLoader:
         )
 
     @classmethod
-    def build(
-        cls,
-        config: Dict[str, Any],
-    ) -> AutoModelForCausalLM:
-        """
-        Convenience entrypoint.
-
-        Example:
-            model = TrainingModelLoader.build(config)
-        """
-
+    def build(cls, config: Dict[str, Any]) -> AutoModelForCausalLM:
         return cls(config).prepare_for_training()
