@@ -108,22 +108,31 @@ def tokenize_function(examples, tokenizer, max_length: int):
     outputs = tokenizer(
         examples["text"],
         truncation=True,
-        padding=False,          # ← était "max_length"
+        padding=False,
         max_length=max_length,
     )
 
     labels = []
     for input_ids, text in zip(outputs["input_ids"], examples["text"]):
-        # Masquer le prompt, loss uniquement sur la réponse assistant
         assistant_marker = "<|assistant|>\n"
-        prefix = text.split(assistant_marker)[0] + assistant_marker
+        parts = text.split(assistant_marker)
+
+        if len(parts) < 2:
+            # Sécurité : pas de marqueur trouvé → masquer tout
+            labels.append([-100] * len(input_ids))
+            continue
+
+        prefix = parts[0] + assistant_marker
         prefix_ids = tokenizer(
             prefix,
+            truncation=True,          # ← AJOUT CRITIQUE
+            max_length=max_length,    # ← AJOUT CRITIQUE
             add_special_tokens=False,
         )["input_ids"]
-        prefix_len = len(prefix_ids)
 
-        # Masquer le prompt avec -100 (ignoré par cross_entropy)
+        prefix_len = min(len(prefix_ids), len(input_ids))  # ← garde-fou
+
+        # Labels alignés sur input_ids (même longueur garantie)
         label = [-100] * prefix_len + input_ids[prefix_len:]
         labels.append(label)
 
