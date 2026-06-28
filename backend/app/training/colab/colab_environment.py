@@ -175,6 +175,7 @@ def log_environment_info() -> ColabEnvironment:
     return env
 
 
+# Ajouter dans get_training_arguments_precision()
 def get_training_arguments_precision() -> dict[str, Any]:
     """
     Return precision arguments compatible with
@@ -183,9 +184,20 @@ def get_training_arguments_precision() -> dict[str, Any]:
     The returned dictionary can safely be merged
     into the TrainingArguments keyword arguments.
     """
-
+    
     cuda_available = torch.cuda.is_available()
     bf16 = is_bf16_supported()
+
+    # Guard explicite : logger un warning si bf16 activé sur T4
+    if bf16:
+        gpu_name = get_gpu_name() or ""
+        if "T4" in gpu_name or "Tesla" in gpu_name:
+            logger.warning(
+                "BF16 détecté sur %s — GPU non supporté nativement. "
+                "Forçage fp16.",
+                gpu_name,
+            )
+            bf16 = False
 
     return {
         "bf16": bf16,

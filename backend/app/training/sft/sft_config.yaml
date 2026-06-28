@@ -5,10 +5,10 @@ training:
 
   num_train_epochs: 3
 
-  per_device_train_batch_size: 2
-  per_device_eval_batch_size: 2
+  per_device_train_batch_size: 1    # ← était 2
+  per_device_eval_batch_size: 1     # ← était 2
 
-  gradient_accumulation_steps: 8
+  gradient_accumulation_steps: 16   # ← compense (batch effectif = 16, était 2×8=16 ✓)
 
   learning_rate: 2e-4
   weight_decay: 0.01
@@ -19,7 +19,7 @@ training:
 
   max_grad_norm: 1.0
 
-  gradient_checkpointing: true
+  gradient_checkpointing: true      # ✓ déjà activé
 
   logging_steps: 10
   eval_steps: 100
@@ -38,10 +38,10 @@ training:
 
   early_stopping_patience: 3
 
-  fp16: false
-  bf16: true
+  fp16: true                        # ← activer (T4 supporte fp16 natif)
+  bf16: false                       # ← désactiver (T4 incompatible)
 
-  dataloader_num_workers: 2
+  dataloader_num_workers: 0         # ← évite les leaks mémoire sur Colab
 
   report_to:
     - "wandb"
@@ -51,14 +51,15 @@ training:
 
   push_to_hub: true
 
+
 model:
   base_model: "Qwen/Qwen3-1.7B-Base"
 
-  torch_dtype: "bfloat16"
+  torch_dtype: "float16"            # ← était "bfloat16"
 
   trust_remote_code: true
 
-  device_map: "auto"
+  device_map: "auto"                # ✓ ok
 
   use_flash_attention: false
 
@@ -83,7 +84,7 @@ dataset:
   test_split: "test"
   clinical_eval_split: "clinical_eval"
 
-  max_sequence_length: 2048
+  max_sequence_length: 512          # ← était 2048, réduire drastiquement
 
   packing: false
 

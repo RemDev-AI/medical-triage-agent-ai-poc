@@ -37,10 +37,10 @@ training:
 
   early_stopping_patience: 2
 
-  fp16: false
-  bf16: true
+  fp16: true                        # ← activer (T4 supporte fp16 natif)
+  bf16: false                       # ← désactiver (T4 incompatible)
 
-  dataloader_num_workers: 2
+  dataloader_num_workers: 0         # ← était à 2, évite les leaks mémoire sur Colab
 
   report_to:
     - "wandb"
@@ -64,7 +64,7 @@ dpo:
 model:
   base_model: "Qwen/Qwen3-1.7B-Base"
 
-  torch_dtype: "bfloat16"
+  torch_dtype: "float16"            # ← était "bfloat16"
 
   trust_remote_code: true
 
