@@ -10,10 +10,12 @@ from typing import Dict, List, Tuple
 import yaml
 from datasets import Dataset, load_dataset
 from transformers import (
+    DataCollatorForSeq2Seq,      # ← ajouter
     EarlyStoppingCallback,
     Trainer,
     TrainingArguments,
 )
+
 
 from backend.app.training.colab.colab_environment import (
     apply_precision_arguments,
@@ -102,20 +104,30 @@ def build_prompt(example: Dict) -> Dict:
     return {"text": prompt}
 
 
-def tokenize_function(
-    examples,
-    tokenizer,
-    max_length: int,
-):
+def tokenize_function(examples, tokenizer, max_length: int):
     outputs = tokenizer(
         examples["text"],
         truncation=True,
-        padding="max_length",
+        padding=False,          # ← était "max_length"
         max_length=max_length,
     )
 
-    outputs["labels"] = outputs["input_ids"].copy()
+    labels = []
+    for input_ids, text in zip(outputs["input_ids"], examples["text"]):
+        # Masquer le prompt, loss uniquement sur la réponse assistant
+        assistant_marker = "<|assistant|>\n"
+        prefix = text.split(assistant_marker)[0] + assistant_marker
+        prefix_ids = tokenizer(
+            prefix,
+            add_special_tokens=False,
+        )["input_ids"]
+        prefix_len = len(prefix_ids)
 
+        # Masquer le prompt avec -100 (ignoré par cross_entropy)
+        label = [-100] * prefix_len + input_ids[prefix_len:]
+        labels.append(label)
+
+    outputs["labels"] = labels
     return outputs
 
 
@@ -234,8 +246,16 @@ def build_trainer(
     train_dataset,
     validation_dataset,
 ):
-
     training_args = build_training_arguments()
+
+    # Padding dynamique par batch → pas de tokens inutiles
+    data_collator = DataCollatorForSeq2Seq(
+        tokenizer=tokenizer,
+        model=model,
+        padding=True,
+        pad_to_multiple_of=8,       # alignement Tensor Core
+        label_pad_token_id=-100,    # cohérent avec le masquage ci-dessus
+    )
 
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=CONFIG["training"][
@@ -249,6 +269,7 @@ def build_trainer(
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,
         processing_class=tokenizer,
+        data_collator=data_collator,    # ← ajouter
         callbacks=[early_stopping],
     )
 
