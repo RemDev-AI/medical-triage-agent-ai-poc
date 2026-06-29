@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/dpo/dpo_config_validation.yaml
-#
+# 
 # CORRECTIONS OOM appliquées :
 #   - OOM-1 : max_length réduit 2048 → 512 (activations ∝ seq²)
 #   - OOM-2 : max_prompt_length réduit 1024 → 256
