@@ -184,7 +184,7 @@ def get_training_arguments_precision() -> dict[str, Any]:
     The returned dictionary can safely be merged
     into the TrainingArguments keyword arguments.
     """
-    
+
     cuda_available = torch.cuda.is_available()
     bf16 = is_bf16_supported()
 

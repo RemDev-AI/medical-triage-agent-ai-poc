@@ -1,111 +1,99 @@
 # medical-triage-agent-ai-poc/backend/app/training/dpo/dpo_config_validation.yaml
-# Petit run de validation DPO — T4 Colab
-# Objectif : valider la pipeline en ~15-20 min avant montée en charge
-# NE PAS utiliser pour la production
+#
+# CORRECTIONS OOM appliquées :
+#   - OOM-1 : max_length réduit 2048 → 512 (activations ∝ seq²)
+#   - OOM-2 : max_prompt_length réduit 1024 → 256
+#   - OOM-3 : fp16 / bf16 supprimés du YAML (source unique = apply_precision_arguments)
+#             torch_dtype → "auto" (était "float16" hardcodé, conflictuel avec fp16:true)
+#   - OOM-4 : tokenizer.model_max_length aligné sur dpo.max_length (512)
+#   - OOM-5 : PYTORCH_CUDA_ALLOC_CONF documenté ici, à définir avant le run
+#             (voir commentaire ci-dessous)
+#
+# ── Avant de lancer le run, exécuter dans Colab ──────────────────────────────
+#   import os
+#   os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+# ─────────────────────────────────────────────────────────────────────────────
 
 training:
-  output_dir: "artifacts/checkpoints/dpo_validation"
-
-  num_train_epochs: 1                 # 1 epoch suffit pour valider
-
+  output_dir: "artifacts/checkpoints/dpo"
+  num_train_epochs: 1
   per_device_train_batch_size: 1
   per_device_eval_batch_size: 1
-
-  gradient_accumulation_steps: 4      # batch effectif = 4 (était 16, trop lourd)
-
+  gradient_accumulation_steps: 16
   learning_rate: 5e-6
   warmup_ratio: 0.05
   lr_scheduler_type: "cosine"
   max_grad_norm: 1.0
-
   gradient_checkpointing: true
-
   logging_steps: 10
-  eval_steps: 50                      # eval fréquente pour détecter nan tôt
+  eval_steps: 50
   save_steps: 50
-
   evaluation_strategy: "steps"
   save_strategy: "steps"
-
-  save_total_limit: 1                 # 1 seul checkpoint en validation
+  save_total_limit: 3
   save_safetensors: true
-
   load_best_model_at_end: true
   metric_for_best_model: "eval_loss"
   greater_is_better: false
-
   early_stopping_patience: 2
-
-  # Précision : NE PAS mettre fp16/bf16 ici
-  # apply_precision_arguments() détecte le GPU et décide seul (T4 → fp16)
-
+  # OOM-3 : fp16 / bf16 SUPPRIMÉS — précision détectée automatiquement
+  #         par apply_precision_arguments() selon le GPU détecté au runtime.
+  #         Ne PAS remettre fp16/bf16 ici pour éviter les conflits avec
+  #         torch_dtype et une double activation du mixed-precision.
   dataloader_num_workers: 0
-
   report_to:
     - "wandb"
-
   resume_from_checkpoint: null
-
-  push_to_hub: false                  # pas de push en validation
-
+  push_to_hub: true
 
 dpo:
   beta: 0.1
-  max_prompt_length: 256              # réduit pour T4 (était 1024)
-  max_length: 512                     # réduit pour T4 (était 2048)
+  # OOM-1 : max_length réduit 2048 → 512
+  # Sur T4 14.5 GiB avec double modèle DPO (model + reference),
+  # les activations croissent en O(seq²) → 2048 est fatal.
+  # 512 laisse ~4-5 GiB de marge après les deux copies de poids.
+  max_length: 512
+  # OOM-2 : max_prompt_length réduit 1024 → 256
+  # Doit être < max_length. Laisse 256 tokens pour chosen/rejected.
+  max_prompt_length: 256
   loss_type: "sigmoid"
+  truncation_mode: "keep_end"
   reference_free: false
-
 
 model:
   base_model: "Qwen/Qwen3-1.7B-Base"
-
-  # "auto" → délégué à colab_environment.get_training_dtype()
-  # Sur T4 : fp16. Sur A100 : bf16. Source unique de vérité.
+  # OOM-3 : torch_dtype → "auto" (était "float16" hardcodé)
+  # "auto" laisse transformers choisir float16 sur T4 (pas bfloat16)
+  # sans conflit avec les flags fp16/bf16 de TrainingArguments.
   torch_dtype: "auto"
-
   trust_remote_code: true
   device_map: "auto"
   use_flash_attention: false
-
   hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
-
-
-lora:
-  r: 8                                # rang réduit pour validation (prod : 16-64)
-  lora_alpha: 16
-  lora_dropout: 0.05
-  bias: "none"
-  task_type: "CAUSAL_LM"
-  target_modules:
-    - "q_proj"
-    - "v_proj"
-
 
 tokenizer:
   use_fast: true
   padding_side: "right"
-  model_max_length: 2048
+  # OOM-4 : aligné sur dpo.max_length pour éviter des séquences
+  # plus longues que ce que DPOTrainer va tronquer de toute façon.
+  model_max_length: 512
 
 special_tokens: {}
-
 
 dataset:
   hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
   hf_config: "dpo"
-
   train_split: "train"
   validation_split: "validation"
   test_split: "test"
   clinical_eval_split: "clinical_eval"
+  # Sous-ensemble de validation rapide (DPO-4)
+  max_train_samples: 500
+  max_val_samples: 100
 
-  max_train_samples: 100              # sous-ensemble pour validation rapide
-  max_val_samples: 25
-
-  # Optional local fallback
-  # train_path: "backend/app/datasets/processed/dpo/train.jsonl"
-  # validation_path: "backend/app/datasets/processed/dpo/validation.jsonl"
-
+tracking:
+  wandb_project: "medical-triage-llm"
+  wandb_run_name: "qwen3-1.7b-dpo"
 
 safety:
   hallucination_keywords:
@@ -118,12 +106,6 @@ safety:
     - "ignore chest pain"
     - "self-medicate antibiotics"
     - "replace doctor diagnosis"
-
-
-tracking:
-  wandb_project: "medical-triage-llm"
-  wandb_run_name: "qwen3-1.7b-dpo-validation-run"
-
 
 system:
   seed: 42
