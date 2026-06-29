@@ -13,20 +13,12 @@
 #   - DPO-3   : max_prompt_length et max_length lus depuis la config YAML
 #   - DPO-4   : sous-ensemble de validation (max_train_samples / max_val_samples)  # noqa : E501
 #   - DPO-5   : SafetyFilter appliqué sur chosen/rejected avant entraînement
-#
-# CORRECTIONS OOM :
-#   - OOM-1   : max_length 2048 → 512 dans le YAML (activations ∝ seq²)
-#   - OOM-2   : max_prompt_length 1024 → 256 dans le YAML
-#   - OOM-3   : fp16/bf16 supprimés du YAML, torch_dtype="auto" uniquement
-#   - OOM-4   : max_prompt_length transmis à DPOConfig (était absent de build_dpo_config)  # noqa : E501
-#   - OOM-5   : PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True défini au démarrage  # noqa : E501
 
 from __future__ import annotations
 
 import json
 import logging
 import math
-import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -65,26 +57,6 @@ def load_config() -> Dict:
 
 
 CONFIG = load_config()
-
-
-# ---------------------------------------------------------------------------
-# OOM-5 — Définir PYTORCH_CUDA_ALLOC_CONF avant tout import torch
-# Réduit la fragmentation mémoire sur T4 / Colab.
-# Doit être défini avant que PyTorch alloue quoi que ce soit.
-# ---------------------------------------------------------------------------
-def _configure_cuda_allocator() -> None:
-    current = os.environ.get("PYTORCH_CUDA_ALLOC_CONF", "")
-    if "expandable_segments" not in current:
-        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = (
-            (current + ",expandable_segments:True").lstrip(",")
-        )
-        logger.info(
-            "PYTORCH_CUDA_ALLOC_CONF → %s",
-            os.environ["PYTORCH_CUDA_ALLOC_CONF"],
-        )
-
-
-_configure_cuda_allocator()
 
 
 # ---------------------------------------------------------------------------
@@ -191,7 +163,7 @@ def prepare_datasets() -> Tuple[Dataset, Dataset]:
     safety_filter = SafetyFilter(CONFIG)
 
     train_dataset = load_dataset_source("train").map(build_dpo_sample)
-    validation_dataset = load_dataset_source("validation").map(build_dpo_sample)  # noqa: E501
+    validation_dataset = load_dataset_source("validation").map(build_dpo_sample)  # noqa : E501
 
     # FIX DPO-5 — filtre de sécurité sur les données DPO
     before_train = len(train_dataset)
@@ -206,7 +178,7 @@ def prepare_datasets() -> Tuple[Dataset, Dataset]:
     )
     logger.info(
         "SafetyFilter — validation : %d → %d exemples (-%d écartés).",
-        before_val, len(validation_dataset), before_val - len(validation_dataset),  # noqa: E501
+        before_val, len(validation_dataset), before_val - len(validation_dataset),  # noqa : E501
     )
 
     if len(validation_dataset) == 0:
@@ -222,23 +194,12 @@ def build_dpo_config() -> "DPOConfig":
     training_config = CONFIG["training"]
     dpo_config = CONFIG["dpo"]
 
-    # OOM-4 : max_prompt_length était absent → transmis maintenant
-    max_length = dpo_config.get("max_length", 512)
-    max_prompt_length = dpo_config.get("max_prompt_length", 256)
-
-    # Validation : max_prompt_length doit être < max_length
-    if max_prompt_length >= max_length:
-        raise ValueError(
-            f"max_prompt_length ({max_prompt_length}) doit être "
-            f"strictement inférieur à max_length ({max_length})."
-        )
-
     training_args = {
         "output_dir": training_config["output_dir"],
         "num_train_epochs": training_config["num_train_epochs"],
-        "per_device_train_batch_size": training_config["per_device_train_batch_size"],  # noqa: E501
-        "per_device_eval_batch_size": training_config["per_device_eval_batch_size"],   # noqa: E501
-        "gradient_accumulation_steps": training_config["gradient_accumulation_steps"],  # noqa: E501
+        "per_device_train_batch_size": training_config["per_device_train_batch_size"],  # noqa : E501
+        "per_device_eval_batch_size": training_config["per_device_eval_batch_size"],  # noqa : E501
+        "gradient_accumulation_steps": training_config["gradient_accumulation_steps"],  # noqa : E501
         "learning_rate": float(training_config["learning_rate"]),
         "logging_steps": training_config["logging_steps"],
         "eval_steps": training_config["eval_steps"],
@@ -246,29 +207,26 @@ def build_dpo_config() -> "DPOConfig":
         "save_total_limit": training_config["save_total_limit"],
         "gradient_checkpointing": training_config["gradient_checkpointing"],
         "report_to": training_config.get("report_to", ["wandb"]),
-        "dataloader_num_workers": training_config.get("dataloader_num_workers", 0),  # noqa: E501
+        "dataloader_num_workers": training_config.get("dataloader_num_workers", 0),  # noqa : E501
 
         # FIX DPO-2 — champs TrainingArguments
         "eval_strategy": training_config.get("evaluation_strategy", "steps"),
         "save_strategy": training_config.get("save_strategy", "steps"),
-        "load_best_model_at_end": training_config.get("load_best_model_at_end", True),   # noqa: E501
-        "metric_for_best_model": training_config.get("metric_for_best_model", "eval_loss"),  # noqa: E501
+        "load_best_model_at_end": training_config.get("load_best_model_at_end", True),  # noqa : E501
+        "metric_for_best_model": training_config.get("metric_for_best_model", "eval_loss"),  # noqa : E501
         "greater_is_better": training_config.get("greater_is_better", False),
         "warmup_ratio": float(training_config.get("warmup_ratio", 0.05)),
-        "lr_scheduler_type": training_config.get("lr_scheduler_type", "cosine"),  # noqa: E501
+        "lr_scheduler_type": training_config.get("lr_scheduler_type", "cosine"),  # noqa : E501
         "max_grad_norm": float(training_config.get("max_grad_norm", 1.0)),
 
-        # FIX DPO-3 + OOM-4 : max_length et max_prompt_length transmis
+        # FIX DPO-3 — paramètres DPO compatibles trl 1.7.0
         "beta": float(dpo_config.get("beta", 0.1)),
-        "max_length": max_length,
-        "max_prompt_length": max_prompt_length,
+        "max_length": dpo_config.get("max_length", 512),
         "loss_type": dpo_config.get("loss_type", "sigmoid"),
         "truncation_mode": dpo_config.get("truncation_mode", "keep_end"),
     }
 
-    # FIX BUG #3 — précision détectée depuis le GPU (source unique)
-    # OOM-3 : fp16/bf16 NE DOIVENT PAS être dans le YAML,
-    # apply_precision_arguments() est la seule source de vérité.
+    # FIX BUG #3 — précision détectée depuis le GPU
     training_args = apply_precision_arguments(training_args)
 
     return DPOConfig(**training_args)
@@ -279,7 +237,7 @@ def build_trainer(
     tokenizer,
     train_dataset,
     validation_dataset,
-) -> "DPOTrainer":
+) -> DPOTrainer | None:  # ← sans guillemets  # noqa : W291 
     if DPOTrainer is None:
         raise ImportError(
             "TRL package is required for DPO training. "
@@ -288,7 +246,7 @@ def build_trainer(
 
     # FIX DPO-1 — EarlyStoppingCallback absent dans la version originale
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=CONFIG["training"].get("early_stopping_patience", 2)  # noqa: E501
+        early_stopping_patience=CONFIG["training"].get("early_stopping_patience", 2)  # noqa : E501
     )
 
     # NaNGuardCallback en premier pour stopper avant EarlyStopping
