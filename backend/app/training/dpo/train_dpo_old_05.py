@@ -10,16 +10,15 @@
 #               → champs manquants ajoutés (eval_strategy, save_strategy,
 #                 load_best_model_at_end, warmup_ratio, lr_scheduler_type,
 #                 max_grad_norm, dataloader_num_workers)
-#   - DPO-3   : max_length lu depuis la config YAML
+#   - DPO-3   : max_prompt_length et max_length lus depuis la config YAML
 #   - DPO-4   : sous-ensemble de validation (max_train_samples / max_val_samples)  # noqa : E501
 #   - DPO-5   : SafetyFilter appliqué sur chosen/rejected avant entraînement
 #
 # CORRECTIONS OOM :
 #   - OOM-1   : max_length 2048 → 512 dans le YAML (activations ∝ seq²)
-#   - OOM-2   : max_prompt_length 1024 → 256 dans le YAML (config uniquement)
+#   - OOM-2   : max_prompt_length 1024 → 256 dans le YAML
 #   - OOM-3   : fp16/bf16 supprimés du YAML, torch_dtype="auto" uniquement
-#   - OOM-4   : max_prompt_length SUPPRIMÉ de DPOConfig — absent de cette version TRL  # noqa : E501
-#               max_length seul est transmis à DPOConfig
+#   - OOM-4   : max_prompt_length transmis à DPOConfig (était absent de build_dpo_config)  # noqa : E501
 #   - OOM-5   : PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True défini au démarrage  # noqa : E501
 
 from __future__ import annotations
@@ -223,9 +222,8 @@ def build_dpo_config() -> "DPOConfig":
     training_config = CONFIG["training"]
     dpo_config = CONFIG["dpo"]
 
+    # OOM-4 : max_prompt_length était absent → transmis maintenant
     max_length = dpo_config.get("max_length", 512)
-    # max_prompt_length conservé localement pour la validation logique
-    # uniquement — NE DOIT PAS être transmis à DPOConfig (absent de TRL ici).
     max_prompt_length = dpo_config.get("max_prompt_length", 256)
 
     # Validation : max_prompt_length doit être < max_length
@@ -260,10 +258,10 @@ def build_dpo_config() -> "DPOConfig":
         "lr_scheduler_type": training_config.get("lr_scheduler_type", "cosine"),  # noqa: E501
         "max_grad_norm": float(training_config.get("max_grad_norm", 1.0)),
 
-        # OOM-4 : max_prompt_length SUPPRIMÉ — absent de DPOConfig dans
-        # cette version de TRL. max_length seul est transmis.
+        # FIX DPO-3 + OOM-4 : max_length et max_prompt_length transmis
         "beta": float(dpo_config.get("beta", 0.1)),
         "max_length": max_length,
+        "max_prompt_length": max_prompt_length,
         "loss_type": dpo_config.get("loss_type", "sigmoid"),
         "truncation_mode": dpo_config.get("truncation_mode", "keep_end"),
     }
