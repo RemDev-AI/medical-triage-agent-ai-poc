@@ -209,7 +209,7 @@ def build_dpo_config() -> "DPOConfig":
         "report_to": training_config.get("report_to", ["wandb"]),
         "dataloader_num_workers": training_config.get("dataloader_num_workers", 0),  # noqa : E501
 
-        # FIX DPO-2 — champs manquants dans la version originale
+        # FIX DPO-2 — champs TrainingArguments
         "eval_strategy": training_config.get("evaluation_strategy", "steps"),
         "save_strategy": training_config.get("save_strategy", "steps"),
         "load_best_model_at_end": training_config.get("load_best_model_at_end", True),  # noqa : E501
@@ -219,14 +219,14 @@ def build_dpo_config() -> "DPOConfig":
         "lr_scheduler_type": training_config.get("lr_scheduler_type", "cosine"),  # noqa : E501
         "max_grad_norm": float(training_config.get("max_grad_norm", 1.0)),
 
-        # FIX DPO-3 — paramètres DPO lus depuis [dpo] dans le YAML
+        # FIX DPO-3 — paramètres DPO compatibles trl 1.7.0
         "beta": float(dpo_config.get("beta", 0.1)),
-        "max_prompt_length": dpo_config.get("max_prompt_length", 256),
         "max_length": dpo_config.get("max_length", 512),
         "loss_type": dpo_config.get("loss_type", "sigmoid"),
+        "truncation_mode": dpo_config.get("truncation_mode", "keep_end"),
     }
 
-    # FIX BUG #3 — source unique de précision : runtime détecte le GPU
+    # FIX BUG #3 — précision détectée depuis le GPU
     training_args = apply_precision_arguments(training_args)
 
     return DPOConfig(**training_args)
