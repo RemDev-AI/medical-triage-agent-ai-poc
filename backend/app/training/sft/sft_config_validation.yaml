@@ -1,4 +1,5 @@
-# sft_config_validation.yaml
+# medical-triage-agent-ai-poc/backend/app/training/sft/sft_config_validation.yaml
+
 # Petit run de validation LoRA — T4 Colab
 # Objectif : valider la pipeline en ~15 min avant montée en charge
 # NE PAS utiliser pour la production

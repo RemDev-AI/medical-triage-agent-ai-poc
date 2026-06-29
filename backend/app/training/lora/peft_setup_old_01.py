@@ -13,29 +13,19 @@ This module handles:
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 import torch
 from peft import (
-    LoraConfig,
     PeftModel,
-    TaskType,
     get_peft_model,
     prepare_model_for_kbit_training,
 )
 from transformers import AutoModelForCausalLM
 
-from backend.app.training.lora.lora_config import (
-    DEFAULT_LORA_CONFIG,
-    LoRAHyperParameters,
-    build_lora_config,
-)
+from backend.app.training.lora.lora_config import DEFAULT_LORA_CONFIG
 
 logger = logging.getLogger(__name__)
-
-# Instance de référence pour les valeurs par défaut
-# (dataclass : les defaults ne sont pas des attributs de classe)
-_DEFAULT_LORA_PARAMS = LoRAHyperParameters()
 
 
 def prepare_model_for_lora(
@@ -77,67 +67,8 @@ def prepare_model_for_lora(
     return model
 
 
-def build_lora_config_from_yaml(config: Dict) -> LoraConfig:
-    """
-    Build a LoraConfig from the YAML training config dict.
-
-    Reads from config["lora"] section. Falls back to
-    LoRAHyperParameters defaults for any missing key.
-
-    Args:
-        config:
-            Full training config dict (loaded from YAML).
-
-    Returns:
-        LoraConfig instance.
-    """
-    lora_section = config.get("lora", {})
-
-    # _DEFAULT_LORA_PARAMS est une instance : accès aux defaults garanti
-    params = LoRAHyperParameters(
-        rank=lora_section.get("r", _DEFAULT_LORA_PARAMS.rank),
-        alpha=lora_section.get("lora_alpha", _DEFAULT_LORA_PARAMS.alpha),
-        dropout=lora_section.get("lora_dropout", _DEFAULT_LORA_PARAMS.dropout),
-        bias=lora_section.get("bias", _DEFAULT_LORA_PARAMS.bias),
-        task_type=TaskType[lora_section.get("task_type", "CAUSAL_LM")],
-        target_modules=tuple(
-            lora_section.get(
-                "target_modules",
-                list(_DEFAULT_LORA_PARAMS.target_modules),
-            )
-        ),
-        modules_to_save=(
-            tuple(lora_section["modules_to_save"])
-            if "modules_to_save" in lora_section
-            else _DEFAULT_LORA_PARAMS.modules_to_save
-        ),
-        inference_mode=lora_section.get(
-            "inference_mode", _DEFAULT_LORA_PARAMS.inference_mode
-        ),
-        use_rslora=lora_section.get("use_rslora", _DEFAULT_LORA_PARAMS.use_rslora),  # noqa : E501
-        use_dora=lora_section.get("use_dora", _DEFAULT_LORA_PARAMS.use_dora),
-        init_lora_weights=lora_section.get(
-            "init_lora_weights", _DEFAULT_LORA_PARAMS.init_lora_weights
-        ),
-    )
-
-    params.validate()
-
-    logger.info(
-        "LoRA config built from YAML: rank=%s, alpha=%s, dropout=%s, "
-        "target_modules=%s",
-        params.rank,
-        params.alpha,
-        params.dropout,
-        params.target_modules,
-    )
-
-    return build_lora_config(params)
-
-
 def inject_lora_adapters(
     model: AutoModelForCausalLM,
-    lora_config: Optional[LoraConfig] = None,
 ) -> PeftModel:
     """
     Inject LoRA adapters into model.
@@ -146,26 +77,18 @@ def inject_lora_adapters(
         model:
             Prepared model.
 
-        lora_config:
-            LoraConfig to use. Falls back to DEFAULT_LORA_CONFIG
-            if not provided.
-
     Returns:
         PEFT wrapped model.
     """
 
-    effective_config = lora_config or DEFAULT_LORA_CONFIG
-
-    if effective_config is None:
-        raise ValueError(
-            "No LoraConfig provided and DEFAULT_LORA_CONFIG is not configured."
-        )
+    if DEFAULT_LORA_CONFIG is None:
+        raise ValueError("DEFAULT_LORA_CONFIG is not configured.")
 
     logger.info("Injecting LoRA adapters...")
 
     peft_model = get_peft_model(
         model,
-        effective_config,
+        DEFAULT_LORA_CONFIG,
     )
 
     logger.info("LoRA adapters successfully injected.")
@@ -247,14 +170,12 @@ def get_gpu_memory_usage() -> Dict[str, object]:
 
 def setup_peft_model(
     model: AutoModelForCausalLM,
-    config: Optional[Dict] = None,      # ← FIX BUG #2 : paramètre ajouté
 ) -> PeftModel:
     """
     Full PEFT setup pipeline.
 
     Steps:
     - prepare model
-    - build LoraConfig (depuis YAML si config fourni, sinon DEFAULT)
     - inject LoRA
     - print trainable params
     - log GPU statistics
@@ -262,11 +183,6 @@ def setup_peft_model(
     Args:
         model:
             Base transformer model.
-
-        config:
-            Full training config dict (loaded from YAML).
-            Si fourni, les hyperparamètres LoRA sont lus depuis
-            config["lora"]. Si None, DEFAULT_LORA_CONFIG est utilisé.
 
     Returns:
         PEFT model.
@@ -284,17 +200,7 @@ def setup_peft_model(
 
     model = prepare_model_for_lora(model)
 
-    # FIX BUG #2 — construire la LoraConfig depuis le YAML si disponible
-    if config is not None:
-        lora_config = build_lora_config_from_yaml(config)
-    else:
-        lora_config = DEFAULT_LORA_CONFIG
-        logger.warning(
-            "No config provided to setup_peft_model — "
-            "using DEFAULT_LORA_CONFIG (YAML ignoré)."
-        )
-
-    peft_model = inject_lora_adapters(model, lora_config=lora_config)
+    peft_model = inject_lora_adapters(model)
 
     print_trainable_parameters(peft_model)
 

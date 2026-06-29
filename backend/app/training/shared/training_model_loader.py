@@ -1,4 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/shared/training_model_loader.py
+
 # Corrections : bug #2 (config LoRA passée), bug #3 (torch_dtype auto),
 #               bug #4 (use_reentrant=False pour Qwen3)
 
