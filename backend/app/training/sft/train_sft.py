@@ -47,6 +47,9 @@ from backend.app.training.shared.training_tokenizer_loader import (
 from backend.app.training.shared.training_utils import (
     TrainingUtils,
 )
+from backend.app.training.colab.colab_checkpoint_sync import (
+    create_default_checkpoint_sync,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -386,9 +389,24 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         train_dataset=train_dataset,
         validation_dataset=validation_dataset,
     )
+    
+    checkpoint_sync = create_default_checkpoint_sync(
+        output_dir=CONFIG["training"]["output_dir"],
+        training_type="sft",
+    )
+
+    resume_checkpoint = (
+        CONFIG["training"].get("resume_from_checkpoint")
+    )
+
+    if resume_checkpoint is None:
+        resume_checkpoint = (
+            checkpoint_sync.restore_latest_checkpoint_from_huggingface()
+        )
 
     trainer.train(
-        resume_from_checkpoint=CONFIG["training"].get("resume_from_checkpoint")
+        # resume_from_checkpoint=CONFIG["training"].get("resume_from_checkpoint")
+        resume_from_checkpoint=resume_checkpoint
     )
 
     trainer.save_model()
