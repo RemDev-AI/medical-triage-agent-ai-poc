@@ -4,67 +4,72 @@
 # Objectif : valider la pipeline en ~15 min avant montée en charge
 # NE PAS utiliser pour la production
 
-runtime:
-  # "transformers" (défaut, PEFT natif + QLoRA via BitsAndBytesConfig)
-  # ou "unsloth" (FastLanguageModel — gère quantification + LoRA en une
-  # étape). cf. training_model_loader.py._prepare_with_unsloth().
-  engine: "transformers"
-
-quantization:
-  # QLoRA 4 bits — active BitsAndBytesConfig dans training_model_loader.py.
-  # Passer à false pour revenir au comportement historique (FP16 complet) —
-  # utile pour comparer/déboguer, mais l'OOM en DPO (T4 16 Go) réapparaît.
-  enabled: true
-  bnb_4bit_quant_type: "nf4"
-  bnb_4bit_use_double_quant: true
-  # bnb_4bit_compute_dtype n'est PAS répété ici : il est dérivé de
-  # model.torch_dtype (via _resolve_torch_dtype -> get_training_dtype),
-  # pour garder une source unique de vérité entre precision et quantization.
-
 training:
   output_dir: "artifacts/checkpoints/sft_validation"
+
   num_train_epochs: 1                 # 1 epoch suffit pour valider
+
   per_device_train_batch_size: 1
   per_device_eval_batch_size: 1
+
   gradient_accumulation_steps: 4     # batch effectif = 4 (était 16, trop lourd)
+
   learning_rate: 2e-4
   weight_decay: 0.01
+
   warmup_ratio: 0.05
+
   lr_scheduler_type: "cosine"
+
   max_grad_norm: 1.0
+
   gradient_checkpointing: true
+
   logging_steps: 10
   eval_steps: 50                     # eval fréquente pour détecter nan tôt
   save_steps: 50
+
   evaluation_strategy: "steps"
   save_strategy: "steps"
+
   save_total_limit: 1                # 1 seul checkpoint en validation
   save_safetensors: true
+
   load_best_model_at_end: true
+
   metric_for_best_model: "eval_loss"
   greater_is_better: false
+
   early_stopping_patience: 3
+
   # Précision : NE PAS mettre fp16/bf16 ici
   # apply_precision_arguments() détecte le GPU et décide seul (T4 → fp16)
+
   dataloader_num_workers: 0
+
   report_to:
     - "wandb"
+
   resume_from_checkpoint: null
+
   push_to_hub: false                 # pas de push en validation
+
 
 model:
   base_model: "Qwen/Qwen3-1.7B-Base"
+
   # "auto" → délégué à colab_environment.get_training_dtype()
   # Sur T4 : fp16. Sur A100 : bf16. Source unique de vérité.
-  # Sert aussi de bnb_4bit_compute_dtype quand quantization.enabled=true.
   torch_dtype: "auto"
+
   trust_remote_code: true
+
   device_map: "auto"
+
   use_flash_attention: false
-  # Utilisé par la branche Unsloth (runtime.engine="unsloth") ; ignoré
-  # par la branche transformers.
-  max_seq_length: 2048
+
   hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
+
 
 lora:
   r: 8                               # rang réduit pour validation (prod : 16-64)
@@ -77,6 +82,7 @@ lora:
     - "v_proj"
   # Qwen3 expose aussi k_proj, o_proj, gate_proj — à ajouter en prod
 
+
 tokenizer:
   use_fast: true
   padding_side: "right"
@@ -84,21 +90,28 @@ tokenizer:
 
 special_tokens: {}
 
+
 dataset:
   hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
   hf_config: "sft"
+
   train_split: "train"
   validation_split: "validation"
   test_split: "test"
   clinical_eval_split: "clinical_eval"
+
   max_sequence_length: 512           # court pour T4
+
   max_train_samples: 200             # sous-ensemble pour validation rapide
   max_val_samples: 50
+
   packing: false
+
 
 tracking:
   wandb_project: "medical-triage-llm"
   wandb_run_name: "qwen3-1.7b-sft-validation-run"
+
 
 system:
   seed: 42

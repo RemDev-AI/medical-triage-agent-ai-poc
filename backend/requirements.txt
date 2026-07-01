@@ -27,7 +27,11 @@ accelerate
 datasets
 sentencepiece
 safetensors
+unsloth
+bitsandbytes
+evaluate
 huggingface_hub
+torchao
 
 # ==========================================================
 # PEFT / LORA

@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/dpo/train_dpo.py
-#
+# 
 # Corrections appliquées (alignées sur les fixes SFT) :
 #   - Bug #2  : config LoRA passée via TrainingModelLoader (déjà corrigé côté loader)  # noqa : E501
 #   - Bug #3  : fp16/bf16 supprimés du YAML, torch_dtype="auto", source unique
@@ -13,17 +13,6 @@
 #   - DPO-3   : max_length lu depuis la config YAML
 #   - DPO-4   : sous-ensemble de validation (max_train_samples / max_val_samples)  # noqa : E501
 #   - DPO-5   : SafetyFilter appliqué sur chosen/rejected avant entraînement
-#   - DPO-6   : reference_free (YAML) était défini mais jamais transmis à
-#               DPOConfig → ajouté à build_dpo_config().
-#   - GC-1    : gradient_checkpointing_kwargs={"use_reentrant": False} ajouté
-#               à DPOConfig (même correctif que train_sft.py). Sans lui,
-#               DPOTrainer réactive le gradient checkpointing à sa façon au
-#               démarrage de trainer.train(), écrasant le use_reentrant=False
-#               déjà posé par TrainingModelLoader (bug #4, requis Qwen3).
-#   - TOK-1/TOK-2 : modèle chargé AVANT le tokenizer (nécessaire pour la
-#               branche Unsloth, qui charge les deux ensemble), et
-#               synchronisation explicite model/tokenizer (pad/eos/bos ids)
-#               pour éliminer le warning PAD/BOS/EOS à la source.
 #
 # CORRECTIONS OOM :
 #   - OOM-1   : max_length 2048 → 512 dans le YAML (activations ∝ seq²)
@@ -32,21 +21,6 @@
 #   - OOM-4   : max_prompt_length SUPPRIMÉ de DPOConfig — absent de cette version TRL  # noqa : E501
 #               max_length seul est transmis à DPOConfig
 #   - OOM-5   : PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True défini au démarrage  # noqa : E501
-#   - OOM-6   : gestion explicite du ref_model (audit hypothèse #1).
-#               Le projet utilise EXCLUSIVEMENT LoRA (SFT et DPO) — aucun
-#               scénario de full fine-tuning n'est prévu dans la mission.
-#               - Si `model` est un PeftModel (cas nominal, toujours vrai en
-#                 pratique) : ref_model=None. DPOTrainer désactive les
-#                 adapters sur le modèle courant pour calculer πref — AUCUNE
-#                 copie mémoire supplémentaire. C'est le comportement le
-#                 plus économe.
-#               - Si `model` n'est PAS un PeftModel (régression de config,
-#                 ex. LoRA désactivé par erreur) : on lève une erreur
-#                 explicite plutôt que de charger un second modèle complet.
-#                 DPOTrainer sans ref_model explicite deep-copierait `model`
-#                 en interne (double la VRAM, cause de l'OOM identifiée par
-#                 l'audit) — ce chemin n'est pas testé en prod et ne doit
-#                 pas être emprunté silencieusement.
 
 from __future__ import annotations
 
@@ -56,7 +30,7 @@ import math
 import os
 import torch
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import yaml
 from datasets import Dataset, load_dataset
@@ -67,12 +41,10 @@ except Exception:
     DPOConfig = None
     DPOTrainer = None
 
-from peft import PeftModel
 from transformers import EarlyStoppingCallback, TrainerCallback
 
 from backend.app.training.colab.colab_environment import (
     apply_precision_arguments,
-    resolve_quantization_settings,
 )
 from backend.app.training.shared.training_model_loader import (
     TrainingModelLoader,
@@ -95,10 +67,6 @@ def load_config() -> Dict:
 
 
 CONFIG = load_config()
-# FIX QUANT-2 — complète config["quantization"] selon le GPU détecté si
-# absent du YAML ; conserve tel quel un choix explicite déjà présent
-# (avec warning informatif en cas de désaccord). cf. colab_environment.py.
-CONFIG = resolve_quantization_settings(CONFIG)
 
 
 # ---------------------------------------------------------------------------
@@ -268,8 +236,6 @@ def build_dpo_config() -> "DPOConfig":
             f"strictement inférieur à max_length ({max_length})."
         )
 
-    reference_free = bool(dpo_config.get("reference_free", False))
-
     training_args = {
         "output_dir": training_config["output_dir"],
         "num_train_epochs": training_config["num_train_epochs"],
@@ -282,14 +248,6 @@ def build_dpo_config() -> "DPOConfig":
         "save_steps": training_config["save_steps"],
         "save_total_limit": training_config["save_total_limit"],
         "gradient_checkpointing": training_config["gradient_checkpointing"],
-        # FIX GC-1 (aligné sur train_sft.py) — le Trainer/DPOTrainer HF
-        # réactive lui-même le gradient checkpointing au démarrage de
-        # trainer.train() (puisque gradient_checkpointing=True ci-dessus),
-        # en écrasant potentiellement le use_reentrant=False déjà posé par
-        # TrainingModelLoader.apply_gradient_checkpointing() (bug #4,
-        # requis pour Qwen3). Rendu explicite ici pour rester cohérent
-        # quelle que soit la source de l'activation.
-        "gradient_checkpointing_kwargs": {"use_reentrant": False},
         "report_to": training_config.get("report_to", ["wandb"]),
         "dataloader_num_workers": training_config.get("dataloader_num_workers", 0),  # noqa: E501
 
@@ -309,9 +267,6 @@ def build_dpo_config() -> "DPOConfig":
         "max_length": max_length,
         "loss_type": dpo_config.get("loss_type", "sigmoid"),
         "truncation_mode": dpo_config.get("truncation_mode", "keep_end"),
-
-        # FIX DPO-6 — reference_free était lu du YAML mais jamais transmis.
-        "reference_free": reference_free,
     }
 
     # FIX BUG #3 — précision détectée depuis le GPU (source unique)
@@ -320,61 +275,6 @@ def build_dpo_config() -> "DPOConfig":
     training_args = apply_precision_arguments(training_args)
 
     return DPOConfig(**training_args)
-
-
-# ---------------------------------------------------------------------------
-# FIX OOM-6 — Gestion explicite et sûre du ref_model
-# ---------------------------------------------------------------------------
-def resolve_ref_model(model) -> Optional[object]:
-    """
-    Détermine le ref_model à transmettre à DPOTrainer.
-
-    Le projet (mission) n'utilise QUE LoRA pour SFT et DPO — le full
-    fine-tuning n'est pas un scénario prévu. En conséquence :
-
-    - reference_free=True (config) : aucun modèle de référence requis,
-      quel que soit le type de `model`.
-    - `model` est un PeftModel (cas nominal, toujours vrai en pratique
-      avec ce pipeline) : retourne None. DPOTrainer désactivera les
-      adapters LoRA sur `model` lui-même pour calculer πref — pas de
-      copie mémoire supplémentaire.
-    - `model` n'est PAS un PeftModel : ceci indique une régression de
-      config (LoRA désactivé par erreur, ou pipeline détourné de son
-      usage prévu). On lève une erreur explicite plutôt que de charger
-      un second modèle complet — ce chemin n'est ni prévu par la
-      mission ni testé, et laisser DPOTrainer deep-copier `model` en
-      interne reproduirait silencieusement l'OutOfMemoryError identifié
-      par l'audit.
-    """
-    dpo_config = CONFIG.get("dpo", {})
-
-    if dpo_config.get("reference_free", False):
-        logger.info(
-            "reference_free=True — aucun ref_model chargé (πref non requis)."
-        )
-        return None
-
-    if isinstance(model, PeftModel):
-        logger.info(
-            "Policy model est un PeftModel (LoRA/QLoRA actif) — "
-            "ref_model=None. DPOTrainer désactivera les adapters pour "
-            "calculer πref sur le même modèle (aucune copie mémoire "
-            "supplémentaire)."
-        )
-        return None
-
-    raise RuntimeError(
-        "DPO training attend un policy model chargé avec LoRA "
-        "(PeftModel) — ce pipeline ne supporte pas le full fine-tuning. "
-        "Le modèle reçu n'est pas un PeftModel : vérifier que "
-        "config['lora'] est bien défini et que TrainingModelLoader.build() "
-        "applique correctement les adapters LoRA. Sans cela, DPOTrainer "
-        "deep-copierait le modèle complet en interne et reproduirait "
-        "l'OutOfMemoryError identifié dans l'audit. Si le full "
-        "fine-tuning devient un besoin réel, il faudra alors charger "
-        "explicitement un ref_model séparé (quantifié à l'identique) "
-        "plutôt que de contourner cette vérification."
-    )
 
 
 def build_trainer(
@@ -389,8 +289,6 @@ def build_trainer(
             "pip install trl --break-system-packages"
         )
 
-    ref_model = resolve_ref_model(model)
-
     # FIX DPO-1 — EarlyStoppingCallback absent dans la version originale
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=CONFIG["training"].get("early_stopping_patience", 2)  # noqa: E501
@@ -401,7 +299,6 @@ def build_trainer(
 
     return DPOTrainer(
         model=model,
-        ref_model=ref_model,
         args=build_dpo_config(),
         processing_class=tokenizer,
         train_dataset=train_dataset,
@@ -432,24 +329,8 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
 
     wandb_run = TrainingUtils.initialize_wandb(config=CONFIG)
 
-    # FIX TOK-1 — le modèle est chargé EN PREMIER : en mode
-    # runtime.engine="unsloth", TrainingModelLoader charge modèle ET
-    # tokenizer ensemble (FastLanguageModel.from_pretrained). Le tokenizer
-    # pré-chargé est ensuite réutilisé par TrainingTokenizerLoader au lieu
-    # d'en recharger un indépendant (source d'incohérence sinon, cf.
-    # warning TRL "prompt mismatch").
-    model_loader = TrainingModelLoader(CONFIG)
-    model = model_loader.prepare_for_training()
-
-    tokenizer = TrainingTokenizerLoader.build(
-        config=CONFIG,
-        preloaded_tokenizer=getattr(model_loader, "unsloth_tokenizer", None),
-    )
-
-    # FIX TOK-2 — synchronise explicitement model.config /
-    # model.generation_config avec le tokenizer (élimine le warning
-    # "tokenizer has new PAD/BOS/EOS tokens" à la source).
-    TrainingTokenizerLoader.sync_with_model(model=model, tokenizer=tokenizer)
+    tokenizer = TrainingTokenizerLoader.build(config=CONFIG)
+    model = TrainingModelLoader.build(config=CONFIG)
 
     train_dataset, validation_dataset = prepare_datasets()
 

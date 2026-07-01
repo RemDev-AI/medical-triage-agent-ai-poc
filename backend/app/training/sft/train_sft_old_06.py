@@ -36,7 +36,6 @@ from transformers import (
 
 from backend.app.training.colab.colab_environment import (
     apply_precision_arguments,
-    resolve_quantization_settings,
 )
 from backend.app.training.shared.training_model_loader import (
     TrainingModelLoader,
@@ -59,10 +58,6 @@ def load_config() -> Dict:
 
 
 CONFIG = load_config()
-# FIX QUANT-2 — complète config["quantization"] selon le GPU détecté si
-# absent du YAML ; conserve tel quel un choix explicite déjà présent
-# (avec warning informatif en cas de désaccord). cf. colab_environment.py.
-CONFIG = resolve_quantization_settings(CONFIG)
 
 
 # ---------------------------------------------------------------------------

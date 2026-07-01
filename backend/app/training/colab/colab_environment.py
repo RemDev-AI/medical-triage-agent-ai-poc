@@ -1,5 +1,15 @@
 # medical-triage-agent-ai-poc/backend/app/training/colab/colab_environment.py
 
+# Correctif (audit OOM DPO, étape 4) :
+#   - QUANT-2 : ajout de is_4bit_quantization_recommended() et
+#               resolve_quantization_settings(), qui exploitent
+#               should_use_4bit_quantization() (colab_gpu_detector.py,
+#               QUANT-1) pour recommander/avertir sur la config
+#               quantization, SANS écraser silencieusement un choix
+#               explicite déjà présent dans le YAML (principe : la config
+#               explicite de l'utilisateur prime toujours sur la
+#               recommandation automatique).
+
 """
 Google Colab Environment Detection Utilities
 
@@ -11,6 +21,7 @@ Features
 - Detect FP16 support
 - Resolve runtime device and dtype
 - Build Hugging Face TrainingArguments precision policy
+- Recommend / validate quantization settings against detected hardware
 
 Used by:
 - backend/app/training/sft/train_sft.py
@@ -28,6 +39,8 @@ import torch
 
 from backend.app.training.colab.colab_gpu_detector import (
     build_gpu_info,
+    detect_gpu_type,
+    should_use_4bit_quantization,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,6 +145,111 @@ def get_device() -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
+# ---------------------------------------------------------------------------
+# FIX QUANT-2 — Recommandation / validation de la quantification
+# ---------------------------------------------------------------------------
+def is_4bit_quantization_recommended() -> bool:
+    """
+    Indique si la quantification 4 bits (QLoRA) est recommandée pour le
+    GPU détecté au runtime, en s'appuyant sur
+    colab_gpu_detector.should_use_4bit_quantization() — seul mode
+    réellement implémenté par training_model_loader.py.
+
+    Retourne False si aucun GPU CUDA n'est détecté (bitsandbytes 4 bits
+    nécessite CUDA).
+    """
+
+    if not torch.cuda.is_available():
+        return False
+
+    return should_use_4bit_quantization(detect_gpu_type())
+
+
+def resolve_quantization_settings(
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Recommande/valide config["quantization"] par rapport au GPU détecté,
+    SANS écraser un choix explicite déjà présent dans le YAML.
+
+    Comportement :
+    - Si "quantization" ou "quantization.enabled" est absent du YAML :
+      applique la recommandation matérielle (is_4bit_quantization_recommended()).  # noqa: E501
+    - Si "quantization.enabled" est explicitement défini dans le YAML :
+      conservé tel quel — c'est un choix assumé de l'utilisateur (ex. le
+      run de validation DPO de ce projet force enabled=true même sur
+      matériel où ce ne serait pas strictement nécessaire). Un warning
+      est loggué si ce choix diverge de la recommandation matérielle,
+      à titre informatif uniquement.
+
+    Args:
+        config:
+            Config d'entraînement complète (dict chargé depuis le YAML).
+            Modifié en place ET retourné pour confort d'appel.
+
+    Returns:
+        Le dict config, avec config["quantization"] garanti présent et
+        contenant au moins la clé "enabled".
+    """
+
+    quantization_section = config.setdefault("quantization", {})
+    recommended = is_4bit_quantization_recommended()
+
+    if "enabled" not in quantization_section:
+        logger.info(
+            "quantization.enabled absent du YAML — application de la "
+            "recommandation matérielle : %s (GPU=%s).",
+            recommended,
+            get_gpu_name(),
+        )
+        quantization_section["enabled"] = recommended
+        # Valeurs par défaut raisonnables si la section était totalement
+        # absente — cohérentes avec ce que training_model_loader.py attend.
+        quantization_section.setdefault("bnb_4bit_quant_type", "nf4")
+        quantization_section.setdefault("bnb_4bit_use_double_quant", True)
+    else:
+        explicit = bool(quantization_section["enabled"])
+        if explicit != recommended:
+            logger.warning(
+                "quantization.enabled=%s défini explicitement dans le "
+                "YAML, alors que la recommandation matérielle pour ce "
+                "GPU (%s) est %s. Choix explicite conservé — vérifier "
+                "que c'est intentionnel (ex. marge de sécurité VRAM "
+                "supplémentaire).",
+                explicit,
+                get_gpu_name(),
+                recommended,
+            )
+
+    return config
+
+
+def log_environment_info() -> ColabEnvironment:
+    """
+    Log runtime information.
+    """
+
+    env = detect_environment()
+
+    logger.info("========== TRAINING ENVIRONMENT ==========")
+    logger.info("Google Colab : %s", env.is_colab)
+    logger.info("Device        : %s", env.device)
+    logger.info("CUDA Available: %s", env.cuda_available)
+    logger.info("GPU           : %s", env.gpu_name)
+    logger.info("BF16          : %s", env.bf16_supported)
+    logger.info("FP16          : %s", env.fp16_supported)
+    logger.info("Torch Version : %s", env.torch_version)
+    logger.info("CUDA Version  : %s", env.cuda_version)
+    logger.info("Training DType: %s", get_training_dtype())
+    logger.info(
+        "4bit Quantization Recommended: %s",
+        is_4bit_quantization_recommended(),
+    )
+    logger.info("==========================================")
+
+    return env
+
+
 def detect_environment() -> ColabEnvironment:
     """
     Build runtime environment descriptor.
@@ -153,29 +271,6 @@ def detect_environment() -> ColabEnvironment:
     )
 
 
-def log_environment_info() -> ColabEnvironment:
-    """
-    Log runtime information.
-    """
-
-    env = detect_environment()
-
-    logger.info("========== TRAINING ENVIRONMENT ==========")
-    logger.info("Google Colab : %s", env.is_colab)
-    logger.info("Device        : %s", env.device)
-    logger.info("CUDA Available: %s", env.cuda_available)
-    logger.info("GPU           : %s", env.gpu_name)
-    logger.info("BF16          : %s", env.bf16_supported)
-    logger.info("FP16          : %s", env.fp16_supported)
-    logger.info("Torch Version : %s", env.torch_version)
-    logger.info("CUDA Version  : %s", env.cuda_version)
-    logger.info("Training DType: %s", get_training_dtype())
-    logger.info("==========================================")
-
-    return env
-
-
-# Ajouter dans get_training_arguments_precision()
 def get_training_arguments_precision() -> dict[str, Any]:
     """
     Return precision arguments compatible with
@@ -188,7 +283,11 @@ def get_training_arguments_precision() -> dict[str, Any]:
     cuda_available = torch.cuda.is_available()
     bf16 = is_bf16_supported()
 
-    # Guard explicite : logger un warning si bf16 activé sur T4
+    # NOTE : ce guard est en pratique redondant — is_bf16_supported()
+    # s'appuie sur gpu_info.bf16_recommended (colab_gpu_detector.py),
+    # dont la liste {L4, A100} exclut déjà T4. bf16 ne peut donc jamais
+    # être True ici pour un T4. Conservé comme filet de sécurité
+    # explicite si la logique de bf16_recommended venait à changer.
     if bf16:
         gpu_name = get_gpu_name() or ""
         if "T4" in gpu_name or "Tesla" in gpu_name:

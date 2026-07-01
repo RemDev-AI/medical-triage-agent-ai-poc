@@ -1,20 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/sft/train_sft.py
-
 # Version : validation LoRA — bugs #1 #2 #3 corrigés
-#
-# Correctif additionnel (audit OOM DPO, analyse train_sft.py) :
-#   - GC-1 : gradient_checkpointing_kwargs ajouté à TrainingArguments.
-#            Sans ce kwarg, le Trainer HF réactive le gradient checkpointing
-#            au démarrage de trainer.train() (car training_config
-#            ["gradient_checkpointing"]=True), en écrasant potentiellement
-#            le use_reentrant=False déjà posé par
-#            TrainingModelLoader.apply_gradient_checkpointing() (bug #4,
-#            requis pour Qwen3). Le rendre explicite ici garantit la
-#            cohérence même si le Trainer réactive le GC.
-#   - TOK-1/TOK-2 : modèle chargé AVANT le tokenizer (nécessaire pour la
-#            branche Unsloth, qui charge les deux ensemble), et
-#            synchronisation explicite model/tokenizer (pad/eos/bos ids)
-#            pour éliminer le warning PAD/BOS/EOS à la source.
 
 from __future__ import annotations
 
@@ -36,7 +21,6 @@ from transformers import (
 
 from backend.app.training.colab.colab_environment import (
     apply_precision_arguments,
-    resolve_quantization_settings,
 )
 from backend.app.training.shared.training_model_loader import (
     TrainingModelLoader,
@@ -59,10 +43,6 @@ def load_config() -> Dict:
 
 
 CONFIG = load_config()
-# FIX QUANT-2 — complète config["quantization"] selon le GPU détecté si
-# absent du YAML ; conserve tel quel un choix explicite déjà présent
-# (avec warning informatif en cas de désaccord). cf. colab_environment.py.
-CONFIG = resolve_quantization_settings(CONFIG)
 
 
 # ---------------------------------------------------------------------------
@@ -287,14 +267,6 @@ def build_training_arguments() -> TrainingArguments:
         "metric_for_best_model": training_config["metric_for_best_model"],
         "greater_is_better": training_config["greater_is_better"],
         "gradient_checkpointing": training_config["gradient_checkpointing"],
-        # FIX GC-1 — le Trainer HF réactive lui-même le gradient
-        # checkpointing au démarrage de trainer.train() (puisque
-        # gradient_checkpointing=True ci-dessus), en écrasant
-        # potentiellement le use_reentrant=False déjà posé par
-        # TrainingModelLoader.apply_gradient_checkpointing() (bug #4,
-        # requis pour Qwen3). On le rend explicite ici pour rester
-        # cohérent quelle que soit la source de l'activation.
-        "gradient_checkpointing_kwargs": {"use_reentrant": False},
         "lr_scheduler_type": training_config["lr_scheduler_type"],
         "max_grad_norm": float(training_config["max_grad_norm"]),
         "report_to": training_config.get("report_to", ["wandb"]),
@@ -355,23 +327,8 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
 
     wandb_run = TrainingUtils.initialize_wandb(config=CONFIG)
 
-    # FIX TOK-1 — le modèle est chargé EN PREMIER : en mode
-    # runtime.engine="unsloth", TrainingModelLoader charge modèle ET
-    # tokenizer ensemble (FastLanguageModel.from_pretrained). Le tokenizer
-    # pré-chargé est ensuite réutilisé par TrainingTokenizerLoader au lieu
-    # d'en recharger un indépendant (source d'incohérence sinon).
-    model_loader = TrainingModelLoader(CONFIG)
-    model = model_loader.prepare_for_training()
-
-    tokenizer = TrainingTokenizerLoader.build(
-        config=CONFIG,
-        preloaded_tokenizer=getattr(model_loader, "unsloth_tokenizer", None),
-    )
-
-    # FIX TOK-2 — synchronise explicitement model.config /
-    # model.generation_config avec le tokenizer (élimine le warning
-    # "tokenizer has new PAD/BOS/EOS tokens" à la source).
-    TrainingTokenizerLoader.sync_with_model(model=model, tokenizer=tokenizer)
+    tokenizer = TrainingTokenizerLoader.build(config=CONFIG)
+    model = TrainingModelLoader.build(config=CONFIG)
 
     train_dataset, validation_dataset = prepare_datasets(tokenizer=tokenizer)
 
