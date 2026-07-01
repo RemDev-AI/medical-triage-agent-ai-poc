@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/colab/colab_checkpoint_sync.py
-
+# sync_to_drive()
 """
 Google Colab Checkpoint Synchronization Utilities
 
@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import Optional
 
 from huggingface_hub import HfApi
-from huggingface_hub import snapshot_download
 
 logger = logging.getLogger(__name__)
 
@@ -133,130 +132,141 @@ class ColabCheckpointSync:
 
         return str(checkpoint)
 
-
     # ==========================================================
-    # Hugging Face synchronization
+    # Google Drive synchronization
     # ==========================================================
-    
-    def _build_remote_checkpoint_name(
-        self,
-        checkpoint_path: Path,
-    ) -> str:
+
+    def sync_to_drive(self) -> bool:
         """
-        Convert checkpoint-500
-
-        into
-
-        checkpoint-sft-500
-
-        or
-
-        checkpoint-dpo-500
+        Synchronize all checkpoints to Google Drive.
         """
 
-        step = checkpoint_path.name.replace(
-            "checkpoint-",
-            "",
-        )
-
-        return (
-            f"checkpoint-"
-            f"{self.training_type}-"
-            f"{step}"
-        )
-
-
-    def cleanup_checkpoint(
-        self,
-        checkpoint_path: Path,
-    ) -> bool:
-        """
-        Delete local checkpoint after successful upload.
-        """
+        if self.drive_checkpoint_dir is None:
+            logger.warning(
+                "Google Drive directory not configured."
+            )
+            return False
 
         try:
+            self.drive_checkpoint_dir.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
 
-            if checkpoint_path.exists():
+            destination = (
+                self.drive_checkpoint_dir
+                / self.local_checkpoint_dir.name
+            )
 
-                import shutil
+            if destination.exists():
+                shutil.rmtree(destination)
 
-                shutil.rmtree(checkpoint_path)
+            shutil.copytree(
+                self.local_checkpoint_dir,
+                destination,
+            )
 
-                logger.info(
-                    "Deleted local checkpoint %s",
-                    checkpoint_path,
-                )
+            logger.info(
+                "Checkpoints synchronized to Google Drive: %s",
+                destination,
+            )
 
             return True
 
         except Exception:
-
             logger.exception(
-                "Checkpoint cleanup failed."
+                "Google Drive synchronization failed."
+            )
+            return False
+
+    def restore_from_drive(self) -> bool:
+        """
+        Restore checkpoints from Google Drive.
+        """
+
+        if self.drive_checkpoint_dir is None:
+            return False
+
+        source = (
+            self.drive_checkpoint_dir
+            / self.local_checkpoint_dir.name
+        )
+
+        if not source.exists():
+            logger.warning(
+                "No checkpoints found in Google Drive."
+            )
+            return False
+
+        try:
+            if self.local_checkpoint_dir.exists():
+                shutil.rmtree(
+                    self.local_checkpoint_dir
+                )
+
+            shutil.copytree(
+                source,
+                self.local_checkpoint_dir,
             )
 
+            logger.info(
+                "Checkpoints restored from Google Drive."
+            )
+
+            return True
+
+        except Exception:
+            logger.exception(
+                "Failed restoring checkpoints from Drive."
+            )
             return False
-        
+
+    # ==========================================================
+    # Hugging Face synchronization
+    # ==========================================================
 
     def sync_checkpoint_to_huggingface(
         self,
         checkpoint_path: Path,
     ) -> bool:
         """
-        Upload a checkpoint to the Hugging Face
-        Models repository.
+        Upload a single checkpoint to HF Models repo.
+
+        Example destination:
+
+        checkpoints/
+            checkpoint-100/
+            checkpoint-200/
+            checkpoint-300/
         """
 
-        remote_name = (
-            self._build_remote_checkpoint_name(
-                checkpoint_path
-            )
-        )
-
         try:
-
             api = HfApi()
 
             api.upload_folder(
-
                 folder_path=str(checkpoint_path),
-
                 repo_id=self.hf_repo_id,
-
                 repo_type="model",
-
                 path_in_repo=(
-                    "checkpoints/"
-                    f"{self.training_type}/"
-                    f"{remote_name}"
+                    f"checkpoints/{checkpoint_path.name}"
                 ),
-
                 commit_message=(
-                    f"Upload {remote_name}"
+                    f"Upload {checkpoint_path.name}"
                 ),
             )
 
             logger.info(
-                "Uploaded checkpoint %s",
-                remote_name,
+                "Checkpoint uploaded to HF Hub: %s",
+                checkpoint_path.name,
             )
-
-            if self.cleanup_after_upload:
-
-                self.cleanup_checkpoint(
-                    checkpoint_path
-                )
 
             return True
 
         except Exception:
-
             logger.exception(
-                "Checkpoint upload failed."
+                "HF checkpoint upload failed."
             )
-
             return False
-    
 
     def sync_latest_checkpoint_to_huggingface(
         self,
@@ -308,216 +318,66 @@ class ColabCheckpointSync:
 
         return success
 
-    
-    # ==========================================================
-    # Hugging Face restoration
-    # ==========================================================
-    
-    def restore_latest_checkpoint_from_huggingface(
-        self,
-    ) -> Optional[str]:
-        """
-        Download the latest checkpoint from the Hugging Face
-        Models repository and restore it locally.
-
-        Repository layout:
-
-        checkpoints/
-            sft/
-                checkpoint-sft-500/
-                checkpoint-sft-1000/
-
-            dpo/
-                checkpoint-dpo-500/
-                checkpoint-dpo-1000/
-
-        Returns
-        -------
-        Optional[str]
-            Local checkpoint directory compatible with
-            Trainer.resume_from_checkpoint.
-        """
-
-        try:
-
-            api = HfApi()
-
-            files = api.list_repo_files(
-                repo_id=self.hf_repo_id,
-                repo_type="model",
-            )
-
-            prefix = (
-                f"checkpoints/{self.training_type}/"
-            )
-
-            checkpoint_dirs = set()
-
-            for file in files:
-
-                if not file.startswith(prefix):
-                    continue
-
-                parts = file.split("/")
-
-                if len(parts) >= 3:
-                    checkpoint_dirs.add(parts[2])
-
-            if not checkpoint_dirs:
-
-                logger.warning(
-                    "No %s checkpoint found on Hugging Face.",
-                    self.training_type,
-                )
-
-                return None
-
-            latest_checkpoint = max(
-
-                checkpoint_dirs,
-
-                key=lambda name: int(
-                    name.split("-")[-1]
-                ),
-
-            )
-
-            logger.info(
-                "Latest checkpoint detected: %s",
-                latest_checkpoint,
-            )
-
-            local_path = snapshot_download(
-
-                repo_id=self.hf_repo_id,
-
-                repo_type="model",
-
-                allow_patterns=[
-                    (
-                        f"{prefix}"
-                        f"{latest_checkpoint}/*"
-                    )
-                ],
-
-                local_dir=str(
-                    self.local_checkpoint_dir
-                ),
-
-                local_dir_use_symlinks=False,
-
-            )
-
-            checkpoint_path = (
-                Path(local_path)
-                / prefix
-                / latest_checkpoint
-            )
-
-            logger.info(
-                "Checkpoint restored into %s",
-                checkpoint_path,
-            )
-
-            return str(checkpoint_path)
-
-        except Exception:
-
-            logger.exception(
-                "Unable to restore checkpoint from Hugging Face."
-            )
-
-            return None
-    
-    
-    def auto_restore_checkpoint(
-        self,
-    ) -> Optional[str]:
-        """
-        Return a checkpoint usable by the Trainer.
-
-        Priority:
-
-        1. Local checkpoint
-
-        2. Hugging Face checkpoint
-
-        3. None
-        """
-
-        local_checkpoint = self.get_resume_checkpoint()
-
-        if local_checkpoint is not None:
-
-            logger.info(
-                "Using local checkpoint."
-            )
-
-            return local_checkpoint
-
-        logger.info(
-            "No local checkpoint found. Restoring from Hugging Face..."
-        )
-
-        return self.restore_latest_checkpoint_from_huggingface()
-
     # ==========================================================
     # Combined synchronization
     # ==========================================================
-    
+
     def sync_latest_checkpoint(
         self,
+        upload_to_drive: bool = True,
+        upload_to_huggingface: bool = True,
     ) -> dict:
         """
-        Upload latest checkpoint to HF Hub.
+        Synchronize latest checkpoint everywhere.
         """
 
-        return {
-
-            "huggingface":
-            self.sync_latest_checkpoint_to_huggingface()
-
+        results = {
+            "drive": False,
+            "huggingface": False,
         }
+
+        if upload_to_drive:
+            results["drive"] = self.sync_to_drive()
+
+        if upload_to_huggingface:
+            results["huggingface"] = (
+                self.sync_latest_checkpoint_to_huggingface()
+            )
+
+        return results
 
     # ==========================================================
     # Status
     # ==========================================================
-    
-    def get_status(
-        self,
-    ) -> dict:
+
+    def get_status(self) -> dict:
         """
         Return synchronization status.
         """
 
-        latest = self.get_latest_checkpoint()
+        latest_checkpoint = (
+            self.get_latest_checkpoint()
+        )
 
         return {
-
-            "training_type":
-            self.training_type,
-
-            "hf_repo_id":
-            self.hf_repo_id,
-
-            "local_checkpoint_dir":
-            str(self.local_checkpoint_dir),
-
-            "cleanup_after_upload":
-            self.cleanup_after_upload,
-
-            "has_checkpoint":
-            latest is not None,
-
-            "latest_checkpoint":
-            (
-                str(latest)
-                if latest
+            "hf_repo_id": self.hf_repo_id,
+            "local_checkpoint_dir": str(
+                self.local_checkpoint_dir
+            ),
+            "drive_checkpoint_dir": (
+                str(self.drive_checkpoint_dir)
+                if self.drive_checkpoint_dir
                 else None
             ),
-
-            "checkpoint_count":
-            len(
+            "has_checkpoint": (
+                latest_checkpoint is not None
+            ),
+            "latest_checkpoint": (
+                str(latest_checkpoint)
+                if latest_checkpoint
+                else None
+            ),
+            "checkpoint_count": len(
                 self.get_checkpoints()
             ),
         }
@@ -525,36 +385,28 @@ class ColabCheckpointSync:
 
 def create_default_checkpoint_sync(
     output_dir: str,
-    training_type: str,
+    drive_dir: Optional[str] = None,
 ) -> ColabCheckpointSync:
     """
-    Factory helper.
+    Factory helper aligned with project architecture.
     """
 
     return ColabCheckpointSync(
-
         local_checkpoint_dir=output_dir,
-
-        training_type=training_type,
-
+        drive_checkpoint_dir=drive_dir,
         hf_repo_id=HF_MODELS_REPO_ID,
-
     )
 
 
 if __name__ == "__main__":
-
-    logging.basicConfig(
-        level=logging.INFO
-    )
+    logging.basicConfig(level=logging.INFO)
 
     sync = ColabCheckpointSync(
-
         local_checkpoint_dir="./outputs",
-
-        training_type="sft",
-
+        drive_checkpoint_dir=(
+            "/content/drive/MyDrive/"
+            "medical-triage-agent-ai-poc/checkpoints"
+        ),
     )
 
     print(sync.get_status())
-    
