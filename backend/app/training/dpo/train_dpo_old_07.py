@@ -1,5 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/dpo/train_dpo.py
-#
+
 # Corrections appliquées (alignées sur les fixes SFT) :
 #   - Bug #2  : config LoRA passée via TrainingModelLoader (déjà corrigé côté loader)  # noqa : E501
 #   - Bug #3  : fp16/bf16 supprimés du YAML, torch_dtype="auto", source unique
@@ -72,7 +72,6 @@ from transformers import EarlyStoppingCallback, TrainerCallback
 
 from backend.app.training.colab.colab_environment import (
     apply_precision_arguments,
-    resolve_quantization_settings,
 )
 from backend.app.training.shared.training_model_loader import (
     TrainingModelLoader,
@@ -95,10 +94,6 @@ def load_config() -> Dict:
 
 
 CONFIG = load_config()
-# FIX QUANT-2 — complète config["quantization"] selon le GPU détecté si
-# absent du YAML ; conserve tel quel un choix explicite déjà présent
-# (avec warning informatif en cas de désaccord). cf. colab_environment.py.
-CONFIG = resolve_quantization_settings(CONFIG)
 
 
 # ---------------------------------------------------------------------------

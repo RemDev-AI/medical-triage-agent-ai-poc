@@ -1,12 +1,28 @@
 # medical-triage-agent-ai-poc/backend/app/training/shared/training_tokenizer_loader.py
 
+# Correctifs (audit OOM DPO, étape 2) :
+#   - TOK-1 : support d'un tokenizer pré-chargé (branche Unsloth). Quand
+#             runtime.engine="unsloth", FastLanguageModel.from_pretrained()
+#             retourne modèle ET tokenizer couplés — il ne faut PAS
+#             recharger un AutoTokenizer indépendant, sous peine
+#             d'incohérence entre le tokenizer utilisé pour l'entraînement
+#             et celui attendu par le modèle patché par Unsloth (source
+#             probable de mismatches type "prompt vs prompt+rejected").
+#   - TOK-2 : sync_with_model() ajouté — synchronise explicitement
+#             model.config et model.generation_config avec le
+#             pad_token_id du tokenizer, plutôt que de compter sur la
+#             synchronisation automatique de TRL (qui déclenche le warning
+#             "tokenizer has new PAD/BOS/EOS tokens"). Élimine le warning
+#             à la source au lieu de le tolérer.
+
 from __future__ import annotations
 
 import logging
 from typing import Any
 from typing import Dict
+from typing import Optional
 
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +36,12 @@ class TrainingTokenizerLoader:
         - DPO
 
     Responsibilities:
-        - Load tokenizer
+        - Load tokenizer (ou réutiliser un tokenizer pré-chargé, ex. Unsloth)
         - Configure padding
         - Configure EOS token
         - Configure special tokens
         - Validate tokenizer settings
+        - Synchroniser le tokenizer avec la config du modèle (pad/eos ids)
 
     Non-responsibilities:
         - Dataset loading
@@ -35,13 +52,30 @@ class TrainingTokenizerLoader:
         - Clinical evaluation
     """
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        preloaded_tokenizer: Optional[PreTrainedTokenizerBase] = None,
+    ) -> None:
         self.config = config
+        # FIX TOK-1 — tokenizer déjà chargé (typiquement par
+        # FastLanguageModel.from_pretrained() côté Unsloth). Quand fourni,
+        # load_tokenizer() ne fait aucun appel réseau/disque supplémentaire
+        # et se contente de le retourner tel quel.
+        self._preloaded_tokenizer = preloaded_tokenizer
 
     def load_tokenizer(self):
         """
-        Load tokenizer from Hugging Face Hub or local path.
+        Load tokenizer from Hugging Face Hub or local path, ou retourne
+        le tokenizer pré-chargé fourni (branche Unsloth).
         """
+
+        if self._preloaded_tokenizer is not None:
+            logger.info(
+                "Tokenizer pré-chargé fourni (runtime.engine=unsloth) — "
+                "aucun AutoTokenizer.from_pretrained() supplémentaire."
+            )
+            return self._preloaded_tokenizer
 
         model_name = self.config["model"]["base_model"]
 
@@ -103,6 +137,22 @@ class TrainingTokenizerLoader:
         """
         Configure optional special tokens.
         """
+
+        if self._preloaded_tokenizer is not None:
+            # FIX TOK-1 — un tokenizer Unsloth a déjà ses tokens spéciaux
+            # correctement configurés par FastLanguageModel. Ajouter des
+            # special_tokens ici referait un resize d'embeddings côté
+            # modèle sans passer par les hooks Unsloth, ce qui casserait
+            # la cohérence modèle/tokenizer patchée par Unsloth.
+            special_tokens = self.config.get("special_tokens", {})
+            if special_tokens:
+                logger.warning(
+                    "config['special_tokens'] est défini mais ignoré : "
+                    "le tokenizer provient d'Unsloth (déjà configuré). "
+                    "Retirer cette section du YAML si runtime.engine="
+                    "'unsloth', ou la traiter via la config Unsloth."
+                )
+            return tokenizer
 
         special_tokens = self.config.get(
             "special_tokens",
@@ -217,16 +267,76 @@ class TrainingTokenizerLoader:
 
         return tokenizer
 
+    # ------------------------------------------------------------------
+    # FIX TOK-2 — synchronisation explicite modèle/tokenizer
+    # ------------------------------------------------------------------
+    @staticmethod
+    def sync_with_model(model, tokenizer) -> None:
+        """
+        Synchronise explicitement model.config et model.generation_config
+        avec le pad_token_id du tokenizer.
+
+        Sans cet appel, TRL effectue cette synchronisation lui-même au
+        premier pas d'entraînement et émet le warning "The tokenizer has
+        new PAD/BOS/EOS tokens...". Le comportement final est identique,
+        mais le faire explicitement ici documente l'intention et supprime
+        le warning (puisque la synchronisation est déjà faite avant que
+        TRL ne la déclenche).
+
+        À appeler après le chargement du modèle ET du tokenizer, dans
+        train_sft.py / train_dpo.py :
+
+            tokenizer = TrainingTokenizerLoader.build(config=CONFIG, ...)
+            model = TrainingModelLoader.build(config=CONFIG)
+            TrainingTokenizerLoader.sync_with_model(model, tokenizer)
+        """
+        if tokenizer.pad_token_id is None:
+            logger.warning(
+                "tokenizer.pad_token_id est None — synchronisation "
+                "modèle/tokenizer ignorée."
+            )
+            return
+
+        if hasattr(model, "config"):
+            model.config.pad_token_id = tokenizer.pad_token_id
+            if tokenizer.eos_token_id is not None:
+                model.config.eos_token_id = tokenizer.eos_token_id
+            if tokenizer.bos_token_id is not None:
+                model.config.bos_token_id = tokenizer.bos_token_id
+
+        if hasattr(model, "generation_config") and model.generation_config is not None:  # noqa: E501
+            model.generation_config.pad_token_id = tokenizer.pad_token_id
+            if tokenizer.eos_token_id is not None:
+                model.generation_config.eos_token_id = tokenizer.eos_token_id  # noqa: E501
+            if tokenizer.bos_token_id is not None:
+                model.generation_config.bos_token_id = tokenizer.bos_token_id  # noqa: E501
+
+        logger.info(
+            "Modèle synchronisé avec le tokenizer : pad_token_id=%s "
+            "eos_token_id=%s bos_token_id=%s",
+            tokenizer.pad_token_id,
+            tokenizer.eos_token_id,
+            tokenizer.bos_token_id,
+        )
+
     @classmethod
     def build(
         cls,
         config: Dict[str, Any],
+        preloaded_tokenizer: Optional[PreTrainedTokenizerBase] = None,
     ):
         """
         Convenience entrypoint.
 
-        Example:
+        Example (transformers natif) :
             tokenizer = TrainingTokenizerLoader.build(config)
+
+        Example (Unsloth — modèle chargé en premier) :
+            model = TrainingModelLoader.build(config)
+            model_loader_instance = ...  # cf. note d'intégration
+            tokenizer = TrainingTokenizerLoader.build(
+                config, preloaded_tokenizer=model_loader_instance.unsloth_tokenizer  # noqa: E501
+            )
         """
 
-        return cls(config).prepare_for_training()
+        return cls(config, preloaded_tokenizer=preloaded_tokenizer).prepare_for_training()  # noqa: E501

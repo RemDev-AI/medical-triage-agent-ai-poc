@@ -8,16 +8,6 @@ This module handles:
 - trainable parameter reporting
 - GPU memory monitoring
 - model preparation for k-bit training
-
-Étape 1 (audit OOM DPO) :
-- prepare_model_for_kbit_training() n'est appelée QUE si le modèle est
-  effectivement quantifié (4/8 bits). Sur un modèle FP16 complet, cette
-  fonction est un no-op trompeur (elle suppose un modèle déjà quantifié :
-  cf. doc PEFT) et ne doit pas être invoquée.
-- gradient_checkpointing n'est plus ré-activé ici par défaut, car
-  TrainingModelLoader.apply_gradient_checkpointing() le fait déjà en
-  amont avec use_reentrant=False (requis pour Qwen3, bug #4). Le
-  ré-activer ici sans ce kwarg écraserait ce réglage.
 """
 
 from __future__ import annotations
@@ -48,36 +38,16 @@ logger = logging.getLogger(__name__)
 _DEFAULT_LORA_PARAMS = LoRAHyperParameters()
 
 
-def is_model_quantized(model: AutoModelForCausalLM) -> bool:
-    """
-    Détecte si le modèle a été chargé avec une quantification
-    (BitsAndBytesConfig 4 bits ou 8 bits), qu'il vienne de
-    transformers natif ou d'Unsloth.
-
-    transformers pose `is_loaded_in_4bit` / `is_loaded_in_8bit` sur le
-    modèle quand un `quantization_config` a été fourni à
-    `from_pretrained()`. Unsloth pose également ces attributs sur les
-    modèles qu'il charge en 4 bits.
-    """
-    return bool(
-        getattr(model, "is_loaded_in_4bit", False)
-        or getattr(model, "is_loaded_in_8bit", False)
-        or getattr(getattr(model, "config", None), "quantization_config", None)
-        is not None
-    )
-
-
 def prepare_model_for_lora(
     model: AutoModelForCausalLM,
     gradient_checkpointing: bool = True,
-    already_gradient_checkpointed: bool = False,
 ) -> AutoModelForCausalLM:
     """
     Prepare model for LoRA fine-tuning.
 
     Includes:
-    - k-bit preparation (uniquement si le modèle est quantifié)
-    - gradient checkpointing (uniquement si pas déjà activé en amont)
+    - k-bit preparation
+    - gradient checkpointing
     - input gradients
 
     Args:
@@ -87,43 +57,22 @@ def prepare_model_for_lora(
         gradient_checkpointing:
             Enable gradient checkpointing.
 
-        already_gradient_checkpointed:
-            True si TrainingModelLoader a déjà activé le gradient
-            checkpointing (avec use_reentrant=False) avant l'appel à
-            setup_peft_model(). Dans ce cas, on ne le ré-active pas ici
-            pour ne pas écraser ce réglage.
-
     Returns:
         Prepared model.
     """
 
-    quantized = is_model_quantized(model)
+    logger.info("Preparing model for k-bit training...")
 
-    if quantized:
-        logger.info("Modèle quantifié détecté — preparing for k-bit training...")  # noqa: E501
-        model = prepare_model_for_kbit_training(
-            model,
-            use_gradient_checkpointing=gradient_checkpointing
-            and not already_gradient_checkpointed,
-        )
-    else:
-        logger.info(
-            "Modèle non quantifié (FP16/BF16/FP32) — "
-            "prepare_model_for_kbit_training() ignorée."
-        )
-        if hasattr(model, "config"):
-            model.config.use_cache = False
+    model = prepare_model_for_kbit_training(model)
 
-    if gradient_checkpointing and not already_gradient_checkpointed and not quantized:  # noqa: E501
-        # Le chemin quantifié gère déjà le gradient checkpointing via
-        # prepare_model_for_kbit_training(use_gradient_checkpointing=...).
-        logger.info("Enabling gradient checkpointing (use_reentrant=False)...")  # noqa: E501
-        model.gradient_checkpointing_enable(
-            gradient_checkpointing_kwargs={"use_reentrant": False}
-        )
+    if hasattr(model, "config"):
+        model.config.use_cache = False
 
-    if hasattr(model, "enable_input_require_grads"):
-        model.enable_input_require_grads()
+    if gradient_checkpointing:
+        logger.info("Enabling gradient checkpointing...")
+        model.gradient_checkpointing_enable()
+
+    model.enable_input_require_grads()
 
     return model
 
@@ -299,13 +248,12 @@ def get_gpu_memory_usage() -> Dict[str, object]:
 def setup_peft_model(
     model: AutoModelForCausalLM,
     config: Optional[Dict] = None,      # ← FIX BUG #2 : paramètre ajouté
-    already_gradient_checkpointed: bool = True,  # ← étape 1 : évite le double GC
 ) -> PeftModel:
     """
     Full PEFT setup pipeline.
 
     Steps:
-    - prepare model (k-bit prep si quantifié, sinon simple use_cache=False)
+    - prepare model
     - build LoraConfig (depuis YAML si config fourni, sinon DEFAULT)
     - inject LoRA
     - print trainable params
@@ -319,12 +267,6 @@ def setup_peft_model(
             Full training config dict (loaded from YAML).
             Si fourni, les hyperparamètres LoRA sont lus depuis
             config["lora"]. Si None, DEFAULT_LORA_CONFIG est utilisé.
-
-        already_gradient_checkpointed:
-            True (défaut) si l'appelant (TrainingModelLoader) a déjà
-            activé le gradient checkpointing avec use_reentrant=False
-            avant d'appeler setup_peft_model(). Passez False si vous
-            appelez setup_peft_model() directement sur un modèle brut.
 
     Returns:
         PEFT model.
@@ -340,10 +282,7 @@ def setup_peft_model(
         total_params_before,
     )
 
-    model = prepare_model_for_lora(
-        model,
-        already_gradient_checkpointed=already_gradient_checkpointed,
-    )
+    model = prepare_model_for_lora(model)
 
     # FIX BUG #2 — construire la LoraConfig depuis le YAML si disponible
     if config is not None:

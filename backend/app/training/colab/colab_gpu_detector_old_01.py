@@ -1,18 +1,5 @@
 # medical-triage-agent-ai-poc/backend/app/training/colab/colab_gpu_detector.py
 
-# Correctif (audit OOM DPO, étape 4) :
-#   - QUANT-1 : get_recommended_quantization() retourne un tri-état
-#               "4bit"/"8bit"/"none", mais training_model_loader.py
-#               n'implémente QUE le 4 bits (BitsAndBytesConfig via
-#               load_in_4bit=True). La recommandation "8bit" pour V100
-#               n'est consommable par aucun composant du pipeline.
-#               Ajout de should_use_4bit_quantization(), fonction booléenne
-#               alignée sur le support réel, destinée à être branchée par
-#               colab_environment.py sur config["quantization"]["enabled"].
-#               get_recommended_quantization() est conservée à titre
-#               informatif/logging uniquement — NE PAS l'utiliser pour
-#               piloter la config.
-
 """
 Google Colab GPU Detection Utilities
 
@@ -37,8 +24,6 @@ Used by:
 - backend/app/training/sft/train_sft.py
 - backend/app/training/dpo/train_dpo.py
 - backend/app/training/evaluation/clinical_eval_runner.py
-- backend/app/training/colab/colab_environment.py (pilotage automatique
-  de quantization.enabled / torch_dtype à partir de ces recommandations)
 """
 
 from __future__ import annotations
@@ -65,20 +50,6 @@ class GPUType(str, Enum):
     CPU = "CPU"
 
 
-# FIX QUANT-1 — GPU sur lesquels la quantification 4 bits est recommandée.
-# A100 dispose de suffisamment de VRAM (40/80 Go) pour se passer de
-# quantification ; les autres GPU listés bénéficient du 4 bits.
-# UNKNOWN et CPU sont traités prudemment : 4 bits par défaut si CUDA
-# disponible (mieux vaut économiser la VRAM sur un GPU non identifié),
-# aucune quantification si CPU (non pertinent / non supporté par bnb).
-_GPUS_RECOMMENDING_4BIT = {
-    GPUType.T4,
-    GPUType.L4,
-    GPUType.V100,
-    GPUType.UNKNOWN,
-}
-
-
 @dataclass
 class GPUInfo:
     """
@@ -96,10 +67,6 @@ class GPUInfo:
     dpo_batch_size: int
 
     quantization: str
-    # FIX QUANT-1 — champ booléen consommable directement par
-    # colab_environment.py, aligné sur le seul mode réellement implémenté
-    # (QLoRA 4 bits via BitsAndBytesConfig).
-    quantization_4bit_recommended: bool
 
     cuda_available: bool
 
@@ -198,14 +165,7 @@ def get_recommended_quantization(
     gpu_type: GPUType,
 ) -> str:
     """
-    Quantization recommendation (INFORMATIF / LOGGING UNIQUEMENT).
-
-    ATTENTION : cette fonction peut retourner "8bit", un mode NON
-    implémenté par training_model_loader.py (QLoRA 4 bits uniquement,
-    via BitsAndBytesConfig(load_in_4bit=True)). Ne pas utiliser cette
-    valeur pour piloter config["quantization"] — utiliser
-    should_use_4bit_quantization() à la place, qui est garantie
-    cohérente avec ce que le pipeline sait réellement charger.
+    Quantization recommendation.
     """
 
     recommendations = {
@@ -216,20 +176,6 @@ def get_recommended_quantization(
     }
 
     return recommendations.get(gpu_type, "4bit")
-
-
-def should_use_4bit_quantization(
-    gpu_type: GPUType,
-) -> bool:
-    """
-    FIX QUANT-1 — Recommandation booléenne alignée sur le support réel
-    du pipeline (QLoRA 4 bits uniquement).
-
-    Destinée à être branchée directement sur
-    config["quantization"]["enabled"] par colab_environment.py.
-    """
-
-    return gpu_type in _GPUS_RECOMMENDING_4BIT
 
 
 def is_bf16_recommended(
@@ -269,9 +215,6 @@ def build_gpu_info() -> GPUInfo:
         quantization=get_recommended_quantization(
             gpu_type
         ),
-        quantization_4bit_recommended=should_use_4bit_quantization(
-            gpu_type
-        ),
         cuda_available=torch.cuda.is_available(),
     )
 
@@ -305,12 +248,8 @@ def log_gpu_info() -> GPUInfo:
         info.dpo_batch_size,
     )
     logger.info(
-        "Quantization (info) : %s",
+        "Quantization: %s",
         info.quantization,
-    )
-    logger.info(
-        "Quantization 4bit recommended (utilisé par le pipeline): %s",
-        info.quantization_4bit_recommended,
     )
     logger.info("===================================")
 
@@ -337,7 +276,6 @@ def get_training_recommendations() -> dict:
         "lora_batch_size": gpu.lora_batch_size,
         "dpo_batch_size": gpu.dpo_batch_size,
         "quantization": gpu.quantization,
-        "quantization_4bit_recommended": gpu.quantization_4bit_recommended,
     }
 
 
