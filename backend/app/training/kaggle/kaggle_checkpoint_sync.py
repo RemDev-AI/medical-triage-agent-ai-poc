@@ -1,12 +1,12 @@
-# medical-triage-agent-ai-poc/backend/app/training/colab/colab_checkpoint_sync.py
+# medical-triage-agent-ai-poc/backend/app/training/kaggle/kaggle_checkpoint_sync.py
 
 """
-Google Colab Checkpoint Synchronization Utilities
+Kaggle Notebooks Checkpoint Synchronization Utilities
 
 Features
 --------
 - Local checkpoint management
-- Google Drive synchronization
+- Kaggle working directory persistence awareness
 - Hugging Face Models synchronization
 - Automatic checkpoint discovery
 - Resume-from-checkpoint support
@@ -21,6 +21,21 @@ Architecture
 ------------
 Hugging Face Models Repository:
     RemDev-AI/medical-triage-agent-ai-poc-models
+
+Notes on Kaggle specifics
+--------------------------
+- Kaggle Notebooks do not provide a persistent mount equivalent to
+  Google Drive. The working directory (`/kaggle/working`) is only
+  preserved for the duration of the session and is capped in size
+  (commonly 20 GB), and outputs are only kept permanently if the
+  notebook is committed/saved as a Version.
+- Kaggle sessions also have a hard runtime limit (commonly 9h/12h
+  depending on the accelerator), which makes frequent Hugging Face
+  checkpoint uploads even more important than on Colab, since a
+  session can be pre-empted or time out without warning.
+- Because of this, `cleanup_after_upload` defaults to True to avoid
+  filling up the limited `/kaggle/working` quota with old checkpoints
+  once they are safely persisted to the Hugging Face Hub.
 """
 
 from __future__ import annotations
@@ -40,13 +55,18 @@ HF_MODELS_REPO_ID = (
     "RemDev-AI/medical-triage-agent-ai-poc-models"
 )
 
+# Default Kaggle-friendly local checkpoint location.
+# `/kaggle/working` is the only writable, session-scoped directory
+# whose content Kaggle will offer to persist when a notebook Version
+# is committed.
+KAGGLE_DEFAULT_CHECKPOINT_DIR = "/kaggle/working/outputs"
 
-class ColabCheckpointSync:
+
+class KaggleCheckpointSync:
     """
     Manage training checkpoints across:
 
-    - Local filesystem
-    - Google Drive
+    - Local filesystem (Kaggle `/kaggle/working` session storage)
     - Hugging Face Models repository
     """
 
@@ -170,6 +190,10 @@ class ColabCheckpointSync:
     ) -> bool:
         """
         Delete local checkpoint after successful upload.
+
+        On Kaggle this is particularly important because
+        `/kaggle/working` has a limited quota (commonly 20 GB),
+        shared across all outputs of the session.
         """
 
         try:
@@ -518,14 +542,14 @@ class ColabCheckpointSync:
 
 
 def create_default_checkpoint_sync(
-    output_dir: str,
-    training_type: str,
-) -> ColabCheckpointSync:
+    output_dir: str = KAGGLE_DEFAULT_CHECKPOINT_DIR,
+    training_type: str = "sft",
+) -> KaggleCheckpointSync:
     """
     Factory helper.
     """
 
-    return ColabCheckpointSync(
+    return KaggleCheckpointSync(
 
         local_checkpoint_dir=output_dir,
 
@@ -542,9 +566,9 @@ if __name__ == "__main__":
         level=logging.INFO
     )
 
-    sync = ColabCheckpointSync(
+    sync = KaggleCheckpointSync(
 
-        local_checkpoint_dir="./outputs",
+        local_checkpoint_dir=KAGGLE_DEFAULT_CHECKPOINT_DIR,
 
         training_type="sft",
 
