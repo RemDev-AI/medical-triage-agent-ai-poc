@@ -299,7 +299,7 @@ def get_gpu_memory_usage() -> Dict[str, object]:
 def setup_peft_model(
     model: AutoModelForCausalLM,
     config: Optional[Dict] = None,      # ← FIX BUG #2 : paramètre ajouté
-    already_gradient_checkpointed: bool = True,  # ← étape 1 : évite le double GC
+    already_gradient_checkpointed: bool = True,  # ← étape 1 : évite le double GC  # noqa : E501
 ) -> PeftModel:
     """
     Full PEFT setup pipeline.

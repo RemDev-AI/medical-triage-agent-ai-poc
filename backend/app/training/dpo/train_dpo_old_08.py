@@ -271,12 +271,7 @@ def build_dpo_config() -> "DPOConfig":
             f"strictement inférieur à max_length ({max_length})."
         )
 
-    # NOTE FIX DPO-6 (révisé) — `reference_free` n'est PAS un paramètre de
-    # `DPOConfig` dans cette version de TRL (TypeError sinon). Sa sémantique
-    # est déjà gérée correctement en aval par `resolve_ref_model()`, qui
-    # relit CONFIG["dpo"]["reference_free"] indépendamment pour décider du
-    # `ref_model` à transmettre à DPOTrainer. Il ne doit donc PAS être
-    # recalculé ni injecté ici.
+    reference_free = bool(dpo_config.get("reference_free", False))
 
     training_args = {
         "output_dir": training_config["output_dir"],
@@ -317,6 +312,9 @@ def build_dpo_config() -> "DPOConfig":
         "max_length": max_length,
         "loss_type": dpo_config.get("loss_type", "sigmoid"),
         "truncation_mode": dpo_config.get("truncation_mode", "keep_end"),
+
+        # FIX DPO-6 — reference_free était lu du YAML mais jamais transmis.
+        "reference_free": reference_free,
     }
 
     # FIX BUG #3 — précision détectée depuis le GPU (source unique)
@@ -477,10 +475,10 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
     print("=" * 60)
     print(torch.cuda.memory_summary())
     print("=" * 60)
-    
+
     checkpoint_sync = create_default_checkpoint_sync(
         output_dir=CONFIG["training"]["output_dir"],
-        training_type="sft",
+        training_type="dpo",
     )
 
     resume_checkpoint = (

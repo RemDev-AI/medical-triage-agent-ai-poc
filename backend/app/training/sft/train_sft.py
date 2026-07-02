@@ -389,7 +389,7 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         train_dataset=train_dataset,
         validation_dataset=validation_dataset,
     )
-    
+
     checkpoint_sync = create_default_checkpoint_sync(
         output_dir=CONFIG["training"]["output_dir"],
         training_type="sft",
