@@ -200,26 +200,6 @@ class TrainingModelLoader:
             random_state=self.config.get("seed", 42),
         )
 
-        # --- Garde-fou fp16 (même correctif que peft_setup.py, étape 09) ---
-        # Unsloth peut caster les adapters LoRA en bfloat16 en interne sur
-        # T4, indépendamment de dtype=resolved_dtype passé à
-        # from_pretrained() (cf. audit dtype : 393 paramètres entraînables
-        # tous en bfloat16 malgré resolved_dtype=float16). On force donc
-        # explicitement tout paramètre entraînable resté en bfloat16 vers
-        # float16, seul dtype compatible avec le GradScaler sur T4.
-        n_cast = 0
-        for param in model.parameters():
-            if param.requires_grad and param.dtype == torch.bfloat16:
-                param.data = param.data.to(torch.float16)
-                n_cast += 1
-
-        if n_cast:
-            logger.warning(
-                "[unsloth] Garde-fou fp16 : %d paramètre(s) entraînable(s) "
-                "recastés de bfloat16 vers float16.",
-                n_cast,
-            )
-
         logger.info("[unsloth] Base model + LoRA ready.")
         return model
 
