@@ -73,24 +73,13 @@ class TrainingModelLoader:
             device_map=self.config["model"].get("device_map", "auto"),
         )
 
-        resolved_dtype = self._resolve_torch_dtype()
-
-        # FIX BF16/FP16 MISMATCH — torch_dtype DOIT être transmis même
-        # quand quantization_config est fourni. bnb_4bit_compute_dtype
-        # ne pilote QUE le calcul des couches quantifiées en 4 bits ; les
-        # couches non quantifiées (embeddings, layernorms, et donc les
-        # modules ensuite enveloppés par LoRA) prennent sinon le
-        # torch_dtype par défaut du config.json du checkpoint (bfloat16
-        # pour Qwen3), indépendamment du GPU détecté. Sur T4 (fp16 requis,
-        # pas de GradScaler compatible bf16), cela provoquait des
-        # paramètres LoRA entraînables en bfloat16 alors que le Trainer
-        # est configuré en fp16 → NotImplementedError sur
-        # _amp_foreach_non_finite_check_and_unscale_. On force donc
-        # explicitement le même dtype résolu pour les deux, quantifié ou non.  # noqa: E501
-        load_kwargs["torch_dtype"] = resolved_dtype
-
         if quantization_config is not None:
+            # torch_dtype est piloté par bnb_4bit_compute_dtype quand
+            # quantization_config est fourni ; on l'aligne pour éviter
+            # les incohérences dtype entre base et compute.
             load_kwargs["quantization_config"] = quantization_config
+        else:
+            load_kwargs["torch_dtype"] = self._resolve_torch_dtype()
 
         model = AutoModelForCausalLM.from_pretrained(**load_kwargs)
 
