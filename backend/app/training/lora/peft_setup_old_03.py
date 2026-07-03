@@ -219,28 +219,6 @@ def inject_lora_adapters(
         effective_config,
     )
 
-    # --- Garde-fou dtype (Option A / audit DPO 2026-07-03) ---
-    # PEFT peut, selon la version, caster certains paramètres
-    # entraînables (notamment via modules_to_save, ex. lm_head) en
-    # bfloat16, indépendamment du dtype du modèle de base chargé en
-    # amont (torch.float16 sur T4). Ce garde-fou force explicitement
-    # tous les paramètres entraînables restés en bfloat16 vers
-    # float16, pour rester cohérent avec fp16=True côté DPOConfig
-    # (GradScaler incompatible avec bfloat16).
-    forced_params = []
-    for name, param in peft_model.named_parameters():
-        if param.requires_grad and param.dtype == torch.bfloat16:
-            param.data = param.data.to(torch.float16)
-            forced_params.append(name)
-
-    if forced_params:
-        logger.warning(
-            "Garde-fou dtype : %d paramètre(s) entraînable(s) forcé(s) "
-            "de bfloat16 vers float16 : %s",
-            len(forced_params),
-            forced_params,
-        )
-
     logger.info("LoRA adapters successfully injected.")
 
     return peft_model
