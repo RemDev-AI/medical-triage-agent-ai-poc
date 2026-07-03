@@ -148,10 +148,13 @@ class TrainingModelLoader:
             load_in_4bit,
         )
 
+        resolved_dtype = self._resolve_torch_dtype()  # réutilise la logique custom validée # noqa: E501
+
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_name,
             max_seq_length=max_seq_length,
-            dtype=None,  # Unsloth choisit automatiquement bf16/fp16 selon le GPU  # noqa: E501
+            # dtype=None,  # Unsloth choisit automatiquement bf16/fp16 selon le GPU  # noqa: E501
+            dtype=resolved_dtype,  # source unique de vérité, plus de dtype=None # noqa: E501
             load_in_4bit=load_in_4bit,
         )
 
