@@ -255,7 +255,7 @@ def prepare_datasets() -> Tuple[Dataset, Dataset]:
     return train_dataset, validation_dataset
 
 
-def build_dpo_config() -> "DPOConfig":
+def build_dpo_config() -> "DPOConfig":  # type: ignore
     training_config = CONFIG["training"]
     dpo_config = CONFIG["dpo"]
 
@@ -387,7 +387,7 @@ def build_trainer(
     tokenizer,
     train_dataset,
     validation_dataset,
-) -> "DPOTrainer":
+) -> "DPOTrainer":  # type: ignore
     if DPOTrainer is None:
         raise ImportError(
             "TRL package is required for DPO training. "
@@ -477,7 +477,7 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
     print("=" * 60)
     print(torch.cuda.memory_summary())
     print("=" * 60)
-    
+
     checkpoint_sync = create_default_checkpoint_sync(
         output_dir=CONFIG["training"]["output_dir"],
         training_type="sft",
@@ -491,6 +491,17 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         resume_checkpoint = (
             checkpoint_sync.restore_latest_checkpoint_from_huggingface()
         )
+
+    print("=" * 60)
+    print("AUDIT DTYPE DES PARAMÈTRES ENTRAÎNABLES")
+    dtype_counts = {}
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            dtype_counts[str(param.dtype)] = dtype_counts.get(str(param.dtype), 0) + 1  # noqa : E501
+            if param.dtype == torch.bfloat16:
+                print(f"[BF16 !] {name} -> {param.dtype}")
+    print("Résumé par dtype :", dtype_counts)
+    print("=" * 60)
 
     trainer.train(
         # resume_from_checkpoint=CONFIG["training"].get("resume_from_checkpoint")
