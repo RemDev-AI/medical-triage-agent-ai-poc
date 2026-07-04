@@ -138,58 +138,6 @@ class NaNGuardCallback(TrainerCallback):
 
 
 # ---------------------------------------------------------------------------
-# FIX BF16-1 — ForceFp16Callback
-# Garde-fou définitif contre la réintroduction de bfloat16 dans les
-# paramètres entraînables sur T4 (incompatible avec le GradScaler fp16 :
-# NotImplementedError sur _amp_foreach_non_finite_check_and_unscale_).
-#
-# Le cast fp16 fait dans TrainingModelLoader._prepare_with_unsloth()
-# (juste après get_peft_model()) s'est révélé insuffisant : l'audit
-# dtype montre encore 100% des paramètres en bfloat16 juste avant
-# trainer.train(), preuve qu'un mécanisme interne (Unsloth, PEFT ou
-# accelerate.prepare() via DPOTrainer) recast le modèle en bf16 après
-# ce point.
-#
-# on_train_begin est le point d'exécution le plus tardif possible
-# avant la première itération d'optimisation : il s'exécute APRÈS tout
-# le wrapping interne du Trainer (self._wrap_model(),
-# accelerator.prepare(), etc.). C'est donc le dernier endroit où
-# intervenir avec la certitude qu'aucune étape ultérieure ne pourra
-# recaster les poids avant le GradScaler.
-# ---------------------------------------------------------------------------
-class ForceFp16Callback(TrainerCallback):
-    def on_train_begin(self, args, state, control, model=None, **kwargs):
-        target_model = model if model is not None else kwargs.get("model")
-        if target_model is None:
-            logger.warning(
-                "[ForceFp16Callback] Aucun modèle reçu à on_train_begin — "
-                "garde-fou fp16 ignoré."
-            )
-            return control
-
-        n_cast = 0
-        dtype_counts: Dict[str, int] = {}
-        for name, param in target_model.named_parameters():
-            if param.requires_grad:
-                if param.dtype == torch.bfloat16:
-                    param.data = param.data.to(torch.float16)
-                    n_cast += 1
-                dtype_counts[str(param.dtype)] = (
-                    dtype_counts.get(str(param.dtype), 0) + 1
-                )
-
-        logger.warning(
-            "[ForceFp16Callback] %d paramètre(s) recastés bf16 -> fp16 "
-            "à on_train_begin. Résumé dtype post-callback : %s",
-            n_cast,
-            dtype_counts,
-        )
-        if n_cast == 0 and dtype_counts.get("torch.bfloat16", 0) == 0:
-            logger.info("[ForceFp16Callback] ✅ Aucun bf16 détecté à ce stade.")
-        return control
-
-
-# ---------------------------------------------------------------------------
 # FIX DPO-5 — SafetyFilter
 # Écarte les exemples dont chosen ou rejected contiennent
 # des keywords dangereux définis dans dpo_config.yaml [safety]
@@ -456,10 +404,6 @@ def build_trainer(
     # NaNGuardCallback en premier pour stopper avant EarlyStopping
     nan_guard = NaNGuardCallback()
 
-    # FIX BF16-1 — dernier garde-fou fp16, exécuté à on_train_begin,
-    # donc après tout wrapping interne (Unsloth / PEFT / accelerate).
-    force_fp16 = ForceFp16Callback()
-
     return DPOTrainer(
         model=model,
         ref_model=ref_model,
@@ -467,7 +411,7 @@ def build_trainer(
         processing_class=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,
-        callbacks=[nan_guard, force_fp16, early_stopping],
+        callbacks=[nan_guard, early_stopping],
     )
 
 
