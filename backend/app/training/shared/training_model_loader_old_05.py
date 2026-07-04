@@ -200,41 +200,23 @@ class TrainingModelLoader:
             random_state=self.config.get("seed", 42),
         )
 
-        # --- Garde-fou fp32 poids maîtres (corrige l'ancien garde-fou fp16,
-        # même correctif que ForceMasterWeightsFp32Callback dans
-        # train_dpo.py) ---
+        # --- Garde-fou fp16 (même correctif que peft_setup.py, étape 09) ---
         # Unsloth peut caster les adapters LoRA en bfloat16 en interne sur
         # T4, indépendamment de dtype=resolved_dtype passé à
         # from_pretrained() (cf. audit dtype : 393 paramètres entraînables
-        # tous en bfloat16 malgré resolved_dtype=float16).
-        #
-        # L'ancienne version de ce garde-fou recastait vers torch.float16,
-        # ce qui est incorrect : le GradScaler utilisé en mixed-precision
-        # fp16 (cf. colab_environment.get_training_arguments_precision())
-        # exige que les POIDS MAÎTRES des paramètres entraînables restent
-        # en float32 — seul l'autocast doit produire du fp16 pendant le
-        # forward/backward. Un paramètre entraînable dont le .dtype brut
-        # est déjà torch.float16 fait échouer
-        # `GradScaler._unscale_grads_` (allow_fp16=False) :
-        # "ValueError: Attempting to unscale FP16 gradients."
-        #
-        # On recast donc tout résidu bfloat16 (et fp16, par cohérence)
-        # vers float32, seul dtype de stockage stable avec un GradScaler
-        # fp16 sur T4.
+        # tous en bfloat16 malgré resolved_dtype=float16). On force donc
+        # explicitement tout paramètre entraînable resté en bfloat16 vers
+        # float16, seul dtype compatible avec le GradScaler sur T4.
         n_cast = 0
         for param in model.parameters():
-            if param.requires_grad and param.dtype in (
-                torch.bfloat16,
-                torch.float16,
-            ):
-                param.data = param.data.to(torch.float32)
+            if param.requires_grad and param.dtype == torch.bfloat16:
+                param.data = param.data.to(torch.float16)
                 n_cast += 1
 
         if n_cast:
             logger.warning(
-                "[unsloth] Garde-fou fp32 : %d paramètre(s) entraînable(s) "
-                "recastés vers float32 (poids maîtres, compatibles "
-                "GradScaler fp16).",
+                "[unsloth] Garde-fou fp16 : %d paramètre(s) entraînable(s) "
+                "recastés de bfloat16 vers float16.",
                 n_cast,
             )
 

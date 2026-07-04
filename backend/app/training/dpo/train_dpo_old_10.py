@@ -138,10 +138,10 @@ class NaNGuardCallback(TrainerCallback):
 
 
 # ---------------------------------------------------------------------------
-# FIX BF16-2 — ForceMasterWeightsFp32Callback (corrige BF16-1)
+# FIX BF16-1 — ForceFp16Callback
 # Garde-fou définitif contre la réintroduction de bfloat16 dans les
 # paramètres entraînables sur T4 (incompatible avec le GradScaler fp16 :
-# ValueError "Attempting to unscale FP16 gradients").
+# NotImplementedError sur _amp_foreach_non_finite_check_and_unscale_).
 #
 # Le cast fp16 fait dans TrainingModelLoader._prepare_with_unsloth()
 # (juste après get_peft_model()) s'est révélé insuffisant : l'audit
@@ -150,20 +150,6 @@ class NaNGuardCallback(TrainerCallback):
 # accelerate.prepare() via DPOTrainer) recast le modèle en bf16 après
 # ce point.
 #
-# BF16-1 recastait vers torch.float16, ce qui a introduit un second bug :
-# le GradScaler utilisé par le Trainer en mixed-precision fp16 exige que
-# les POIDS MAÎTRES des paramètres entraînables restent en float32 — seul
-# l'autocast doit convertir les activations en fp16 pendant le
-# forward/backward. Un paramètre entraînable dont le .dtype brut est déjà
-# torch.float16 fait échouer `_unscale_grads_` (allow_fp16=False), d'où le
-# crash "Attempting to unscale FP16 gradients." au premier
-# clip_grad_norm_.
-#
-# Correction : recast bf16 -> float32 (pas float16). Le T4 (Turing) ne
-# supporte de toute façon pas le calcul bf16 nativement ; float32 comme
-# stockage des poids maîtres + autocast fp16 pour le calcul est la
-# configuration standard et stable en mixed-precision fp16.
-#
 # on_train_begin est le point d'exécution le plus tardif possible
 # avant la première itération d'optimisation : il s'exécute APRÈS tout
 # le wrapping interne du Trainer (self._wrap_model(),
@@ -171,13 +157,13 @@ class NaNGuardCallback(TrainerCallback):
 # intervenir avec la certitude qu'aucune étape ultérieure ne pourra
 # recaster les poids avant le GradScaler.
 # ---------------------------------------------------------------------------
-class ForceMasterWeightsFp32Callback(TrainerCallback):
+class ForceFp16Callback(TrainerCallback):
     def on_train_begin(self, args, state, control, model=None, **kwargs):
         target_model = model if model is not None else kwargs.get("model")
         if target_model is None:
             logger.warning(
-                "[ForceMasterWeightsFp32Callback] Aucun modèle reçu à "
-                "on_train_begin — garde-fou fp32 ignoré."
+                "[ForceFp16Callback] Aucun modèle reçu à on_train_begin — "
+                "garde-fou fp16 ignoré."
             )
             return control
 
@@ -185,26 +171,21 @@ class ForceMasterWeightsFp32Callback(TrainerCallback):
         dtype_counts: Dict[str, int] = {}
         for name, param in target_model.named_parameters():
             if param.requires_grad:
-                if param.dtype in (torch.bfloat16, torch.float16):
-                    param.data = param.data.to(torch.float32)
+                if param.dtype == torch.bfloat16:
+                    param.data = param.data.to(torch.float16)
                     n_cast += 1
                 dtype_counts[str(param.dtype)] = (
                     dtype_counts.get(str(param.dtype), 0) + 1
                 )
 
         logger.warning(
-            "[ForceMasterWeightsFp32Callback] %d paramètre(s) recastés "
-            "vers float32 à on_train_begin. Résumé dtype post-callback : %s",
+            "[ForceFp16Callback] %d paramètre(s) recastés bf16 -> fp16 "
+            "à on_train_begin. Résumé dtype post-callback : %s",
             n_cast,
             dtype_counts,
         )
-        if n_cast == 0 and dtype_counts.get("torch.float32", 0) == sum(
-            dtype_counts.values()
-        ):
-            logger.info(
-                "[ForceMasterWeightsFp32Callback] ✅ Tous les paramètres "
-                "entraînables sont déjà en float32."
-            )
+        if n_cast == 0 and dtype_counts.get("torch.bfloat16", 0) == 0:
+            logger.info("[ForceFp16Callback] ✅ Aucun bf16 détecté à ce stade.")
         return control
 
 
@@ -475,10 +456,9 @@ def build_trainer(
     # NaNGuardCallback en premier pour stopper avant EarlyStopping
     nan_guard = NaNGuardCallback()
 
-    # FIX BF16-2 — dernier garde-fou fp32 (poids maîtres), exécuté à
-    # on_train_begin, donc après tout wrapping interne
-    # (Unsloth / PEFT / accelerate).
-    force_master_fp32 = ForceMasterWeightsFp32Callback()
+    # FIX BF16-1 — dernier garde-fou fp16, exécuté à on_train_begin,
+    # donc après tout wrapping interne (Unsloth / PEFT / accelerate).
+    force_fp16 = ForceFp16Callback()
 
     return DPOTrainer(
         model=model,
@@ -487,7 +467,7 @@ def build_trainer(
         processing_class=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,
-        callbacks=[nan_guard, force_master_fp32, early_stopping],
+        callbacks=[nan_guard, force_fp16, early_stopping],
     )
 
 
@@ -574,15 +554,9 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
     for name, param in model.named_parameters():
         if param.requires_grad:
             dtype_counts[str(param.dtype)] = dtype_counts.get(str(param.dtype), 0) + 1  # noqa : E501
-            if param.dtype in (torch.bfloat16, torch.float16):
-                print(f"[ATTENDU FP32 !] {name} -> {param.dtype}")
+            if param.dtype == torch.bfloat16:
+                print(f"[BF16 !] {name} -> {param.dtype}")
     print("Résumé par dtype :", dtype_counts)
-    print(
-        "Rappel : les poids maîtres entraînables doivent être en float32 "
-        "avant trainer.train() (mixed-precision fp16 + GradScaler sur T4). "
-        "ForceMasterWeightsFp32Callback corrigera tout résidu bf16/fp16 à "
-        "on_train_begin si ce n'est pas déjà le cas ici."
-    )
     print("=" * 60)
 
     trainer.train(

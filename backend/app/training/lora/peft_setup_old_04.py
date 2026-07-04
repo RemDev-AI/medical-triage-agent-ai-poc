@@ -219,37 +219,24 @@ def inject_lora_adapters(
         effective_config,
     )
 
-    # --- Garde-fou dtype poids maîtres (corrige "Option A / audit DPO
-    # 2026-07-03") ---
+    # --- Garde-fou dtype (Option A / audit DPO 2026-07-03) ---
     # PEFT peut, selon la version, caster certains paramètres
     # entraînables (notamment via modules_to_save, ex. lm_head) en
     # bfloat16, indépendamment du dtype du modèle de base chargé en
-    # amont (torch.float16 sur T4).
-    #
-    # L'ancienne version de ce garde-fou recastait vers torch.float16,
-    # ce qui est incorrect : le GradScaler utilisé en mixed-precision
-    # fp16 (fp16=True côté DPOConfig) exige que les POIDS MAÎTRES des
-    # paramètres entraînables restent en float32 — seul l'autocast doit
-    # produire du fp16 pendant le forward/backward. Un paramètre
-    # entraînable dont le .dtype brut est déjà torch.float16 fait
-    # échouer `GradScaler._unscale_grads_` (allow_fp16=False) :
-    # "ValueError: Attempting to unscale FP16 gradients."
-    #
-    # On recast donc tout résidu bfloat16 (et fp16, par cohérence) vers
-    # float32, seul dtype de stockage stable avec un GradScaler fp16.
+    # amont (torch.float16 sur T4). Ce garde-fou force explicitement
+    # tous les paramètres entraînables restés en bfloat16 vers
+    # float16, pour rester cohérent avec fp16=True côté DPOConfig
+    # (GradScaler incompatible avec bfloat16).
     forced_params = []
     for name, param in peft_model.named_parameters():
-        if param.requires_grad and param.dtype in (
-            torch.bfloat16,
-            torch.float16,
-        ):
-            param.data = param.data.to(torch.float32)
+        if param.requires_grad and param.dtype == torch.bfloat16:
+            param.data = param.data.to(torch.float16)
             forced_params.append(name)
 
     if forced_params:
         logger.warning(
             "Garde-fou dtype : %d paramètre(s) entraînable(s) forcé(s) "
-            "vers float32 (poids maîtres) : %s",
+            "de bfloat16 vers float16 : %s",
             len(forced_params),
             forced_params,
         )
