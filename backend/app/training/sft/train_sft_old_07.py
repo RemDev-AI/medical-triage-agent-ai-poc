@@ -15,13 +15,6 @@
 #            branche Unsloth, qui charge les deux ensemble), et
 #            synchronisation explicite model/tokenizer (pad/eos/bos ids)
 #            pour éliminer le warning PAD/BOS/EOS à la source.
-#   - DTYPE-1 : ajout de ForceMasterWeightsFp32Callback (parité avec le
-#            correctif appliqué à train_dpo.py le 2026-07-05). Ce script
-#            utilise le même TrainingModelLoader (branche Unsloth possible)
-#            sur le même T4 avec la même politique fp16/GradScaler ; sans
-#            ce filet de sécurité à on_train_begin, il est exposé au même
-#            risque de crash "Attempting to unscale FP16 gradients" que
-#            celui diagnostiqué et corrigé côté DPO.
 
 from __future__ import annotations
 
@@ -31,7 +24,6 @@ import math
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import torch
 import yaml
 from datasets import Dataset, load_dataset
 from transformers import (
@@ -87,51 +79,6 @@ class NaNGuardCallback(TrainerCallback):
             raise ValueError(
                 f"eval_loss={loss} détecté à step {state.global_step}. "
                 "Arrêt du run. Vérifier le masquage des labels (bug #1)."
-            )
-
-
-# ---------------------------------------------------------------------------
-# FIX DTYPE-1 — ForceMasterWeightsFp32Callback (parité avec train_dpo.py)
-#
-# Contexte (cf. audit DPO du 2026-07-05) : sur T4, la politique de précision
-# impose fp16=True/bf16=False + GradScaler fp16. Or TrainingModelLoader
-# (branche Unsloth) peut réintroduire du bfloat16 sur les poids maîtres LoRA
-# après get_peft_model(), car Unsloth applique en interne sa propre
-# détection GPU (is_bfloat16_supported()), indépendante du dtype demandé.
-# Cette réintroduction se produit AVANT trainer.train() et n'est donc pas
-# spécifique à DPOTrainer : ce Trainer standard est exposé au même risque de
-# crash "Attempting to unscale FP16 gradients" si des paramètres
-# entraînables se retrouvent en bf16 (ou fp16 mal placé) au moment où le
-# GradScaler fp16 intervient. Ce callback est le filet de sécurité final,
-# exécuté juste avant le début de l'entraînement, qui force tout paramètre
-# entraînable en float32, seul dtype de stockage compatible avec un
-# GradScaler fp16.
-# ---------------------------------------------------------------------------
-class ForceMasterWeightsFp32Callback(TrainerCallback):
-    def on_train_begin(self, args, state, control, model=None, **kwargs):
-        target_model = model if model is not None else kwargs.get("model")
-        if target_model is None:
-            logger.warning(
-                "ForceMasterWeightsFp32Callback : modèle introuvable dans "
-                "on_train_begin, aucun recast effectué."
-            )
-            return
-
-        recast_count = 0
-        for name, param in target_model.named_parameters():
-            if param.requires_grad and param.dtype in (
-                torch.bfloat16,
-                torch.float16,
-            ):
-                param.data = param.data.to(torch.float32)
-                recast_count += 1
-
-        if recast_count:
-            logger.warning(
-                "ForceMasterWeightsFp32Callback : %d paramètre(s) "
-                "entraînable(s) recastés vers float32 avant le début de "
-                "l'entraînement (bf16/fp16 détectés).",
-                recast_count,
             )
 
 
@@ -382,11 +329,6 @@ def build_trainer(model, tokenizer, train_dataset, validation_dataset):
     # FIX BUG #5 — NaNGuardCallback en premier pour stopper avant EarlyStopping
     nan_guard = NaNGuardCallback()
 
-    # FIX DTYPE-1 — doit s'exécuter à on_train_begin, avant tout forward/
-    # backward, pour garantir que le GradScaler fp16 ne voit jamais de
-    # poids maîtres entraînables en bf16.
-    dtype_guard = ForceMasterWeightsFp32Callback()
-
     return Trainer(
         model=model,
         args=training_args,
@@ -394,7 +336,7 @@ def build_trainer(model, tokenizer, train_dataset, validation_dataset):
         eval_dataset=validation_dataset,
         processing_class=tokenizer,
         data_collator=data_collator,
-        callbacks=[dtype_guard, nan_guard, early_stopping],
+        callbacks=[nan_guard, early_stopping],
     )
 
 
