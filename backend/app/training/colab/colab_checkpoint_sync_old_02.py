@@ -210,12 +210,6 @@ class ColabCheckpointSync:
             )
         )
 
-        remote_dir = (
-            "checkpoints/"
-            f"{self.training_type}/"
-            f"{remote_name}"
-        )
-
         try:
 
             api = HfApi()
@@ -228,7 +222,11 @@ class ColabCheckpointSync:
 
                 repo_type="model",
 
-                path_in_repo=remote_dir,
+                path_in_repo=(
+                    "checkpoints/"
+                    f"{self.training_type}/"
+                    f"{remote_name}"
+                ),
 
                 commit_message=(
                     f"Upload {remote_name}"
@@ -238,47 +236,6 @@ class ColabCheckpointSync:
             logger.info(
                 "Uploaded checkpoint %s",
                 remote_name,
-            )
-
-            # FIX HUB-4 — ne pas faire confiance à la seule absence
-            # d'exception de upload_folder(). On relit la liste des
-            # fichiers réellement présents sur le Hub sous remote_dir/
-            # et on la compare aux fichiers locaux attendus AVANT tout
-            # nettoyage local (cleanup_checkpoint supprime le checkpoint
-            # de façon irréversible).
-            local_files = {
-                str(path.relative_to(checkpoint_path)).replace("\\", "/")
-                for path in checkpoint_path.rglob("*")
-                if path.is_file()
-            }
-
-            remote_prefix = f"{remote_dir}/"
-            remote_files = {
-                file[len(remote_prefix):]
-                for file in api.list_repo_files(
-                    repo_id=self.hf_repo_id,
-                    repo_type="model",
-                )
-                if file.startswith(remote_prefix)
-            }
-
-            missing_files = local_files - remote_files
-
-            if missing_files:
-                logger.error(
-                    "Vérification post-upload échouée pour %s : %d "
-                    "fichier(s) manquant(s) sur le Hub : %s. "
-                    "Nettoyage local ANNULÉ par précaution.",
-                    remote_name,
-                    len(missing_files),
-                    sorted(missing_files),
-                )
-                return False
-
-            logger.info(
-                "Vérification post-upload OK pour %s (%d fichier(s)).",
-                remote_name,
-                len(local_files),
             )
 
             if self.cleanup_after_upload:

@@ -47,17 +47,10 @@ training:
   max_grad_norm: 1.0
   gradient_checkpointing: true
   logging_steps: 10
-  # FIX DPO-2 — avec max_train_samples=500, batch=1, grad_accum=16 :
-  # ~31 steps réels par epoch. eval_steps/save_steps=50 en "steps" ne
-  # peut STRUCTURELLEMENT jamais être atteint (31 < 50) : aucun
-  # checkpoint-N/ n'est créé, rien n'est synchronisable vers Hugging
-  # Face. "epoch" garantit un checkpoint en fin de run quel que soit
-  # le nombre exact de steps produits (aligné sur le fix appliqué à
-  # sft_config_validation.yaml).
-  eval_steps: 50                     # ignoré tant que *_strategy="epoch" ; conservé pour retour rapide à "steps" si besoin  # noqa: E501
-  save_steps: 50                     # idem
-  evaluation_strategy: "epoch"
-  save_strategy: "epoch"
+  eval_steps: 50
+  save_steps: 50
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
   save_total_limit: 3
   save_safetensors: true
   load_best_model_at_end: true
@@ -72,12 +65,6 @@ training:
   report_to:
     - "wandb"
   resume_from_checkpoint: null
-  # NOTE — cette clé n'est lue nulle part dans train_dpo.py (confirmé par
-  # grep : aucune occurrence de push_to_hub dans le code). Mise à `true`
-  # ici, elle donne l'illusion d'un contrôle qui n'existe pas : le
-  # comportement de push est piloté exclusivement par l'argument
-  # publish_to_hf de train() (train_dpo.py). Appelez explicitement
-  # train(publish_to_hf=True) pour publier réellement sur le Hub.
   push_to_hub: true
 
 dpo:

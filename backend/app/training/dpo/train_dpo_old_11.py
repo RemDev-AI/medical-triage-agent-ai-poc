@@ -556,13 +556,7 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
 
     checkpoint_sync = create_default_checkpoint_sync(
         output_dir=CONFIG["training"]["output_dir"],
-        # FIX DPO-1 — était "sft" par erreur (copier-coller de train_sft.py).
-        # Avec "sft", ce script DPO restaurerait/pousserait ses checkpoints
-        # sous checkpoints/sft/ sur le Hub, mélangés avec les vrais
-        # checkpoints SFT. ColabCheckpointSync ne lève aucune erreur dans ce
-        # cas car "sft" est une valeur valide pour training_type — le bug
-        # est donc silencieux.
-        training_type="dpo",
+        training_type="sft",
     )
 
     resume_checkpoint = (
@@ -600,108 +594,6 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
     tokenizer.save_pretrained(CONFIG["training"]["output_dir"])
     publish_training_artifacts()
     run_clinical_evaluation(model=model, tokenizer=tokenizer)
-
-    # FIX DPO-HUB — aligné sur les correctifs appliqués à train_sft.py :
-    # publish_to_hf était déclaré mais jamais utilisé, aucun push n'était
-    # jamais tenté (ni checkpoints intermédiaires, ni modèle final), et
-    # aucune vérification post-upload n'existait avant un éventuel
-    # nettoyage local. Voir train_sft.py pour le détail du raisonnement
-    # (FIX HUB-1 à HUB-5).
-    if publish_to_hf:
-        if checkpoint_sync.has_checkpoint():
-            logger.info("Synchronisation des checkpoints DPO intermédiaires vers Hugging Face...")  # noqa: E501
-            checkpoints_synced = checkpoint_sync.sync_all_checkpoints_to_huggingface()  # noqa: E501
-            if not checkpoints_synced:
-                raise RuntimeError(
-                    "Échec de synchronisation d'au moins un checkpoint DPO "
-                    "intermédiaire vers Hugging Face — voir logs "
-                    "ColabCheckpointSync ci-dessus pour le détail."
-                )
-        else:
-            logger.info(
-                "Aucun checkpoint DPO intermédiaire local (dossier "
-                "'checkpoint-*' absent) — rien à synchroniser à ce niveau."
-            )
-
-        logger.info(
-            "Publication du modèle final DPO sur Hugging Face (hub_model_id=%s)...",  # noqa: E501
-            CONFIG["model"]["hub_model_id"],
-        )
-        # FIX HUB-COLLISION (voir train_sft.py) — la racine de
-        # hub_model_id est réservée au modèle DPO (celui-ci), car c'est
-        # ce que le Hugging Face Space API
-        # (RemDev-AI/medical-triage-agent-ai-poc-api) charge en
-        # production. Le modèle SFT intermédiaire est poussé à part,
-        # sous sft-final/, pour ne pas écraser ce qui est servi en prod.
-        from huggingface_hub import HfApi
-
-        output_dir_path = Path(CONFIG["training"]["output_dir"])
-        hf_api = HfApi()
-
-        try:
-            hf_api.upload_folder(
-                folder_path=str(output_dir_path),
-                repo_id=CONFIG["model"]["hub_model_id"],
-                repo_type="model",
-                commit_message="DPO validation run — final model",
-            )
-            logger.info("Modèle final DPO publié sur Hugging Face.")
-
-            # Vérification post-upload avant tout nettoyage local (FIX
-            # HUB-3, identique à train_sft.py).
-            local_files = {
-                str(path.relative_to(output_dir_path)).replace("\\", "/")
-                for path in output_dir_path.rglob("*")
-                if path.is_file()
-            }
-
-            remote_files = set(
-                hf_api.list_repo_files(
-                    repo_id=CONFIG["model"]["hub_model_id"],
-                    repo_type="model",
-                )
-            )
-
-            missing_files = local_files - remote_files
-
-            if missing_files:
-                raise RuntimeError(
-                    f"Vérification post-upload échouée : {len(missing_files)} "  # noqa: E501
-                    f"fichier(s) local(aux) absent(s) du Hub après upload_folder() : "  # noqa: E501
-                    f"{sorted(missing_files)}"
-                )
-
-            logger.info(
-                "Vérification post-upload OK : %d fichier(s) confirmé(s) "
-                "présent(s) sur %s.",
-                len(local_files),
-                CONFIG["model"]["hub_model_id"],
-            )
-
-            if checkpoint_sync.cleanup_after_upload:
-                import shutil
-
-                shutil.rmtree(output_dir_path, ignore_errors=True)
-                logger.info(
-                    "Répertoire local %s supprimé après publication réussie "
-                    "et vérifiée (aucune persistance locale sur Colab).",
-                    output_dir_path,
-                )
-        except Exception:
-            logger.exception(
-                "Échec de la publication ou de la vérification du modèle "
-                "final DPO sur Hugging Face — le répertoire local %s est "
-                "CONSERVÉ pour éviter toute perte de données.",
-                output_dir_path,
-            )
-            raise
-    else:
-        logger.info(
-            "publish_to_hf=False — modèle DPO conservé en local uniquement "
-            "(%s), aucun push vers le Hub.",
-            CONFIG["training"]["output_dir"],
-        )
-
     TrainingUtils.finalize_wandb_run(wandb_run)
 
     logger.info("DPO validation run completed.")

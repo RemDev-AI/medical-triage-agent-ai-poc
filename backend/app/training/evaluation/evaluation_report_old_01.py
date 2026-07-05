@@ -24,36 +24,11 @@ Compatible with:
 from __future__ import annotations
 
 import json
-import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import Optional
-
-import yaml
-
-logger = logging.getLogger(__name__)
-
-# ============================================================
-# FIX EVAL-6 — evaluation_config.yaml n'était lu nulle part ici :
-# reporting.include_metadata / reporting.include_thresholds n'avaient
-# donc aucun effet (le Markdown n'incluait ni seuils ni métadonnées,
-# même quand ces flags étaient à true). On charge le YAML pour piloter
-# réellement le contenu des rapports.
-# json_filename / markdown_filename restent gérés via les paramètres
-# filename= existants (déjà alignés par coïncidence avec le YAML) ;
-# seuls include_metadata/include_thresholds étaient de vraies clés
-# mortes.
-# ============================================================
-EVALUATION_CONFIG_PATH = (
-    Path(__file__).parent / "evaluation_config.yaml"
-)
-
-
-def load_evaluation_config() -> Dict[str, Any]:
-    with open(EVALUATION_CONFIG_PATH, "r", encoding="utf-8") as file:
-        return yaml.safe_load(file)
 
 
 # ============================================================
@@ -73,11 +48,7 @@ def _utc_timestamp() -> str:
     Returns UTC timestamp in ISO-8601 format.
     """
 
-    return (
-        datetime.now(timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    return datetime.utcnow().isoformat() + "Z"
 
 
 def _ensure_directory(
@@ -178,14 +149,6 @@ def build_markdown_report(
         {},
     )
 
-    # FIX EVAL-6 — seuils et métadonnées, jusqu'ici jamais rendus dans le
-    # Markdown même quand include_thresholds/include_metadata=true.
-    eval_config = load_evaluation_config()
-    reporting_config = eval_config.get("reporting", {})
-
-    thresholds = report_data.get("thresholds", {})
-    metadata = report_data.get("metadata", {})
-
     lines = [
         "# Clinical Evaluation Report",
         "",
@@ -238,43 +201,6 @@ def build_markdown_report(
                 f"- **{metric_name}**: "
                 f"{metric_value}"
             )
-
-    # FIX EVAL-6 — section Thresholds, rendue uniquement si
-    # reporting.include_thresholds=true ET des seuils sont disponibles
-    # dans report_data (fournis par create_evaluation_report()).
-    if reporting_config.get("include_thresholds", False) and thresholds:
-        lines.extend(
-            [
-                "",
-                "---",
-                "",
-                "## Thresholds",
-                "",
-            ]
-        )
-        for threshold_name, threshold_value in thresholds.items():
-            lines.append(
-                f"- **{threshold_name}**: "
-                f"{threshold_value:.4f}"
-                if isinstance(threshold_value, (float, int))
-                else f"- **{threshold_name}**: {threshold_value}"
-            )
-
-    # FIX EVAL-6 — section Metadata, rendue uniquement si
-    # reporting.include_metadata=true ET des métadonnées sont
-    # disponibles.
-    if reporting_config.get("include_metadata", False) and metadata:
-        lines.extend(
-            [
-                "",
-                "---",
-                "",
-                "## Metadata",
-                "",
-            ]
-        )
-        for meta_key, meta_value in metadata.items():
-            lines.append(f"- **{meta_key}**: {meta_value}")
 
     lines.extend(
         [
@@ -347,15 +273,6 @@ def create_evaluation_report(
     Build canonical report structure.
     """
 
-    # FIX EVAL-6 — thresholds provenaient nulle part : report_data n'avait
-    # jamais de clé "thresholds", donc reporting.include_thresholds=true
-    # ne pouvait rien afficher même une fois branché côté Markdown. On les
-    # lit depuis evaluation_config.yaml, seule source de vérité existante
-    # pour ces valeurs (clinical_gate_status() les utilise déjà par
-    # ailleurs pour calculer overall_status).
-    eval_config = load_evaluation_config()
-    thresholds = eval_config.get("thresholds", {})
-
     return {
         "model_name": model_name,
         "evaluation_timestamp":
@@ -366,8 +283,6 @@ def create_evaluation_report(
             clinical_metrics,
         "safety":
             safety,
-        "thresholds":
-            thresholds,
         "metadata":
             metadata or {},
     }
