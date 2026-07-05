@@ -34,17 +34,10 @@ training:
   max_grad_norm: 1.0
   gradient_checkpointing: true
   logging_steps: 10
-  # FIX C — "steps" avec eval_steps/save_steps=50 supposait ~50 steps par
-  # epoch (200 échantillons / batch effectif 4). En pratique le filtre de
-  # masquage (tokenize_function) réduit légèrement le dataset et le run
-  # s'arrête à 49 steps : la condition step % 50 == 0 n'est jamais vraie,
-  # donc aucun dossier checkpoint-N/ n'est créé et rien n'est synchronisable
-  # vers Hugging Face. "epoch" garantit un checkpoint en fin de run quel
-  # que soit le nombre exact de steps produits.
-  eval_steps: 50                     # ignoré tant que *_strategy="epoch" ; conservé pour retour rapide à "steps" si besoin  # noqa: E501
-  save_steps: 50                     # idem
-  evaluation_strategy: "epoch"
-  save_strategy: "epoch"
+  eval_steps: 50                     # eval fréquente pour détecter nan tôt
+  save_steps: 50
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
   save_total_limit: 1                # 1 seul checkpoint en validation
   save_safetensors: true
   load_best_model_at_end: true
@@ -57,13 +50,7 @@ training:
   report_to:
     - "wandb"
   resume_from_checkpoint: null
-  # NOTE — cette clé n'est lue nulle part dans train_sft.py (ni passée à
-  # TrainingArguments, ni utilisée par build_training_arguments()). Le
-  # comportement de push est piloté exclusivement par l'argument
-  # publish_to_hf de train(), voir train_sft.py. Clé conservée pour
-  # documentation/intention mais actuellement sans effet — à supprimer
-  # ou à brancher explicitement si vous voulez qu'elle pilote quelque chose.
-  push_to_hub: false
+  push_to_hub: false                 # pas de push en validation
 
 model:
   base_model: "Qwen/Qwen3-1.7B-Base"
