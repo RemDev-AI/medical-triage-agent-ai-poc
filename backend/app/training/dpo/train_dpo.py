@@ -707,5 +707,8 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
     logger.info("DPO validation run completed.")
 
 
+# if __name__ == "__main__":
+#     train()
+
 if __name__ == "__main__":
-    train()
+    train(publish_to_hf=True)
