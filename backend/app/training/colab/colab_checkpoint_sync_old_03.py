@@ -452,31 +452,6 @@ class ColabCheckpointSync:
                 / latest_checkpoint
             )
 
-            # FIX HUB-6 — snapshot_download(local_dir=...) crée
-            # systématiquement un sous-dossier "<local_dir>/.cache/huggingface/"  # noqa : E501
-            # (fichiers *.metadata de suivi du téléchargement incrémental).
-            # Comme local_dir == self.local_checkpoint_dir == output_dir
-            # (cf. create_default_checkpoint_sync), ce cache technique se
-            # retrouve mélangé au répertoire où train_sft.py sauvegarde
-            # ensuite le modèle final (trainer.save_model()). Sans
-            # nettoyage, ces fichiers de cache sont ensuite scannés par la
-            # vérification post-upload de train_sft.py (rglob(output_dir)),
-            # qui les signale à tort comme "manquants sur le Hub" — alors
-            # qu'ils n'ont jamais eu vocation à y être. Ce cache n'a plus
-            # aucune utilité une fois le checkpoint restauré : on le
-            # supprime immédiatement (best-effort, ne doit jamais faire
-            # échouer une restauration par ailleurs réussie).
-            cache_dir = self.local_checkpoint_dir / ".cache"
-            if cache_dir.exists():
-                import shutil
-
-                shutil.rmtree(cache_dir, ignore_errors=True)
-                logger.info(
-                    "Cache technique huggingface_hub (%s) nettoyé après "
-                    "restauration du checkpoint.",
-                    cache_dir,
-                )
-
             logger.info(
                 "Checkpoint restored into %s",
                 checkpoint_path,

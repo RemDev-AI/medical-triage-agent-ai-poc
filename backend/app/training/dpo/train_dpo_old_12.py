@@ -638,29 +638,12 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         output_dir_path = Path(CONFIG["training"]["output_dir"])
         hf_api = HfApi()
 
-        # FIX HUB-6 (aligné sur train_sft.py) — output_dir peut contenir un
-        # sous-dossier ".cache/" laissé par snapshot_download(local_dir=...)
-        # dans restore_latest_checkpoint_from_huggingface() (cf.
-        # colab_checkpoint_sync.py). Ce cache technique est déjà nettoyé à
-        # la source côté ColabCheckpointSync ; ce filet de sécurité évite
-        # néanmoins tout faux positif dans missing_files si un résidu de
-        # cache venait à subsister (ex. run manuel, ancienne version du
-        # module, interruption avant nettoyage).
-        IGNORED_LOCAL_DIRS = (".cache",)
-
         try:
             hf_api.upload_folder(
                 folder_path=str(output_dir_path),
                 repo_id=CONFIG["model"]["hub_model_id"],
                 repo_type="model",
                 commit_message="DPO validation run — final model",
-                ignore_patterns=[
-                    ".cache/**",
-                    ".cache",
-                    "*.metadata",
-                    "CACHEDIR.TAG",
-                    ".gitignore",
-                ],
             )
             logger.info("Modèle final DPO publié sur Hugging Face.")
 
@@ -670,10 +653,6 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
                 str(path.relative_to(output_dir_path)).replace("\\", "/")
                 for path in output_dir_path.rglob("*")
                 if path.is_file()
-                and not any(
-                    part in IGNORED_LOCAL_DIRS
-                    for part in path.relative_to(output_dir_path).parts
-                )
             }
 
             remote_files = set(

@@ -535,18 +535,6 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         output_dir_path = Path(CONFIG["training"]["output_dir"])
         hf_api = HfApi()
 
-        # FIX HUB-6 — output_dir peut contenir un sous-dossier ".cache/"
-        # (cache interne de huggingface_hub, ex: HF_HOME/HUGGINGFACE_HUB_CACHE
-        # pointant par erreur à l'intérieur de output_dir, ou résidu d'un
-        # snapshot_download() antérieur). Ce sous-dossier ne fait PAS partie
-        # du modèle et est de toute façon exclu par upload_folder() (fichiers
-        # de cache/metadata internes, jamais poussés sur le Hub). Il doit
-        # donc être ignoré à l'upload ET lors de la vérification post-upload,
-        # sous peine de faux positifs dans missing_files (cf. RuntimeError
-        # précédent : 14 fichiers ".cache/huggingface/..." signalés à tort
-        # comme "manquants" alors qu'ils n'ont jamais dû être uploadés).
-        IGNORED_LOCAL_DIRS = (".cache",)
-
         try:
             hf_api.upload_folder(
                 folder_path=str(output_dir_path),
@@ -554,13 +542,6 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
                 repo_type="model",
                 path_in_repo=SFT_FINAL_MODEL_REMOTE_PREFIX,
                 commit_message="SFT validation run — final model",
-                ignore_patterns=[
-                    ".cache/**",
-                    ".cache",
-                    "*.metadata",
-                    "CACHEDIR.TAG",
-                    ".gitignore",
-                ],
             )
             logger.info("Modèle final SFT publié sur Hugging Face.")
 
@@ -569,19 +550,10 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
             # masquer un upload partiel). On relit la liste des fichiers
             # réellement présents sur le Hub et on la compare à la liste
             # des fichiers locaux attendus AVANT toute suppression locale.
-            #
-            # FIX HUB-6 — on exclut ici les mêmes fichiers/dossiers que ceux
-            # passés à ignore_patterns ci-dessus, pour que la vérification
-            # compare des ensembles cohérents (fichiers réellement candidats
-            # à l'upload, pas le cache technique local).
             local_files = {
                 str(path.relative_to(output_dir_path)).replace("\\", "/")
                 for path in output_dir_path.rglob("*")
                 if path.is_file()
-                and not any(
-                    part in IGNORED_LOCAL_DIRS
-                    for part in path.relative_to(output_dir_path).parts
-                )
             }
 
             remote_prefix = f"{SFT_FINAL_MODEL_REMOTE_PREFIX}/"
