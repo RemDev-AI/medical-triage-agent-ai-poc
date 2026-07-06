@@ -970,52 +970,6 @@ if __name__ == "__main__":
     logger.info("Chargement du dataset %s...", CLINICAL_EVAL_PATH)
     dataset_records = load_jsonl(CLINICAL_EVAL_PATH)
 
-    # ========================================================
-    # FIX EVAL-6 — échantillonnage optionnel du dataset d'évaluation.
-    # generate_model_responses() génère une réponse par exemple, en
-    # boucle séquentielle sur GPU (ligne ~979) : c'est de loin l'étape
-    # la plus coûteuse en temps/VRAM sur Colab Free (T4, quota limité).
-    # Piloté par variable d'environnement pour ne pas modifier le code
-    # à chaque run. CLINICAL_EVAL_SAMPLE_SIZE=0 (défaut) => dataset
-    # complet, comportement inchangé. Seed fixe => échantillon
-    # reproductible d'un run à l'autre.
-    # ========================================================
-    import os
-    import random
-
-    # Défaut à 40 (au lieu de 0/dataset complet) : compromis retenu avec
-    # l'utilisateur entre temps GPU sur Colab Free et taille du
-    # sous-ensemble QCM exploitable en sortie de build_qcm_eval_inputs()
-    # (~42% du dataset dispose d'une vérité terrain QCM ; 40 exemples
-    # tirés au hasard laissent donc statistiquement une quinzaine
-    # d'exemples QCM, suffisant pour un test rapide mais pas pour un
-    # résultat définitif). Toujours surchargeable via
-    # CLINICAL_EVAL_SAMPLE_SIZE, y compris à 0 pour repasser sur
-    # l'intégralité du dataset.
-    CLINICAL_EVAL_SAMPLE_SIZE = int(
-        os.environ.get("CLINICAL_EVAL_SAMPLE_SIZE", "40")
-    )
-    CLINICAL_EVAL_SAMPLE_SEED = int(
-        os.environ.get("CLINICAL_EVAL_SAMPLE_SEED", "42")
-    )
-
-    if (
-        CLINICAL_EVAL_SAMPLE_SIZE > 0
-        and CLINICAL_EVAL_SAMPLE_SIZE < len(dataset_records)
-    ):
-        logger.info(
-            "Échantillonnage du dataset : %d/%d exemples "
-            "(seed=%d), via CLINICAL_EVAL_SAMPLE_SIZE.",
-            CLINICAL_EVAL_SAMPLE_SIZE,
-            len(dataset_records),
-            CLINICAL_EVAL_SAMPLE_SEED,
-        )
-        rng = random.Random(CLINICAL_EVAL_SAMPLE_SEED)
-        dataset_records = rng.sample(
-            dataset_records,
-            CLINICAL_EVAL_SAMPLE_SIZE,
-        )
-
     # Le format DPO utilise "prompt" (pas "instruction" comme en SFT).
     prompts = [record["prompt"] for record in dataset_records]
 
