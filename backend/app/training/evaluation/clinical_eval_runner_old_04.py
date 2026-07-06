@@ -717,42 +717,6 @@ def summarize_evaluation(
 
 QCM_ANSWER_LETTER_PATTERN = re.compile(r"\b([A-E])\b")
 
-# FIX EVAL-7 — extract_qcm_letters() appliquait le regex sur l'INTÉGRALITÉ
-# du texte généré, y compris tout le raisonnement intermédiaire. Pour un
-# modèle "thinking" comme qwen3-1.7b, la sortie contient typiquement une
-# analyse de chaque option ("A pourrait convenir mais... B semble
-# incorrect... donc la réponse est C") : l'ancienne version renvoyait
-# "A,B,C" au lieu de "C", ce qui provoquait un mismatch quasi systématique
-# avec la référence même quand le modèle avait la bonne réponse — c'est la
-# cause la plus probable de priority_accuracy=0.0714 (3/42, sous le niveau
-# du hasard sur un QCM à 4-5 choix).
-#
-# Nouvelle stratégie, par ordre de priorité :
-#   1) Retirer les traces de raisonnement (<think>...</think>) si présentes.
-#   2) Chercher un pattern de CONCLUSION explicite ("réponse correcte : X",
-#      "the answer is X", ...) et prendre la DERNIÈRE occurrence trouvée
-#      (la plus proche de la fin = la conclusion réelle en cas de mentions
-#      répétées). Ce pattern capture aussi les réponses multiples
-#      ("B,D") groupées explicitement.
-#   3) À défaut de pattern de conclusion (texte non structuré), repli sur
-#      la DERNIÈRE lettre isolée du texte plutôt que TOUTES les lettres —
-#      hypothèse raisonnable qu'un modèle qui raisonne linéairement conclut
-#      par son choix final. Ce repli ne capture qu'une seule lettre : il
-#      est donc imparfait pour les rares QCM à réponses multiples sans
-#      pattern de conclusion explicite, mais reste largement supérieur à
-#      l'ancien comportement (qui capturait TOUT, y compris les options
-#      écartées).
-THINK_BLOCK_PATTERN = re.compile(
-    r"<think>.*?</think>",
-    re.DOTALL | re.IGNORECASE,
-)
-
-QCM_CONCLUSION_PATTERN = re.compile(
-    r"(?:R[ÉE]PONSES?\s+CORRECTES?|R[ÉE]PONSE\s+EST|"
-    r"ANSWER(?:S)?\s+IS|ANSWER(?:S)?\s*:)"
-    r"\s*[:\-]?\s*([A-E](?:\s*(?:,|ET|AND)\s*[A-E])*)",
-)
-
 
 def extract_qcm_letters(text: str) -> str:
     """
@@ -760,34 +724,17 @@ def extract_qcm_letters(text: str) -> str:
     modèle ou issu de metadata.correct_answers), triées et dédupliquées.
 
     Exemples :
-        "Réponses correctes : B,D"                 -> "B,D"
-        "Réponse correcte : C"                      -> "C"
-        "So the answer is A."                       -> "A"
-        "<think>A? non. B? non plutôt C</think>"
-        "Donc la réponse est C."                     -> "C"
-        "J'hésite entre A et D, je choisis D."       -> "D"  (repli, cf. 3)
+        "Réponses correctes : B,D"  -> "B,D"
+        "Réponse correcte : C"      -> "C"
+        "So the answer is A."       -> "A"
     """
 
     if not text:
         return ""
 
-    # 1) Retrait du raisonnement explicite, s'il existe.
-    cleaned = THINK_BLOCK_PATTERN.sub("", text)
-    upper = cleaned.upper()
+    letters = sorted(set(QCM_ANSWER_LETTER_PATTERN.findall(text.upper())))
 
-    # 2) Pattern de conclusion explicite — on prend la DERNIÈRE occurrence.
-    conclusion_matches = QCM_CONCLUSION_PATTERN.findall(upper)
-    if conclusion_matches:
-        last_conclusion = conclusion_matches[-1]
-        letters = sorted(set(re.findall(r"[A-E]", last_conclusion)))
-        return ",".join(letters)
-
-    # 3) Repli : dernière lettre isolée du texte (et non plus toutes).
-    all_letters = QCM_ANSWER_LETTER_PATTERN.findall(upper)
-    if not all_letters:
-        return ""
-
-    return all_letters[-1]
+    return ",".join(letters)
 
 
 def load_jsonl(path: str | Path) -> list[Dict[str, Any]]:
@@ -930,38 +877,6 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
 
-    # ========================================================
-    # FIX EVAL-8 — instrumentation du temps par étape.
-    #
-    # Constat : réduire CLINICAL_EVAL_SAMPLE_SIZE de 100 à 40 (-60%) n'a
-    # fait baisser le temps total que de ~33% (1h00+ -> ~40min). Ça
-    # indique des coûts FIXES (chargement modèle 4-bit, téléchargement
-    # dataset...) qui ne scalent pas avec le nombre d'exemples, en plus
-    # du coût variable (génération, scans sécurité). stage_timings
-    # objective la répartition réelle au lieu de deviner à partir du
-    # seul temps total.
-    # ========================================================
-    import time
-    from contextlib import contextmanager
-
-    stage_timings: Dict[str, float] = {}
-
-    @contextmanager
-    def timed_stage(stage_name: str):
-        start = time.perf_counter()
-        logger.info("[TIMING] Début étape « %s »...", stage_name)
-        try:
-            yield
-        finally:
-            elapsed = time.perf_counter() - start
-            stage_timings[stage_name] = elapsed
-            logger.info(
-                "[TIMING] Fin étape « %s » — %.1fs (%.1f min).",
-                stage_name,
-                elapsed,
-                elapsed / 60,
-            )
-
     # Modèle évalué : le modèle final DPO (SFT + DPO), conformément à la
     # mission ("Modèle Qwen3-1.7B adapté (SFT LoRA + DPO)").
     DPO_CONFIG_PATH = (
@@ -983,42 +898,39 @@ if __name__ == "__main__":
     from peft import AutoPeftModelForCausalLM
     from transformers import AutoTokenizer, BitsAndBytesConfig
 
-    with timed_stage("chargement_modele"):
-        # Rechargement en 4 bits, cohérent avec quantization.enabled=true à
-        # l'entraînement (dpo_config_validation.yaml) — évite l'OOM T4 que
-        # le modèle en pleine précision reproduirait à l'inférence.
-        quantization_config = None
-        if dpo_config.get("quantization", {}).get("enabled", False):
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type=dpo_config["quantization"][
-                    "bnb_4bit_quant_type"
-                ],
-                bnb_4bit_use_double_quant=dpo_config["quantization"][
-                    "bnb_4bit_use_double_quant"
-                ],
-            )
-
-        # AutoPeftModelForCausalLM suppose que hub_model_id contient un
-        # adapter LoRA (adapter_config.json + adapter_model.safetensors) —
-        # cohérent avec lora.target_modules dans dpo_config_validation.yaml.
-        # La racine de hub_model_id est réservée au modèle DPO de production
-        # (cf. FIX HUB-COLLISION dans train_sft.py/train_dpo.py) — le modèle
-        # SFT intermédiaire est publié séparément sous sft-final/, donc plus
-        # de risque d'écrasement ici.
-        model = AutoPeftModelForCausalLM.from_pretrained(
-            hub_model_id,
-            device_map="auto",
-            quantization_config=quantization_config,
+    # Rechargement en 4 bits, cohérent avec quantization.enabled=true à
+    # l'entraînement (dpo_config_validation.yaml) — évite l'OOM T4 que
+    # le modèle en pleine précision reproduirait à l'inférence.
+    quantization_config = None
+    if dpo_config.get("quantization", {}).get("enabled", False):
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type=dpo_config["quantization"][
+                "bnb_4bit_quant_type"
+            ],
+            bnb_4bit_use_double_quant=dpo_config["quantization"][
+                "bnb_4bit_use_double_quant"
+            ],
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            hub_model_id,
-            use_fast=dpo_config["tokenizer"]["use_fast"],
-        )
-        tokenizer.model_max_length = (
-            dpo_config["tokenizer"]["model_max_length"]
-        )
+    # AutoPeftModelForCausalLM suppose que hub_model_id contient un
+    # adapter LoRA (adapter_config.json + adapter_model.safetensors) —
+    # cohérent avec lora.target_modules dans dpo_config_validation.yaml.
+    # La racine de hub_model_id est réservée au modèle DPO de production
+    # (cf. FIX HUB-COLLISION dans train_sft.py/train_dpo.py) — le modèle
+    # SFT intermédiaire est publié séparément sous sft-final/, donc plus
+    # de risque d'écrasement ici.
+    model = AutoPeftModelForCausalLM.from_pretrained(
+        hub_model_id,
+        device_map="auto",
+        quantization_config=quantization_config,
+    )
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        hub_model_id,
+        use_fast=dpo_config["tokenizer"]["use_fast"],
+    )
+    tokenizer.model_max_length = dpo_config["tokenizer"]["model_max_length"]
 
     # Dataset clinical_eval — téléchargé depuis le dataset repo HF
     # (RemDev-AI/medical-triage-agent-ai-poc-datasets), split DPO
@@ -1035,29 +947,28 @@ if __name__ == "__main__":
     CLINICAL_EVAL_HF_FILENAME = "processed/dpo/clinical_eval.jsonl"
     CLINICAL_EVAL_LOCAL_PATH = Path("clinical_eval.jsonl")
 
-    with timed_stage("telechargement_et_chargement_dataset"):
-        if CLINICAL_EVAL_LOCAL_PATH.exists():
-            CLINICAL_EVAL_PATH = CLINICAL_EVAL_LOCAL_PATH
-            logger.info(
-                "Fichier local %s trouvé, téléchargement HF ignoré.",
-                CLINICAL_EVAL_PATH,
-            )
-        else:
-            from huggingface_hub import hf_hub_download
+    if CLINICAL_EVAL_LOCAL_PATH.exists():
+        CLINICAL_EVAL_PATH = CLINICAL_EVAL_LOCAL_PATH
+        logger.info(
+            "Fichier local %s trouvé, téléchargement HF ignoré.",
+            CLINICAL_EVAL_PATH,
+        )
+    else:
+        from huggingface_hub import hf_hub_download
 
-            logger.info(
-                "Téléchargement de %s depuis %s (dataset repo)...",
-                CLINICAL_EVAL_HF_FILENAME,
-                DEFAULT_HF_DATASETS_REPO_ID,
-            )
-            CLINICAL_EVAL_PATH = hf_hub_download(
-                repo_id=DEFAULT_HF_DATASETS_REPO_ID,
-                repo_type="dataset",
-                filename=CLINICAL_EVAL_HF_FILENAME,
-            )
+        logger.info(
+            "Téléchargement de %s depuis %s (dataset repo)...",
+            CLINICAL_EVAL_HF_FILENAME,
+            DEFAULT_HF_DATASETS_REPO_ID,
+        )
+        CLINICAL_EVAL_PATH = hf_hub_download(
+            repo_id=DEFAULT_HF_DATASETS_REPO_ID,
+            repo_type="dataset",
+            filename=CLINICAL_EVAL_HF_FILENAME,
+        )
 
-        logger.info("Chargement du dataset %s...", CLINICAL_EVAL_PATH)
-        dataset_records = load_jsonl(CLINICAL_EVAL_PATH)
+    logger.info("Chargement du dataset %s...", CLINICAL_EVAL_PATH)
+    dataset_records = load_jsonl(CLINICAL_EVAL_PATH)
 
     # ========================================================
     # FIX EVAL-6 — échantillonnage optionnel du dataset d'évaluation.
@@ -1111,27 +1022,16 @@ if __name__ == "__main__":
     logger.info(
         "Génération des réponses pour %d exemples...", len(prompts)
     )
-    with timed_stage("generation_reponses_modele"):
-        generated_responses = generate_model_responses(
-            model=model,
-            tokenizer=tokenizer,
-            prompts=prompts,
-        )
+    generated_responses = generate_model_responses(
+        model=model,
+        tokenizer=tokenizer,
+        prompts=prompts,
+    )
 
-    # NB — build_qcm_eval_inputs() calcule déjà is_hallucinated /
-    # contains_unsafe_claim / is_dangerous_response par exemple pour le
-    # sous-ensemble QCM (~42% du dataset). scan_full_dataset_safety()
-    # ci-dessous recalcule ensuite ces mêmes détecteurs sur l'INTÉGRALITÉ
-    # des réponses, y compris ce même sous-ensemble QCM : c'est un
-    # doublon de calcul volontairement non corrigé ici (portée de ce
-    # patch = instrumentation, pas refactoring des détecteurs), mais
-    # visible dans stage_timings ci-dessous ("scan_securite_qcm_subset" +
-    # "scan_securite_dataset_complet") si son coût s'avère significatif.
-    with timed_stage("scan_securite_qcm_subset"):
-        eval_inputs = build_qcm_eval_inputs(
-            dataset_records=dataset_records,
-            generated_responses=generated_responses,
-        )
+    eval_inputs = build_qcm_eval_inputs(
+        dataset_records=dataset_records,
+        generated_responses=generated_responses,
+    )
 
     qcm_predictions = eval_inputs["qcm_predictions"]
     qcm_references = eval_inputs["qcm_references"]
@@ -1149,9 +1049,7 @@ if __name__ == "__main__":
     # en complément du gate QCM ci-dessous qui ne couvre que 42% des
     # exemples. Ce scan n'entre pas dans overall_status (evaluate_model
     # ne le voit pas) — c'est un signal supplémentaire, loggé séparément.
-    with timed_stage("scan_securite_dataset_complet"):
-        full_dataset_safety = scan_full_dataset_safety(generated_responses)
-
+    full_dataset_safety = scan_full_dataset_safety(generated_responses)
     logger.info(
         "Scan de sécurité sur l'intégralité du dataset (%d exemples) : "
         "hallucination_rate=%.4f, dangerous_rate=%.4f, "
@@ -1164,65 +1062,29 @@ if __name__ == "__main__":
         full_dataset_safety["thresholds_passed"],
     )
 
-    with timed_stage("evaluation_et_generation_rapports"):
-        result = evaluate_model(
-            model_name=dpo_config["tracking"]["wandb_run_name"],
-            output_dir="outputs/evaluation/dpo_validation",
-            # COMPROMIS EXPLICITE (cf. commentaire ADAPTATION QCM
-            # ci-dessus) : la même accuracy QCM alimente les 3 métriques,
-            # faute de schéma de triage réel dans le dataset. Toutes les
-            # listes sont issues du MÊME sous-ensemble QCM (42/100 ici)
-            # pour rester cohérentes en longueur (cf. FIX EVAL-1).
-            priority_predictions=qcm_predictions,
-            priority_references=qcm_references,
-            clinical_predictions=qcm_predictions,
-            clinical_references=qcm_references,
-            recommendation_predictions=qcm_predictions,
-            recommendation_references=qcm_references,
-            generated_responses=qcm_generated_responses,
-            safe_predictions=safe_predictions,
-            dataset_split="clinical_eval",
-            model_revision=hub_model_id,
-            metadata={
-                "full_dataset_size": len(dataset_records),
-                "qcm_subset_size": len(qcm_predictions),
-                "full_dataset_safety_scan": full_dataset_safety,
-                # Traçabilité du temps par étape directement dans le
-                # rapport JSON/Markdown généré (cf. FIX EVAL-8) — permet
-                # de comparer plusieurs runs sans dépendre uniquement des
-                # logs Colab (qui disparaissent à la fin de la session).
-                "stage_timings_seconds": {
-                    stage: round(elapsed, 1)
-                    for stage, elapsed in stage_timings.items()
-                },
-            },
-        )
+    result = evaluate_model(
+        model_name=dpo_config["tracking"]["wandb_run_name"],
+        output_dir="outputs/evaluation/dpo_validation",
+        # COMPROMIS EXPLICITE (cf. commentaire ADAPTATION QCM ci-dessus) :
+        # la même accuracy QCM alimente les 3 métriques, faute de schéma
+        # de triage réel dans le dataset. Toutes les listes sont issues
+        # du MÊME sous-ensemble QCM (42/100 ici) pour rester cohérentes
+        # en longueur (cf. FIX EVAL-1).
+        priority_predictions=qcm_predictions,
+        priority_references=qcm_references,
+        clinical_predictions=qcm_predictions,
+        clinical_references=qcm_references,
+        recommendation_predictions=qcm_predictions,
+        recommendation_references=qcm_references,
+        generated_responses=qcm_generated_responses,
+        safe_predictions=safe_predictions,
+        dataset_split="clinical_eval",
+        model_revision=hub_model_id,
+        metadata={
+            "full_dataset_size": len(dataset_records),
+            "qcm_subset_size": len(qcm_predictions),
+            "full_dataset_safety_scan": full_dataset_safety,
+        },
+    )
 
     logger.info(summarize_evaluation(result))
-
-    # ========================================================
-    # Récapitulatif final des temps par étape — vue d'ensemble en un
-    # coup d'œil, en complément des logs [TIMING] individuels ci-dessus
-    # (utile en fin de run Colab quand il faut scroller pour retrouver
-    # chaque étape).
-    # ========================================================
-    total_elapsed = sum(stage_timings.values())
-    logger.info("=" * 60)
-    logger.info("RÉCAPITULATIF DES TEMPS PAR ÉTAPE")
-    logger.info("=" * 60)
-    for stage, elapsed in stage_timings.items():
-        pct = (elapsed / total_elapsed * 100) if total_elapsed else 0.0
-        logger.info(
-            "  %-38s %8.1fs (%5.1f%%)",
-            stage,
-            elapsed,
-            pct,
-        )
-    logger.info("-" * 60)
-    logger.info(
-        "  %-38s %8.1fs (%.1f min)",
-        "TOTAL (étapes mesurées)",
-        total_elapsed,
-        total_elapsed / 60,
-    )
-    logger.info("=" * 60)
