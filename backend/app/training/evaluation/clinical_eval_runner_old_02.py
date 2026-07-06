@@ -70,20 +70,6 @@ DEFAULT_HF_MODELS_REPO_ID = (
     "RemDev-AI/medical-triage-agent-ai-poc-models"
 )
 
-# ============================================================
-# FIX EVAL-5 — evaluation_config.yaml n'a pas vocation à porter la
-# provenance des données (il ne couvre que thresholds/metrics/safety/
-# reporting/wandb/hf_hub des RAPPORTS), et dpo_config_validation.yaml
-# ne définit pas non plus de section dataset.hf_repo /
-# clinical_eval_split. On expose donc ici, en dur, le repo HF du
-# dataset (symétrique à DEFAULT_HF_MODELS_REPO_ID ci-dessus) : le
-# split clinical_eval y est publié sous processed/<sft|dpo>/
-# clinical_eval.jsonl (cf. README du dataset repo).
-# ============================================================
-DEFAULT_HF_DATASETS_REPO_ID = (
-    "RemDev-AI/medical-triage-agent-ai-poc-datasets"
-)
-
 
 def load_evaluation_config() -> Dict[str, Any]:
     with open(EVALUATION_CONFIG_PATH, "r", encoding="utf-8") as file:
@@ -932,40 +918,10 @@ if __name__ == "__main__":
     )
     tokenizer.model_max_length = dpo_config["tokenizer"]["model_max_length"]
 
-    # Dataset clinical_eval — téléchargé depuis le dataset repo HF
-    # (RemDev-AI/medical-triage-agent-ai-poc-datasets), split DPO
-    # (processed/dpo/clinical_eval.jsonl), cohérent avec
-    # dpo_config_validation.yaml chargé ci-dessus (record["prompt"]
-    # ligne suivante = schéma DPO, pas SFT).
-    # FIX EVAL-5 — remplace l'ancien chemin local en dur
-    # ("clinical_eval.jsonl", à déposer manuellement dans Colab), qui
-    # provoquait un FileNotFoundError si l'upload manuel était oublié.
-    # Repli sur un fichier local du même nom si déjà présent (ex. dépôt
-    # manuel volontaire, ou exécution hors Colab avec le fichier à
-    # côté), pour ne pas forcer un téléchargement HF si le fichier est
-    # déjà là.
-    CLINICAL_EVAL_HF_FILENAME = "processed/dpo/clinical_eval.jsonl"
-    CLINICAL_EVAL_LOCAL_PATH = Path("clinical_eval.jsonl")
-
-    if CLINICAL_EVAL_LOCAL_PATH.exists():
-        CLINICAL_EVAL_PATH = CLINICAL_EVAL_LOCAL_PATH
-        logger.info(
-            "Fichier local %s trouvé, téléchargement HF ignoré.",
-            CLINICAL_EVAL_PATH,
-        )
-    else:
-        from huggingface_hub import hf_hub_download
-
-        logger.info(
-            "Téléchargement de %s depuis %s (dataset repo)...",
-            CLINICAL_EVAL_HF_FILENAME,
-            DEFAULT_HF_DATASETS_REPO_ID,
-        )
-        CLINICAL_EVAL_PATH = hf_hub_download(
-            repo_id=DEFAULT_HF_DATASETS_REPO_ID,
-            repo_type="dataset",
-            filename=CLINICAL_EVAL_HF_FILENAME,
-        )
+    # Dataset clinical_eval — chemin local (déposé manuellement dans
+    # Colab) ; adapter si le split est chargé depuis le Hub à la place
+    # (dataset.hf_repo / dataset.clinical_eval_split dans le YAML).
+    CLINICAL_EVAL_PATH = "clinical_eval.jsonl"
 
     logger.info("Chargement du dataset %s...", CLINICAL_EVAL_PATH)
     dataset_records = load_jsonl(CLINICAL_EVAL_PATH)
