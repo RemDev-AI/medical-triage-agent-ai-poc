@@ -6,51 +6,28 @@ Google Colab Checkpoint Synchronization Utilities
 Features
 --------
 - Local checkpoint management
+- Google Drive synchronization
 - Hugging Face Models synchronization
 - Automatic checkpoint discovery
-- Resume-from-checkpoint support (restauration depuis Hugging Face)
+- Resume-from-checkpoint support
+- Automatic checkpoint uploads during training
 
 Used by:
 - backend/app/training/sft/train_sft.py
 - backend/app/training/dpo/train_dpo.py
+- backend/app/training/evaluation/clinical_eval_runner.py
 
 Architecture
 ------------
 Hugging Face Models Repository:
     RemDev-AI/medical-triage-agent-ai-poc-models
-
-NETTOYAGE (2026-07-07) — méthodes supprimées car jamais appelées par
-train_sft.py ni train_dpo.py, seuls consommateurs réels de ce module :
-    - sync_latest_checkpoint() / sync_latest_checkpoint_to_huggingface()
-      -> les deux scripts appellent sync_all_checkpoints_to_huggingface(),
-         qui boucle déjà sur chaque checkpoint via
-         sync_checkpoint_to_huggingface(). Le wrapper "latest" était un
-         doublon partiel, non branché sur le pipeline réel.
-    - get_resume_checkpoint() / auto_restore_checkpoint()
-      -> les deux scripts appellent directement
-         restore_latest_checkpoint_from_huggingface() (pas
-         auto_restore_checkpoint), et ne lisent jamais
-         get_resume_checkpoint().
-    - get_status()
-      -> ne reflète que l'état LOCAL (get_checkpoints() sur
-         local_checkpoint_dir), jamais l'état sur le Hub. Ni train_sft.py
-         ni train_dpo.py ne l'utilisent. Source de confusion : à un
-         instant T hors training, local_checkpoint_dir est presque
-         toujours vide (tout est déjà poussé + nettoyé sur HF), ce qui
-         rend cette méthode trompeuse pour un diagnostic manuel.
-    - bloc `if __name__ == "__main__":`
-      -> code de test mort, jamais exécuté par le pipeline (runpy cible
-         train_sft/train_dpo/clinical_eval_runner, jamais ce module).
-
-Si un besoin de diagnostic manuel (vérifier ce qui existe sur le Hub)
-réapparaît, utiliser directement
-`restore_latest_checkpoint_from_huggingface()` ou `get_checkpoints()`
-depuis un notebook, plutôt que de réintroduire ces wrappers.
 """
 
 from __future__ import annotations
 
 import logging
+# import shutil
+import tempfile  # noqa : F401
 from pathlib import Path
 from typing import Optional
 
@@ -69,6 +46,7 @@ class ColabCheckpointSync:
     Manage training checkpoints across:
 
     - Local filesystem
+    - Google Drive
     - Hugging Face Models repository
     """
 
@@ -137,10 +115,23 @@ class ColabCheckpointSync:
 
     def has_checkpoint(self) -> bool:
         """
-        Check if checkpoints exist locally.
+        Check if checkpoints exist.
         """
 
         return self.get_latest_checkpoint() is not None
+
+    def get_resume_checkpoint(self) -> Optional[str]:
+        """
+        Return checkpoint path compatible with
+        Hugging Face Trainer.resume_from_checkpoint.
+        """
+
+        checkpoint = self.get_latest_checkpoint()
+
+        if checkpoint is None:
+            return None
+
+        return str(checkpoint)
 
     # ==========================================================
     # Hugging Face synchronization
@@ -305,6 +296,27 @@ class ColabCheckpointSync:
             )
 
             return False
+
+    def sync_latest_checkpoint_to_huggingface(
+        self,
+    ) -> bool:
+        """
+        Upload latest checkpoint only.
+        """
+
+        latest_checkpoint = (
+            self.get_latest_checkpoint()
+        )
+
+        if latest_checkpoint is None:
+            logger.warning(
+                "No checkpoint available."
+            )
+            return False
+
+        return self.sync_checkpoint_to_huggingface(
+            latest_checkpoint
+        )
 
     def sync_all_checkpoints_to_huggingface(
         self,
@@ -480,6 +492,98 @@ class ColabCheckpointSync:
 
             return None
 
+    def auto_restore_checkpoint(
+        self,
+    ) -> Optional[str]:
+        """
+        Return a checkpoint usable by the Trainer.
+
+        Priority:
+
+        1. Local checkpoint
+
+        2. Hugging Face checkpoint
+
+        3. None
+        """
+
+        local_checkpoint = self.get_resume_checkpoint()
+
+        if local_checkpoint is not None:
+
+            logger.info(
+                "Using local checkpoint."
+            )
+
+            return local_checkpoint
+
+        logger.info(
+            "No local checkpoint found. Restoring from Hugging Face..."
+        )
+
+        return self.restore_latest_checkpoint_from_huggingface()
+
+    # ==========================================================
+    # Combined synchronization
+    # ==========================================================
+
+    def sync_latest_checkpoint(
+        self,
+    ) -> dict:
+        """
+        Upload latest checkpoint to HF Hub.
+        """
+
+        return {
+
+            "huggingface":
+            self.sync_latest_checkpoint_to_huggingface()
+
+        }
+
+    # ==========================================================
+    # Status
+    # ==========================================================
+
+    def get_status(
+        self,
+    ) -> dict:
+        """
+        Return synchronization status.
+        """
+
+        latest = self.get_latest_checkpoint()
+
+        return {
+
+            "training_type":
+            self.training_type,
+
+            "hf_repo_id":
+            self.hf_repo_id,
+
+            "local_checkpoint_dir":
+            str(self.local_checkpoint_dir),
+
+            "cleanup_after_upload":
+            self.cleanup_after_upload,
+
+            "has_checkpoint":
+            latest is not None,
+
+            "latest_checkpoint":
+            (
+                str(latest)
+                if latest
+                else None
+            ),
+
+            "checkpoint_count":
+            len(
+                self.get_checkpoints()
+            ),
+        }
+
 
 def create_default_checkpoint_sync(
     output_dir: str,
@@ -498,3 +602,20 @@ def create_default_checkpoint_sync(
         hf_repo_id=HF_MODELS_REPO_ID,
 
     )
+
+
+if __name__ == "__main__":
+
+    logging.basicConfig(
+        level=logging.INFO
+    )
+
+    sync = ColabCheckpointSync(
+
+        local_checkpoint_dir="./outputs",
+
+        training_type="sft",
+
+    )
+
+    print(sync.get_status())
