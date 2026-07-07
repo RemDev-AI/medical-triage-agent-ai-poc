@@ -868,197 +868,47 @@ def scan_full_dataset_safety(
     return evaluate_safety(generated_responses)
 
 
-# ============================================================
-# FIX EVAL-9 — checkpointing des réponses générées.
-#
-# Sur Colab Free, une coupure de quota/session en plein milieu de
-# generate_model_responses() (l'étape la plus longue, cf. stage_timings)
-# faisait tout reperdre : aucune réponse déjà générée n'était
-# récupérable, il fallait relancer tout le run de zéro.
-#
-# _load_checkpoint()/_append_checkpoint() persistent une ligne JSONL par
-# prompt généré, au fur et à mesure (pas seulement en fin de run), sur
-# un chemin fourni par l'appelant — typiquement un dossier Google Drive
-# monté (/content/drive/...), qui survit à la coupure de la session,
-# contrairement à /content/ qui est réinitialisé.
-# ============================================================
-
-def _load_checkpoint(
-    checkpoint_path: Optional[Path],
-) -> Dict[int, str]:
-    """
-    Charge les réponses déjà générées lors d'un run précédent, indexées
-    par position dans `prompts`. Retourne {} si le fichier n'existe pas
-    encore (premier run) ou si aucun checkpoint_path n'est fourni.
-    """
-
-    if checkpoint_path is None or not checkpoint_path.exists():
-        return {}
-
-    import json
-
-    recovered: Dict[int, str] = {}
-
-    with open(checkpoint_path, "r", encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            if not line:
-                continue
-            record = json.loads(line)
-            recovered[record["index"]] = record["response"]
-
-    return recovered
-
-
-def _append_checkpoint(
-    checkpoint_path: Optional[Path],
-    index: int,
-    prompt: str,
-    response: str,
-) -> None:
-    """
-    Ajoute une réponse au fichier de checkpoint (mode append, une
-    écriture par exemple généré). Aucune écriture si checkpoint_path
-    est None — le checkpointing reste optionnel/rétrocompatible.
-    """
-
-    if checkpoint_path is None:
-        return
-
-    import json
-
-    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(checkpoint_path, "a", encoding="utf-8") as file:
-        file.write(
-            json.dumps(
-                {"index": index, "prompt": prompt, "response": response},
-                ensure_ascii=False,
-            )
-            + "\n"
-        )
-
-
 def generate_model_responses(
     *,
     model: Any,
     tokenizer: Any,
     prompts: list[str],
     max_new_tokens: int = 512,
-    batch_size: int = 8,
-    checkpoint_path: Optional[Path] = None,
 ) -> list[str]:
     """
-    Génère une réponse par prompt, par batches (au lieu d'un prompt à la
-    fois), avec reprise sur checkpoint en cas de coupure.
-
-    FIX EVAL-9a (batching) — un T4 16 Go en 4-bit avec un modèle
-    ~1.7B a de la marge VRAM pour traiter plusieurs prompts en
-    parallèle : batch_size=8 par défaut réduit le nombre d'appels
-    model.generate() d'un facteur ~8, ce qui domine largement le coût
-    par rapport à l'overhead du padding. Réduire batch_size si un OOM
-    survient (dépend de model_max_length et de max_new_tokens).
-
-    FIX EVAL-9b (checkpoint) — si checkpoint_path est fourni (idéalement
-    un chemin sous Google Drive monté), chaque réponse est persistée dès
-    qu'elle est générée. Si le fichier contient déjà des réponses pour
-    certains indices (run précédent interrompu), ces prompts sont
-    sautés : seuls les prompts manquants sont (re)générés.
-
-    Import de torch différé pour que ce module reste import-safe hors
-    environnement GPU (ex. tests unitaires sur les fonctions ci-dessus
-    sans dépendance torch).
+    Génère une réponse par prompt. Import de torch différé pour que ce
+    module reste important-safe hors environnement GPU (ex. tests
+    unitaires sur les fonctions ci-dessus sans dépendance torch).
     """
 
     import torch
 
-    # Le padding est indispensable dès qu'on batche plusieurs prompts de
-    # longueurs différentes dans un même tenseur. padding_side="left"
-    # est requis pour un modèle causal en génération : avec un padding à
-    # droite, les positions des tokens générés seraient décalées et la
-    # génération produirait n'importe quoi pour les séquences les plus
-    # courtes du batch.
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    original_padding_side = tokenizer.padding_side
-    tokenizer.padding_side = "left"
-
-    recovered = _load_checkpoint(checkpoint_path)
-    if recovered:
-        logger.info(
-            "Checkpoint trouvé (%s) : %d/%d réponses déjà générées lors "
-            "d'un run précédent — reprise, seuls les %d prompts "
-            "manquants seront (re)générés.",
-            checkpoint_path,
-            len(recovered),
-            len(prompts),
-            len(prompts) - len(recovered),
-        )
-
-    responses: list[Optional[str]] = [
-        recovered.get(i) for i in range(len(prompts))
-    ]
-
-    pending_indices = [
-        i for i in range(len(prompts)) if responses[i] is None
-    ]
+    responses = []
 
     model.eval()
 
-    try:
-        for batch_start in range(0, len(pending_indices), batch_size):
-            batch_indices = pending_indices[
-                batch_start: batch_start + batch_size
-            ]
-            batch_prompts = [prompts[i] for i in batch_indices]
+    for prompt in prompts:
+        inputs = tokenizer(
+            prompt,
+            return_tensors="pt",
+            truncation=True,
+            max_length=tokenizer.model_max_length,
+        ).to(model.device)
 
-            inputs = tokenizer(
-                batch_prompts,
-                return_tensors="pt",
-                truncation=True,
-                max_length=tokenizer.model_max_length,
-                padding=True,
-            ).to(model.device)
-
-            with torch.no_grad():
-                output_ids = model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=tokenizer.pad_token_id,
-                )
-
-            prompt_len = inputs["input_ids"].shape[1]
-
-            for position, dataset_index in enumerate(batch_indices):
-                generated_ids = output_ids[position][prompt_len:]
-                response_text = tokenizer.decode(
-                    generated_ids, skip_special_tokens=True
-                )
-                responses[dataset_index] = response_text
-                _append_checkpoint(
-                    checkpoint_path,
-                    dataset_index,
-                    prompts[dataset_index],
-                    response_text,
-                )
-
-            logger.info(
-                "Génération : %d/%d prompts traités (batch de %d).",
-                min(batch_start + batch_size, len(pending_indices)),
-                len(pending_indices),
-                len(batch_indices),
+        with torch.no_grad():
+            output_ids = model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
             )
-    finally:
-        # Restaure l'état du tokenizer pour ne pas affecter d'autres
-        # usages ultérieurs (ex. tokenizer réutilisé ailleurs après cet
-        # appel, avec padding_side="right" attendu par défaut).
-        tokenizer.padding_side = original_padding_side
 
-    # À ce stade, tous les indices doivent être renseignés (soit issus
-    # du checkpoint, soit tout juste générés) — cast pour le type de
-    # retour déclaré.
-    return responses  # type: ignore[return-value]
+        generated_ids = output_ids[0][inputs["input_ids"].shape[1]:]
+
+        responses.append(
+            tokenizer.decode(generated_ids, skip_special_tokens=True)
+        )
+
+    return responses
 
 
 if __name__ == "__main__":
@@ -1078,12 +928,7 @@ if __name__ == "__main__":
         is_hallucinated,
     )
 
-    # force=True : Colab/Jupyter appelle souvent logging.basicConfig()
-    # implicitement en amont (import de librairies tierces qui
-    # configurent déjà le root logger) — sans force=True, cet appel est
-    # silencieusement ignoré et aucun log INFO ne remonte, ce qui est
-    # invisible tant qu'on ne vérifie pas explicitement.
-    logging.basicConfig(level=logging.INFO, force=True)
+    logging.basicConfig(level=logging.INFO)
 
     # ========================================================
     # FIX EVAL-8 — instrumentation du temps par étape.
@@ -1137,60 +982,11 @@ if __name__ == "__main__":
 
     from peft import AutoPeftModelForCausalLM
     from transformers import AutoTokenizer, BitsAndBytesConfig
-    import torch
 
     with timed_stage("chargement_modele"):
         # Rechargement en 4 bits, cohérent avec quantization.enabled=true à
         # l'entraînement (dpo_config_validation.yaml) — évite l'OOM T4 que
         # le modèle en pleine précision reproduirait à l'inférence.
-        #
-        # FIX EVAL-10 — bnb_4bit_compute_dtype n'était pas renseigné ici.
-        # Contrairement à l'entraînement (training_model_loader.py,
-        # _resolve_torch_dtype()), qui délègue la résolution de "auto" à
-        # colab_environment.get_training_dtype() — explicitement
-        # documentée comme "Used by: ... clinical_eval_runner.py" dans
-        # son propre docstring — ce runner construisait son propre
-        # BitsAndBytesConfig sans jamais appeler cette fonction : la
-        # valeur par défaut de bnb_4bit_compute_dtype (torch.float32)
-        # s'appliquait donc silencieusement à l'inférence, alors même que
-        # torch_dtype: "auto" dans le YAML documente une intention
-        # explicite de tourner en float16 sur T4 (confirmé par l'audit
-        # GPU : bf16 natif = False). Résultat concret : tous les calculs
-        # de forward/génération tournaient en float32 malgré des poids
-        # stockés en 4 bits — plausiblement la cause principale de la
-        # lenteur observée (+22 min pour 40 exemples, avant même la fin
-        # du chargement), bien plus que l'absence de batching seule.
-        #
-        # On réplique ici exactement la même logique que
-        # TrainingModelLoader._resolve_torch_dtype() (mêmes branches,
-        # même fonction déléguée pour "auto") plutôt que de coder
-        # torch.float16 en dur, pour que train et eval restent alignés
-        # même sur un GPU différent (ex. A100 : bf16 recommandé) sans
-        # avoir à mettre à jour ce runner séparément.
-        from backend.app.training.colab.colab_environment import (
-            get_training_dtype,
-        )
-
-        torch_dtype_config = dpo_config["model"]["torch_dtype"]
-        if torch_dtype_config == "auto":
-            compute_dtype = get_training_dtype()
-            logger.info(
-                "torch_dtype=auto → résolu par runtime : %s",
-                compute_dtype,
-            )
-        else:
-            dtype_mapping = {
-                "float16": torch.float16,
-                "fp16": torch.float16,
-                "bfloat16": torch.bfloat16,
-                "bf16": torch.bfloat16,
-                "float32": torch.float32,
-                "fp32": torch.float32,
-            }
-            compute_dtype = dtype_mapping.get(
-                torch_dtype_config.lower(), torch.float16
-            )
-
         quantization_config = None
         if dpo_config.get("quantization", {}).get("enabled", False):
             quantization_config = BitsAndBytesConfig(
@@ -1201,7 +997,6 @@ if __name__ == "__main__":
                 bnb_4bit_use_double_quant=dpo_config["quantization"][
                     "bnb_4bit_use_double_quant"
                 ],
-                bnb_4bit_compute_dtype=compute_dtype,
             )
 
         # AutoPeftModelForCausalLM suppose que hub_model_id contient un
@@ -1313,55 +1108,14 @@ if __name__ == "__main__":
     # Le format DPO utilise "prompt" (pas "instruction" comme en SFT).
     prompts = [record["prompt"] for record in dataset_records]
 
-    # ========================================================
-    # FIX EVAL-9 (suite) — montage de Google Drive pour le checkpoint.
-    #
-    # Écrire le checkpoint sous /content/ ne protégerait de rien : ce
-    # dossier est effacé si la session Colab est coupée/relancée. On
-    # tente donc de monter Drive, et on n'utilise ce chemin en dur QUE
-    # s'il est disponible (import Colab), sinon repli sur un fichier
-    # local (utile en exécution hors Colab, ex. tests).
-    # ========================================================
-    try:
-        from google.colab import drive  # type: ignore[import-not-found]
-
-        drive.mount("/content/drive", force_remount=False)
-        CHECKPOINT_DIR = Path(
-            "/content/drive/MyDrive/medical-triage-agent-checkpoints"
-        )
-    except ImportError:
-        logger.info(
-            "google.colab indisponible (exécution hors Colab) — "
-            "checkpoint écrit localement, sans protection contre une "
-            "coupure de session."
-        )
-        CHECKPOINT_DIR = Path("checkpoints")
-
-    CHECKPOINT_PATH = (
-        CHECKPOINT_DIR / "clinical_eval_generated_responses.jsonl"
-    )
-
     logger.info(
-        "Génération des réponses pour %d exemples... (checkpoint : %s)",
-        len(prompts),
-        CHECKPOINT_PATH,
+        "Génération des réponses pour %d exemples...", len(prompts)
     )
-
-    # Batch de 8 par défaut, surchargeable via variable d'environnement
-    # sans modifier le code — même logique que CLINICAL_EVAL_SAMPLE_SIZE
-    # ci-dessus. À réduire si OOM sur le T4 (dépend de
-    # tokenizer.model_max_length et de max_new_tokens).
-    GENERATION_BATCH_SIZE = int(
-        os.environ.get("GENERATION_BATCH_SIZE", "8")
-    )
-
     with timed_stage("generation_reponses_modele"):
         generated_responses = generate_model_responses(
             model=model,
             tokenizer=tokenizer,
             prompts=prompts,
-            batch_size=GENERATION_BATCH_SIZE,
-            checkpoint_path=CHECKPOINT_PATH,
         )
 
     # NB — build_qcm_eval_inputs() calcule déjà is_hallucinated /
