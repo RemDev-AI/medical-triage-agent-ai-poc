@@ -18,6 +18,9 @@ from backend.app.monitoring.latency_monitor import (
 from backend.app.monitoring.request_tracker import (
     request_tracker,
 )
+from backend.app.monitoring.audit_store import (
+    record_entry,
+)
 
 
 logger = logging.getLogger(
@@ -38,11 +41,21 @@ class AuditLoggingMiddleware(
 
     Responsabilités :
 
-    - audit des requêtes
-    - mesure de latence
-    - suivi du trafic
+    - audit des requêtes (persisté via audit_store,
+      cf. routes/audit.py — correctif étape 3)
+    - mesure de latence (source unique de vérité
+      pour latency_monitor, cf. NOTE ci-dessous)
+    - suivi du trafic (source unique de vérité
+      pour request_tracker)
     - attribution d'un Request ID
     - alimentation du monitoring
+
+    NOTE (correctif étape 3) :
+    Ce middleware est l'UNIQUE point d'incrémentation
+    de request_tracker et de latency_monitor pour
+    l'ensemble des routes. Les routes individuelles
+    (inference.py, triage.py) ne doivent plus
+    dupliquer ces appels.
     """
 
     async def dispatch(
@@ -95,6 +108,12 @@ class AuditLoggingMiddleware(
                 success=success,
             )
 
+            client_ip = (
+                request.client.host
+                if request.client
+                else "unknown"
+            )
+
             audit_log = {
                 "request_id": request_id,
                 "timestamp": (
@@ -106,11 +125,7 @@ class AuditLoggingMiddleware(
                 "status_code": (
                     response.status_code
                 ),
-                "client_ip": (
-                    request.client.host
-                    if request.client
-                    else "unknown"
-                ),
+                "client_ip": client_ip,
                 "latency_ms": latency_ms,
             }
 
@@ -120,6 +135,8 @@ class AuditLoggingMiddleware(
                     ensure_ascii=False,
                 )
             )
+
+            record_entry(audit_log)
 
             response.headers[
                 "X-Request-ID"
@@ -146,6 +163,12 @@ class AuditLoggingMiddleware(
                 success=False,
             )
 
+            client_ip = (
+                request.client.host
+                if request.client
+                else "unknown"
+            )
+
             audit_log = {
                 "request_id": request_id,
                 "timestamp": (
@@ -155,11 +178,7 @@ class AuditLoggingMiddleware(
                 "method": method,
                 "path": endpoint,
                 "status_code": 500,
-                "client_ip": (
-                    request.client.host
-                    if request.client
-                    else "unknown"
-                ),
+                "client_ip": client_ip,
                 "latency_ms": latency_ms,
                 "error": True,
             }
@@ -170,5 +189,7 @@ class AuditLoggingMiddleware(
                     ensure_ascii=False,
                 )
             )
+
+            record_entry(audit_log)
 
             raise

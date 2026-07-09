@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 from typing import Dict
 
@@ -30,6 +31,30 @@ class GPUMonitor:
       dans les routes FastAPI et les dashboards.
     """
 
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._request_count = 0
+
+    def increment_request(self) -> None:
+        """
+        Incrémente le compteur de requêtes
+        d'inférence traitées.
+
+        Utilisé par TriageEngine.run_triage()
+        (PHASE 7 - Monitoring) pour suivre le
+        volume de charge appliqué au backend
+        d'inférence, indépendamment du compteur
+        HTTP global (request_tracker).
+        """
+
+        with self._lock:
+            self._request_count += 1
+
+    def get_request_count(self) -> int:
+
+        with self._lock:
+            return self._request_count
+
     def get_gpu_stats(self) -> Dict[str, Any]:
         """
         Retourne les métriques consolidées
@@ -51,6 +76,9 @@ class GPUMonitor:
             "gpu": gpu_metrics,
             "latency": latency_metrics,
             "containers": container_metrics,
+            "inference_request_count": (
+                self.get_request_count()
+            ),
         }
 
     def health_status(self) -> Dict[str, Any]:

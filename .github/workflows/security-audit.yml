@@ -1,0 +1,82 @@
+# ==========================================================
+# medical-triage-agent-ai-poc/.github/workflows/security-audit.yml
+# ==========================================================
+
+name: Security Audit
+
+on:
+  # schedule:
+    # - cron: "0 4 * * 1" # tous les lundis à 4h UTC
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  secrets-scan:
+    name: Detect leaked secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit backend dependencies
+        working-directory: backend
+        run: pip-audit -r requirements.txt --desc || true
+
+      - name: Audit frontend dependencies
+        working-directory: frontend
+        run: pip-audit -r requirements.txt --desc || true
+
+  container-scan:
+    name: Scan built images for CVEs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image (local, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: local/medical-triage-backend:audit
+          load: true
+
+      - name: Trivy scan (backend)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+            image-ref: "local/medical-triage-backend:audit"
+            format: "sarif"
+            output: "trivy-backend.sarif"
+            severity: "CRITICAL,HIGH,MEDIUM"
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-backend.sarif"

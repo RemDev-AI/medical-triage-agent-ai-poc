@@ -27,7 +27,7 @@ accelerate
 datasets
 sentencepiece
 safetensors
-unsloth
+# unsloth
 bitsandbytes
 evaluate
 huggingface_hub
@@ -94,7 +94,7 @@ presidio-anonymizer
 # MONITORING / MLOPS
 # ==========================================================
 
-mlflow
+# mlflow
 wandb
 
 # ==========================================================

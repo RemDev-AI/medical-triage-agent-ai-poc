@@ -27,6 +27,10 @@ from backend.app.llm.inference.prompt_builder import (
     build_triage_prompt,
 )
 
+from backend.app.deployment.huggingface.hf_space_runtime import (
+    runtime_config,
+)
+
 # PHASE 7 - Monitoring
 from backend.app.monitoring.gpu_monitor import gpu_monitor
 
@@ -40,21 +44,48 @@ VALID_PRIORITIES = {
     "FAIBLE",
 }
 
+# Confiance heuristique associée à un parsing réussi
+# vs. un repli sur une valeur par défaut (champ non
+# détecté dans la sortie du modèle). Ajouté à l'étape 3
+# pour renseigner TriageResponse.confidence_score, requis
+# par le schéma mais absent du moteur jusqu'ici.
+_CONFIDENCE_FULL_MATCH = 0.9
+_CONFIDENCE_PARTIAL_MATCH = 0.5
+
 
 class TriageEngine:
     """
     Clinical triage inference engine.
 
-    Uses a locally loaded Hugging Face model
-    and tokenizer (Google Colab / Hugging Face Hub).
+    Deux modes de fonctionnement (étape 3) :
+
+    - vLLM (runtime_config.use_vllm == True) :
+      model/tokenizer ne sont pas requis, la
+      génération est déléguée à
+      backend.app.llm.inference.vllm_engine.
+
+    - Transformers (historique) : model/tokenizer
+      Hugging Face chargés localement, requis.
     """
 
     def __init__(
         self,
-        model: PreTrainedModel,
-        tokenizer: PreTrainedTokenizerBase,
-        model_name: str,
+        model: Optional[PreTrainedModel] = None,
+        tokenizer: Optional[
+            PreTrainedTokenizerBase
+        ] = None,
+        model_name: str = "Qwen3-Medical-Triage",
     ) -> None:
+
+        if not runtime_config.use_vllm and (
+            model is None or tokenizer is None
+        ):
+            raise ValueError(
+                "model and tokenizer are required "
+                "when runtime_config.use_vllm is "
+                "False."
+            )
+
         self.model = model
         self.tokenizer = tokenizer
         self.model_name = model_name
@@ -148,15 +179,69 @@ class TriageEngine:
             "RECOMMANDATIONS",
         )
 
-        priority = self.normalize_priority(
-            priority,
+        priority, priority_matched = (
+            self.normalize_priority(
+                priority,
+            )
+        )
+
+        justification_matched = (
+            justification != "Non disponible"
+        )
+
+        recommendations_matched = (
+            recommendations != "Non disponible"
+        )
+
+        confidence_score = (
+            self._compute_confidence(
+                priority_matched,
+                justification_matched,
+                recommendations_matched,
+            )
         )
 
         return {
             "priority": priority,
             "justification": justification,
             "recommendations": recommendations,
+            "confidence_score": confidence_score,
         }
+
+    @staticmethod
+    def _compute_confidence(
+        *field_matches: bool,
+    ) -> float:
+        """
+        Score de confiance heuristique basé sur le
+        nombre de champs correctement extraits du
+        format structuré attendu (PRIORITÉ /
+        JUSTIFICATION / RECOMMANDATIONS).
+
+        Introduit à l'étape 3 pour satisfaire
+        TriageResponse.confidence_score, requis par
+        le schéma Pydantic mais jusqu'ici toujours
+        renvoyé à 0.0 par défaut.
+        """
+
+        if not field_matches:
+            return 0.0
+
+        ratio = (
+            sum(1 for m in field_matches if m)
+            / len(field_matches)
+        )
+
+        if ratio == 1.0:
+            return _CONFIDENCE_FULL_MATCH
+
+        if ratio == 0.0:
+            return 0.0
+
+        return round(
+            _CONFIDENCE_PARTIAL_MATCH * ratio,
+            2,
+        )
 
     @staticmethod
     def extract_field(
@@ -186,9 +271,17 @@ class TriageEngine:
     @staticmethod
     def normalize_priority(
         priority: str,
-    ) -> str:
+    ) -> tuple[str, bool]:
         """
         Normalize medical priority.
+
+        Returns
+        -------
+        tuple[str, bool]
+            La priorité normalisée, et un booléen
+            indiquant si la valeur brute était déjà
+            valide (utilisé pour le calcul du
+            confidence_score).
         """
 
         priority = priority.upper().strip()
@@ -200,6 +293,6 @@ class TriageEngine:
                 priority,
             )
 
-            return "MODÉRÉ"
+            return "MODÉRÉ", False
 
-        return priority
+        return priority, True

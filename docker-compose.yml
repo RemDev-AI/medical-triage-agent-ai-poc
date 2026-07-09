@@ -8,8 +8,8 @@ services:
     container_name: medical-triage-backend
 
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
 
     restart: unless-stopped
 
@@ -38,7 +38,7 @@ services:
       - "8000:8000"
 
     volumes:
-      - ./backend:/app
+      - ./backend:/app/backend
 
     networks:
       - medical-triage-network

@@ -6,10 +6,6 @@ from fastapi import FastAPI, Depends
 
 from backend.app.api.router import api_router
 
-from backend.app.api.routes.monitoring import (
-    router as monitoring_router,
-)
-
 from backend.app.api.middleware.auth_middleware import (
     JWTAuthMiddleware,
 )
@@ -73,6 +69,13 @@ app.add_middleware(
 
 # =========================================================
 # ROUTERS
+#
+# NOTE (correctif étape 3) :
+# monitoring_router est déjà agrégé dans api_router
+# (cf. backend/app/api/router.py). Il ne doit PAS être
+# inclus une seconde fois ici, sous peine de dupliquer
+# l'ensemble des routes /monitoring/* sous deux chemins
+# distincts.
 # =========================================================
 
 app.include_router(
@@ -80,11 +83,6 @@ app.include_router(
     dependencies=[
         Depends(rate_limit)
     ],
-)
-
-app.include_router(
-    monitoring_router,
-    tags=["Monitoring"],
 )
 
 

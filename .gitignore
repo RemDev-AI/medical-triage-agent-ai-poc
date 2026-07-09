@@ -181,5 +181,5 @@ reports/
 # !.github/workflows/
 
 # !!! temporaire ne pas committer et executer Github Actions !!!
-.github/
-.github/workflows/
+# .github/
+# .github/workflows/

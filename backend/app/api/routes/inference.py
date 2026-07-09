@@ -18,14 +18,6 @@ from backend.app.api.dependencies.inference import (
     get_inference_client,
 )
 
-from backend.app.monitoring.latency_monitor import (
-    latency_monitor,
-)
-
-from backend.app.monitoring.request_tracker import (
-    request_tracker,
-)
-
 from backend.app.monitoring.alerting import (
     alert_manager,
 )
@@ -60,12 +52,23 @@ async def generate_route(
         ↓
     Backend d'inférence
         ↓
-    Monitoring
+    Monitoring (AuditLoggingMiddleware)
         ↓
     Response
-    """
 
-    request_tracker.increment_total_requests()
+    NOTE (correctif étape 3) :
+    Le comptage global des requêtes et la latence
+    globale sont déjà assurés par
+    AuditLoggingMiddleware (request_tracker,
+    latency_monitor) pour TOUTES les routes.
+    Cette route ne doit donc plus appeler
+    request_tracker.increment_*() ni
+    latency_monitor.record() elle-même, sous peine
+    de compter chaque requête deux fois.
+    Le chronométrage local ci-dessous sert
+    uniquement à renseigner le champ
+    `latency_seconds` de la réponse métier.
+    """
 
     start_time = time.perf_counter()
 
@@ -85,12 +88,6 @@ async def generate_route(
         )
 
         latency_ms = latency_seconds * 1000
-
-        latency_monitor.record(
-            latency_ms
-        )
-
-        request_tracker.increment_success_requests()
 
         try:
             alert_manager.evaluate_latency(
@@ -133,8 +130,6 @@ async def generate_route(
         )
 
     except Exception as exc:
-
-        request_tracker.increment_error_requests()
 
         try:
             alert_manager.raise_alert(
