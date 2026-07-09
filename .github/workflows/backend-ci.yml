@@ -41,16 +41,14 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           python -m pip install --upgrade pip
-          pip install ruff black mypy bandit
-
+          pip install ruff black==24.10.0 mypy bandit
       - name: Ruff (lint)
         working-directory: ${{ env.WORKDIR }}
         run: ruff check app --output-format=github --extend-exclude "app/training/colab/training_pipeline_colab.ipynb"
-
       - name: Black (format check)
         working-directory: ${{ env.WORKDIR }}
-        run: black --check app
-
+        run: black --check --config pyproject.toml app
+      
       - name: Bandit (security static analysis)
         working-directory: ${{ env.WORKDIR }}
         run: bandit -r app -ll -x app/tests -f screen

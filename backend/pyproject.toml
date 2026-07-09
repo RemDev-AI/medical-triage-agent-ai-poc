@@ -60,7 +60,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov>=6.0.0",
-    "black",
+    "black==24.10.0",
     "flake8",
     "isort",
     "mypy",
