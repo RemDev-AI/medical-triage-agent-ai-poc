@@ -43,20 +43,16 @@ RUN apt-get update && apt-get install -y \
 # PYTHON DEPENDENCIES
 # ==========================================================
 
-# COPY backend/requirements.txt ./backend/requirements.txt
 COPY requirements.txt ./requirements.txt
-
 RUN pip install --upgrade pip
-
-RUN pip install --no-cache-dir -r backend/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # ==========================================================
 # APPLICATION
 # ==========================================================
 
 # Copie du package "backend" complet (préserve backend.app.*)
-# COPY backend/ ./backend/
-COPY . ./backend/
+COPY . ./  
 
 # ==========================================================
 # NETWORK
