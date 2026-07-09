@@ -9,7 +9,6 @@ from streamlit_app.components.navbar import render_navbar
 from streamlit_app.components.api_status import render_api_status
 from streamlit_app.components.footer import render_footer
 
-
 st.set_page_config(
     page_title=APP_TITLE,
     page_icon=PAGE_ICON,

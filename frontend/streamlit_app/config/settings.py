@@ -62,10 +62,7 @@ LOCAL_API_URL = os.getenv(
     "http://localhost:8000",
 )
 
-IS_PRODUCTION = (
-    ENVIRONMENT.lower()
-    == "production"
-)
+IS_PRODUCTION = ENVIRONMENT.lower() == "production"
 
 IS_HUGGINGFACE_SPACE = (
     os.getenv(

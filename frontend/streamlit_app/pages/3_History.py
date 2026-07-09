@@ -5,7 +5,6 @@ import streamlit as st
 from streamlit_app.services.history_api import get_triage_history
 from streamlit_app.components.history_table import render_history_table
 
-
 st.set_page_config(
     page_title="Historique",
     page_icon="📋",

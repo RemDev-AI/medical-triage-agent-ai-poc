@@ -25,18 +25,15 @@ def get_ui_config() -> HFSpaceUIConfig:
             "API_BASE_URL",
             "http://localhost:8000",
         ),
-
         environment=os.getenv(
             "ENVIRONMENT",
             "development",
         ),
-
         monitoring_enabled=os.getenv(
             "ENABLE_MONITORING",
             "true",
         ).lower()
         == "true",
-
         request_timeout=int(
             os.getenv(
                 "REQUEST_TIMEOUT",

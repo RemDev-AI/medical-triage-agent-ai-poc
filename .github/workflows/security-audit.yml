@@ -75,8 +75,8 @@ jobs:
             output: "trivy-backend.sarif"
             severity: "CRITICAL,HIGH,MEDIUM"
 
-      - name: Upload SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
+      - name: Upload Trivy scan results
+        if: always() && hashFiles('trivy-backend.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4  # note: v3 sera dépréciée en déc. 2026
         with:
-          sarif_file: "trivy-backend.sarif"
+          sarif_file: trivy-backend.sarif

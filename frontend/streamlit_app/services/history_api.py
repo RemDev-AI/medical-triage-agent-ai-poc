@@ -1,5 +1,6 @@
 # medical-triage-agent-ai-poc/frontend/streamlit_app/services/history_api.py
 
+
 def get_triage_history() -> list:
 
     return [

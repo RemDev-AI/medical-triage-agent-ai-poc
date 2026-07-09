@@ -10,9 +10,7 @@ def render_navbar() -> None:
         st.success("🟢 System Ready")
 
     with col2:
-        st.markdown(
-            "## 🤖 AI Medical Triage Dashboard"
-        )
+        st.markdown("## 🤖 AI Medical Triage Dashboard")
 
     with col3:
         st.metric(

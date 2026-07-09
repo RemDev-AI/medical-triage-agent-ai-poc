@@ -6,7 +6,6 @@ from streamlit_app.components.patient_form import render_patient_form
 from streamlit_app.components.triage_result import render_triage_result
 from streamlit_app.services.triage_api import submit_triage_request
 
-
 st.set_page_config(
     page_title="Triage",
     page_icon="🩺",

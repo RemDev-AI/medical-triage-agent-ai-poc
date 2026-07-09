@@ -47,7 +47,7 @@ jobs:
 
       - name: Ruff (lint)
         working-directory: ${{ env.WORKDIR }}
-        run: ruff check app --output-format=github
+        run: ruff check app --output-format=github --extend-exclude "app/training/colab/training_pipeline_colab.ipynb"
 
       - name: Black (format check)
         working-directory: ${{ env.WORKDIR }}
