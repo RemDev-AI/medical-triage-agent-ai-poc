@@ -74,49 +74,35 @@ async def generate_route(
 
     try:
 
-        inference_response = (
-            await inference_client.generate(
-                prompt=payload.prompt,
-                max_new_tokens=payload.max_new_tokens,
-                temperature=payload.temperature,
-                top_p=payload.top_p,
-            )
+        inference_response = await inference_client.generate(
+            prompt=payload.prompt,
+            max_new_tokens=payload.max_new_tokens,
+            temperature=payload.temperature,
+            top_p=payload.top_p,
         )
 
-        latency_seconds = (
-            time.perf_counter() - start_time
-        )
+        latency_seconds = time.perf_counter() - start_time
 
         latency_ms = latency_seconds * 1000
 
         try:
-            alert_manager.evaluate_latency(
-                latency_ms
-            )
+            alert_manager.evaluate_latency(latency_ms)
         except Exception:
             pass
 
-        generated_text = (
-            inference_response.get(
-                "generated_text",
-                "",
-            )
+        generated_text = inference_response.get(
+            "generated_text",
+            "",
         )
 
-        model_name = (
-            inference_response.get(
-                "model_name",
-                "Qwen3-Medical-Triage",
-            )
+        model_name = inference_response.get(
+            "model_name",
+            "Qwen3-Medical-Triage",
         )
 
-        timestamp = (
-            inference_response.get(
-                "timestamp",
-                time.strftime(
-                    "%Y-%m-%dT%H:%M:%S"
-                ),
-            )
+        timestamp = inference_response.get(
+            "timestamp",
+            time.strftime("%Y-%m-%dT%H:%M:%S"),
         )
 
         return GenerateResponse(
@@ -141,8 +127,5 @@ async def generate_route(
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Inference generation failed: "
-                f"{str(exc)}"
-            ),
+            detail=("Inference generation failed: " f"{str(exc)}"),
         )

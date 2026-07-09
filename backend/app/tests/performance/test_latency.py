@@ -66,9 +66,7 @@ class _FakeInferenceClient:
 @pytest.fixture()
 def client():
 
-    app.dependency_overrides[
-        get_inference_client
-    ] = lambda: _FakeInferenceClient()
+    app.dependency_overrides[get_inference_client] = lambda: _FakeInferenceClient()
 
     latency_monitor.reset()
 
@@ -81,13 +79,9 @@ def client():
 @pytest.fixture()
 def auth_headers():
 
-    token = create_access_token(
-        subject="latency-test-user"
-    )
+    token = create_access_token(subject="latency-test-user")
 
-    return {
-        "Authorization": f"Bearer {token}"
-    }
+    return {"Authorization": f"Bearer {token}"}
 
 
 # Seuils alignés sur AlertManager.LATENCY_WARNING_MS
@@ -121,9 +115,7 @@ def test_triage_endpoint_latency_is_measured(
         headers=auth_headers,
     )
 
-    elapsed_ms = (
-        time.perf_counter() - start
-    ) * 1000
+    elapsed_ms = (time.perf_counter() - start) * 1000
 
     assert response.status_code == 200
 
@@ -134,8 +126,7 @@ def test_triage_endpoint_latency_is_measured(
     assert body["latency_seconds"] >= 0
 
     assert elapsed_ms < LATENCY_WARNING_MS, (
-        f"Latence observée trop élevée : "
-        f"{elapsed_ms:.2f} ms"
+        f"Latence observée trop élevée : " f"{elapsed_ms:.2f} ms"
     )
 
 
@@ -171,8 +162,7 @@ def test_generate_endpoint_latency_under_load(
     assert stats["count"] >= n_requests
 
     assert stats["p95_ms"] < ACCEPTABLE_P95_MS, (
-        f"p95 de latence trop élevé : "
-        f"{stats['p95_ms']} ms"
+        f"p95 de latence trop élevé : " f"{stats['p95_ms']} ms"
     )
 
 

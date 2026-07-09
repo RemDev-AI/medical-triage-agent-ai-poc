@@ -32,19 +32,12 @@ def test_coverage_threshold():
     coverage_file = Path("coverage.json")
 
     assert coverage_file.exists(), (
-        "coverage.json not found. "
-        "Run pytest with --cov-report=json:coverage.json"
+        "coverage.json not found. " "Run pytest with --cov-report=json:coverage.json"
     )
 
-    report = json.loads(
-        coverage_file.read_text(
-            encoding="utf-8"
-        )
-    )
+    report = json.loads(coverage_file.read_text(encoding="utf-8"))
 
-    total_coverage = (
-        report["totals"]["percent_covered"]
-    )
+    total_coverage = report["totals"]["percent_covered"]
 
     assert total_coverage >= MINIMUM_COVERAGE, (
         f"Coverage too low: "
@@ -62,19 +55,12 @@ def test_coverage_report_structure():
 
     assert coverage_file.exists()
 
-    report = json.loads(
-        coverage_file.read_text(
-            encoding="utf-8"
-        )
-    )
+    report = json.loads(coverage_file.read_text(encoding="utf-8"))
 
     assert "totals" in report
     assert "files" in report
 
-    assert (
-        "percent_covered"
-        in report["totals"]
-    )
+    assert "percent_covered" in report["totals"]
 
 
 def test_critical_modules_present():
@@ -85,11 +71,7 @@ def test_critical_modules_present():
 
     coverage_file = Path("coverage.json")
 
-    report = json.loads(
-        coverage_file.read_text(
-            encoding="utf-8"
-        )
-    )
+    report = json.loads(coverage_file.read_text(encoding="utf-8"))
 
     files = report.get("files", {})
 
@@ -100,11 +82,7 @@ def test_critical_modules_present():
         "app/monitoring",
     ]
 
-    indexed_paths = " ".join(
-        files.keys()
-    ).replace("\\", "/")
+    indexed_paths = " ".join(files.keys()).replace("\\", "/")
 
     for module in expected_modules:
-        assert module in indexed_paths, (
-            f"{module} missing from coverage report"
-        )
+        assert module in indexed_paths, f"{module} missing from coverage report"

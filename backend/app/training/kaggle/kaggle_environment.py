@@ -283,11 +283,7 @@ def detect_environment() -> KaggleEnvironment:
         bf16_supported=is_bf16_supported(),
         fp16_supported=is_fp16_supported(),
         torch_version=torch.__version__,
-        cuda_version=(
-            torch.version.cuda
-            if torch.cuda.is_available()
-            else None
-        ),
+        cuda_version=(torch.version.cuda if torch.cuda.is_available() else None),
         gpu_name=get_gpu_name(),
     )
 
@@ -313,8 +309,7 @@ def get_training_arguments_precision() -> dict[str, Any]:
         gpu_name = get_gpu_name() or ""
         if "T4" in gpu_name or "Tesla" in gpu_name or "P100" in gpu_name:
             logger.warning(
-                "BF16 détecté sur %s — GPU non supporté nativement. "
-                "Forçage fp16.",
+                "BF16 détecté sur %s — GPU non supporté nativement. " "Forçage fp16.",
                 gpu_name,
             )
             bf16 = False
@@ -334,9 +329,7 @@ def apply_precision_arguments(
     TrainingArguments configuration dictionary.
     """
 
-    training_args.update(
-        get_training_arguments_precision()
-    )
+    training_args.update(get_training_arguments_precision())
 
     return training_args
 

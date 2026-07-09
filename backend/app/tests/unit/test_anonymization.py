@@ -52,10 +52,7 @@ def test_clean_medical_text():
 
     from backend.app.anonymization.validation import contains_pii
 
-    text = (
-        "Patient présentant une fièvre "
-        "depuis trois jours."
-    )
+    text = "Patient présentant une fièvre " "depuis trois jours."
 
     result = contains_pii(text)
 

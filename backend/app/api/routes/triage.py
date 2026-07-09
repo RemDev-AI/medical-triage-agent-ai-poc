@@ -78,16 +78,12 @@ async def triage_route(
             priority_context=payload.priority_context,
         )
 
-        latency_seconds = (
-            time.perf_counter() - start_time
-        )
+        latency_seconds = time.perf_counter() - start_time
 
         latency_ms = latency_seconds * 1000
 
         try:
-            alert_manager.evaluate_latency(
-                latency_ms
-            )
+            alert_manager.evaluate_latency(latency_ms)
         except Exception:
             pass
 
@@ -110,9 +106,7 @@ async def triage_route(
             ),
             generated_at=triage_result.get(
                 "generated_at",
-                time.strftime(
-                    "%Y-%m-%dT%H:%M:%S"
-                ),
+                time.strftime("%Y-%m-%dT%H:%M:%S"),
             ),
             latency_seconds=round(
                 latency_seconds,
@@ -132,8 +126,5 @@ async def triage_route(
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Triage engine failed: "
-                f"{str(exc)}"
-            ),
+            detail=("Triage engine failed: " f"{str(exc)}"),
         )

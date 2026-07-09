@@ -16,13 +16,9 @@ utilisable pour :
 from pathlib import Path
 import json
 
-INPUT_DIR = Path(
-    "backend/app/datasets/raw/data"
-)
+INPUT_DIR = Path("backend/app/datasets/raw/data")
 
-OUTPUT_DIR = Path(
-    "backend/app/datasets/raw/standardized"
-)
+OUTPUT_DIR = Path("backend/app/datasets/raw/standardized")
 
 OUTPUT_DIR.mkdir(
     parents=True,
@@ -49,9 +45,7 @@ def detect_language(
     Détermine la langue du dataset.
     """
 
-    if source_name.startswith(
-        "mediqa"
-    ):
+    if source_name.startswith("mediqa"):
         return "fr"
 
     return "en"
@@ -66,15 +60,9 @@ def extract_id(
 
     return str(
         record.get("id")
-        or record.get(
-            "question_id"
-        )
-        or record.get(
-            "prompt_id"
-        )
-        or record.get(
-            "document_id"
-        )
+        or record.get("question_id")
+        or record.get("prompt_id")
+        or record.get("document_id")
         or ""
     )
 
@@ -87,17 +75,9 @@ def build_mcq_instruction(
     les datasets MCQU / MCQM.
     """
 
-    clinical_case = safe_str(
-        record.get(
-            "clinical_case"
-        )
-    )
+    clinical_case = safe_str(record.get("clinical_case"))
 
-    question = safe_str(
-        record.get(
-            "question"
-        )
-    )
+    question = safe_str(record.get("question"))
 
     answers = []
 
@@ -108,36 +88,21 @@ def build_mcq_instruction(
         "d",
         "e",
     ]:
-        value = safe_str(
-            record.get(
-                f"answer_{letter}"
-            )
-        )
+        value = safe_str(record.get(f"answer_{letter}"))
 
         if value:
-            answers.append(
-                f"{letter.upper()}. "
-                f"{value}"
-            )
+            answers.append(f"{letter.upper()}. " f"{value}")
 
     parts = []
 
     if clinical_case:
-        parts.append(
-            clinical_case
-        )
+        parts.append(clinical_case)
 
     if question:
-        parts.append(
-            question
-        )
+        parts.append(question)
 
     if answers:
-        parts.append(
-            "\n".join(
-                answers
-            )
-        )
+        parts.append("\n".join(answers))
 
     return "\n\n".join(parts)
 
@@ -150,11 +115,7 @@ def build_mcq_response(
     pour les QCU / QCM.
     """
 
-    correct_answers = safe_str(
-        record.get(
-            "correct_answers"
-        )
-    )
+    correct_answers = safe_str(record.get("correct_answers"))
 
     if not correct_answers:
         return ""
@@ -162,15 +123,9 @@ def build_mcq_response(
     # Détection robuste
     # des réponses multiples.
     if "," in correct_answers:
-        return (
-            "Réponses correctes : "
-            f"{correct_answers}"
-        )
+        return "Réponses correctes : " f"{correct_answers}"
 
-    return (
-        "Réponse correcte : "
-        f"{correct_answers}"
-    )
+    return "Réponse correcte : " f"{correct_answers}"
 
 
 def get_confidence_score(
@@ -180,9 +135,7 @@ def get_confidence_score(
     Score de confiance initial.
     """
 
-    if source_name.startswith(
-        "mediqa"
-    ):
+    if source_name.startswith("mediqa"):
         return 0.95
 
     if source_name == "medquad":
@@ -253,11 +206,7 @@ def standardize_ultramedical(
             dict,
         )
     ):
-        chosen_response = safe_str(
-            chosen[1].get(
-                "content"
-            )
-        )
+        chosen_response = safe_str(chosen[1].get("content"))
 
     if (
         isinstance(
@@ -270,11 +219,7 @@ def standardize_ultramedical(
             dict,
         )
     ):
-        rejected_response = safe_str(
-            rejected[1].get(
-                "content"
-            )
-        )
+        rejected_response = safe_str(rejected[1].get("content"))
 
     metadata = record.get(
         "metadata",
@@ -287,31 +232,19 @@ def standardize_ultramedical(
         metadata,
         dict,
     ):
-        raw_score = (
-            metadata.get(
-                "chosen",
-                {},
-            ).get(
-                "score",
-                0.0,
-            )
+        raw_score = metadata.get(
+            "chosen",
+            {},
+        ).get(
+            "score",
+            0.0,
         )
 
-    confidence_score = (
-        normalize_preference_score(
-            raw_score
-        )
-    )
+    confidence_score = normalize_preference_score(raw_score)
 
     return {
-        "id": extract_id(
-            record
-        ),
-        "instruction": safe_str(
-            record.get(
-                "prompt"
-            )
-        ),
+        "id": extract_id(record),
+        "instruction": safe_str(record.get("prompt")),
         "response": chosen_response,
         "source": source_name,
         "language": "en",
@@ -326,17 +259,9 @@ def standardize_ultramedical(
             "confidence_score": confidence_score,
             "anonymized": False,
             "split": "",
-            "source_record_id": (
-                extract_id(
-                    record
-                )
-            ),
-            "rejected_response": (
-                rejected_response
-            ),
-            "original_fields": list(
-                record.keys()
-            ),
+            "source_record_id": (extract_id(record)),
+            "rejected_response": (rejected_response),
+            "original_fields": list(record.keys()),
         },
     }
 
@@ -351,57 +276,25 @@ def standardize_mcq(
     """
 
     return {
-        "id": extract_id(
-            record
-        ),
-        "instruction": (
-            build_mcq_instruction(
-                record
-            )
-        ),
-        "response": (
-            build_mcq_response(
-                record
-            )
-        ),
+        "id": extract_id(record),
+        "instruction": (build_mcq_instruction(record)),
+        "response": (build_mcq_response(record)),
         "source": source_name,
         "language": "fr",
         "metadata": {
             "dataset_name": source_name,
-            "dataset_subset": safe_str(
-                record.get(
-                    "task"
-                )
-            ),
-            "medical_subject": safe_str(
-                record.get(
-                    "medical_subject"
-                )
-            ),
-            "question_type": safe_str(
-                record.get(
-                    "question_type"
-                )
-            ),
+            "dataset_subset": safe_str(record.get("task")),
+            "medical_subject": safe_str(record.get("medical_subject")),
+            "question_type": safe_str(record.get("question_type")),
             "symptoms": [],
             "medical_history": [],
             "vital_signs": {},
             "confidence_score": 0.95,
             "anonymized": False,
             "split": "",
-            "source_record_id": (
-                extract_id(
-                    record
-                )
-            ),
-            "correct_answers": safe_str(
-                record.get(
-                    "correct_answers"
-                )
-            ),
-            "original_fields": list(
-                record.keys()
-            ),
+            "source_record_id": (extract_id(record)),
+            "correct_answers": safe_str(record.get("correct_answers")),
+            "original_fields": list(record.keys()),
         },
     }
 
@@ -417,66 +310,27 @@ def standardize_generic(
     - MedQuAD
     """
 
-    instruction = safe_str(
-        record.get(
-            "question"
-        )
-        or record.get(
-            "instruction"
-        )
-    )
+    instruction = safe_str(record.get("question") or record.get("instruction"))
 
-    response = safe_str(
-        record.get(
-            "answer"
-        )
-        or record.get(
-            "response"
-        )
-    )
+    response = safe_str(record.get("answer") or record.get("response"))
 
-    medical_subject = safe_str(
-        record.get(
-            "medical_subject"
-        )
-        or record.get(
-            "category"
-        )
-    )
+    medical_subject = safe_str(record.get("medical_subject") or record.get("category"))
 
-    question_type = safe_str(
-        record.get(
-            "question_type"
-        )
-    )
+    question_type = safe_str(record.get("question_type"))
 
     metadata = {
         "dataset_name": source_name,
         "dataset_subset": "",
-        "medical_subject": (
-            medical_subject
-        ),
-        "question_type": (
-            question_type
-        ),
+        "medical_subject": (medical_subject),
+        "question_type": (question_type),
         "symptoms": [],
         "medical_history": [],
         "vital_signs": {},
-        "confidence_score": (
-            get_confidence_score(
-                source_name
-            )
-        ),
+        "confidence_score": (get_confidence_score(source_name)),
         "anonymized": False,
         "split": "",
-        "source_record_id": (
-            extract_id(
-                record
-            )
-        ),
-        "original_fields": list(
-            record.keys()
-        ),
+        "source_record_id": (extract_id(record)),
+        "original_fields": list(record.keys()),
     }
 
     # Enrichissement spécifique
@@ -484,47 +338,19 @@ def standardize_generic(
     if source_name == "medquad":
         metadata.update(
             {
-                "question_focus": (
-                    safe_str(
-                        record.get(
-                            "question_focus"
-                        )
-                    )
-                ),
-                "umls_cui": safe_str(
-                    record.get(
-                        "umls_cui"
-                    )
-                ),
-                "umls_semantic_group": (
-                    safe_str(
-                        record.get(
-                            "umls_semantic_group"
-                        )
-                    )
-                ),
-                "document_source": (
-                    safe_str(
-                        record.get(
-                            "document_source"
-                        )
-                    )
-                ),
+                "question_focus": (safe_str(record.get("question_focus"))),
+                "umls_cui": safe_str(record.get("umls_cui")),
+                "umls_semantic_group": (safe_str(record.get("umls_semantic_group"))),
+                "document_source": (safe_str(record.get("document_source"))),
             }
         )
 
     return {
-        "id": extract_id(
-            record
-        ),
+        "id": extract_id(record),
         "instruction": instruction,
         "response": response,
         "source": source_name,
-        "language": (
-            detect_language(
-                source_name
-            )
-        ),
+        "language": (detect_language(source_name)),
         "metadata": metadata,
     }
 
@@ -537,14 +363,10 @@ def standardize_record(
     Routeur principal.
     """
 
-    if source_name == (
-        "ultramedical_preference"
-    ):
-        return (
-            standardize_ultramedical(
-                record,
-                source_name,
-            )
+    if source_name == ("ultramedical_preference"):
+        return standardize_ultramedical(
+            record,
+            source_name,
         )
 
     if source_name in (
@@ -569,23 +391,23 @@ def process_file(
     Standardise un fichier JSONL.
     """
 
-    output_path = (
-        OUTPUT_DIR
-        / file_path.name
-    )
+    output_path = OUTPUT_DIR / file_path.name
 
     total_records = 0
     error_count = 0
 
-    with open(
-        file_path,
-        "r",
-        encoding="utf-8",
-    ) as infile, open(
-        output_path,
-        "w",
-        encoding="utf-8",
-    ) as outfile:
+    with (
+        open(
+            file_path,
+            "r",
+            encoding="utf-8",
+        ) as infile,
+        open(
+            output_path,
+            "w",
+            encoding="utf-8",
+        ) as outfile,
+    ):
 
         for line_number, line in enumerate(
             infile,
@@ -597,15 +419,11 @@ def process_file(
                 continue
 
             try:
-                record = json.loads(
-                    line
-                )
+                record = json.loads(line)
 
-                standardized = (
-                    standardize_record(
-                        record,
-                        file_path.stem,
-                    )
+                standardized = standardize_record(
+                    record,
+                    file_path.stem,
                 )
 
                 outfile.write(
@@ -621,24 +439,12 @@ def process_file(
             except Exception as exc:
                 error_count += 1
 
-                print(
-                    f"[ERROR] "
-                    f"{file_path.name}"
-                    f":{line_number} "
-                    f"{exc}"
-                )
+                print(f"[ERROR] " f"{file_path.name}" f":{line_number} " f"{exc}")
 
-    print(
-        f"Standardized -> "
-        f"{output_path} "
-        f"({total_records} records)"
-    )
+    print(f"Standardized -> " f"{output_path} " f"({total_records} records)")
 
     if error_count:
-        print(
-            f"Errors -> "
-            f"{error_count}"
-        )
+        print(f"Errors -> " f"{error_count}")
 
 
 def main():
@@ -646,22 +452,14 @@ def main():
     Point d'entrée principal.
     """
 
-    files = sorted(
-        INPUT_DIR.glob(
-            "*.jsonl"
-        )
-    )
+    files = sorted(INPUT_DIR.glob("*.jsonl"))
 
     if not files:
-        print(
-            "No JSONL files found."
-        )
+        print("No JSONL files found.")
         return
 
     for file_path in files:
-        process_file(
-            file_path
-        )
+        process_file(file_path)
 
 
 if __name__ == "__main__":

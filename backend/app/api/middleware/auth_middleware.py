@@ -6,13 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.app.core.security import verify_access_token
 
 
-EXCLUDED_PATHS = {
-    "/",
-    "/docs",
-    "/redoc",
-    "/openapi.json",
-    "/health/"
-}
+EXCLUDED_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health/"}
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -25,26 +19,21 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization")
 
         if not auth_header:
-            raise HTTPException(
-                status_code=401,
-                detail="Authorization header missing"
-            )
+            raise HTTPException(status_code=401, detail="Authorization header missing")
 
         try:
             scheme, token = auth_header.split()
 
             if scheme.lower() != "bearer":
                 raise HTTPException(
-                    status_code=401,
-                    detail="Invalid authentication scheme"
+                    status_code=401, detail="Invalid authentication scheme"
                 )
 
             verify_access_token(token)
 
         except ValueError:
             raise HTTPException(
-                status_code=401,
-                detail="Malformed Authorization header"
+                status_code=401, detail="Malformed Authorization header"
             )
 
         return await call_next(request)

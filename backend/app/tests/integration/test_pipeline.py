@@ -87,14 +87,9 @@ def test_pipeline_with_complex_patient_profile():
     """
 
     payload = {
-        "symptoms": (
-            "douleur thoracique légère, fatigue,"
-            " essoufflement"
-        ),
+        "symptoms": ("douleur thoracique légère, fatigue," " essoufflement"),
         "age": 68,
-        "medical_history": (
-            "hypertension, diabète type 2"
-        ),
+        "medical_history": ("hypertension, diabète type 2"),
         "medications": [
             "metformine",
             "amlodipine",

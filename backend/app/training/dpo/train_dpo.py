@@ -113,8 +113,8 @@ def _configure_cuda_allocator() -> None:
     current = os.environ.get("PYTORCH_CUDA_ALLOC_CONF", "")
     if "expandable_segments" not in current:
         os.environ["PYTORCH_CUDA_ALLOC_CONF"] = (
-            (current + ",expandable_segments:True").lstrip(",")
-        )
+            current + ",expandable_segments:True"
+        ).lstrip(",")
         logger.info(
             "PYTORCH_CUDA_ALLOC_CONF → %s",
             os.environ["PYTORCH_CUDA_ALLOC_CONF"],
@@ -216,9 +216,8 @@ class ForceMasterWeightsFp32Callback(TrainerCallback):
 class SafetyFilter:
     def __init__(self, config: Dict) -> None:
         safety = config.get("safety", {})
-        self.blocked: List[str] = (
-            safety.get("hallucination_keywords", [])
-            + safety.get("dangerous_keywords", [])
+        self.blocked: List[str] = safety.get("hallucination_keywords", []) + safety.get(
+            "dangerous_keywords", []
         )
 
     def is_safe(self, example: Dict) -> bool:
@@ -299,7 +298,9 @@ def prepare_datasets() -> Tuple[Dataset, Dataset]:
     safety_filter = SafetyFilter(CONFIG)
 
     train_dataset = load_dataset_source("train").map(build_dpo_sample)
-    validation_dataset = load_dataset_source("validation").map(build_dpo_sample)  # noqa: E501
+    validation_dataset = load_dataset_source("validation").map(
+        build_dpo_sample
+    )  # noqa: E501
 
     # FIX DPO-5 — filtre de sécurité sur les données DPO
     before_train = len(train_dataset)
@@ -310,11 +311,15 @@ def prepare_datasets() -> Tuple[Dataset, Dataset]:
 
     logger.info(
         "SafetyFilter — train : %d → %d exemples (-%d écartés).",
-        before_train, len(train_dataset), before_train - len(train_dataset),
+        before_train,
+        len(train_dataset),
+        before_train - len(train_dataset),
     )
     logger.info(
         "SafetyFilter — validation : %d → %d exemples (-%d écartés).",
-        before_val, len(validation_dataset), before_val - len(validation_dataset),  # noqa: E501
+        before_val,
+        len(validation_dataset),
+        before_val - len(validation_dataset),  # noqa: E501
     )
 
     if len(validation_dataset) == 0:
@@ -352,9 +357,15 @@ def build_dpo_config() -> "DPOConfig":  # type: ignore
     training_args = {
         "output_dir": training_config["output_dir"],
         "num_train_epochs": training_config["num_train_epochs"],
-        "per_device_train_batch_size": training_config["per_device_train_batch_size"],  # noqa: E501
-        "per_device_eval_batch_size": training_config["per_device_eval_batch_size"],   # noqa: E501
-        "gradient_accumulation_steps": training_config["gradient_accumulation_steps"],  # noqa: E501
+        "per_device_train_batch_size": training_config[
+            "per_device_train_batch_size"
+        ],  # noqa: E501
+        "per_device_eval_batch_size": training_config[
+            "per_device_eval_batch_size"
+        ],  # noqa: E501
+        "gradient_accumulation_steps": training_config[
+            "gradient_accumulation_steps"
+        ],  # noqa: E501
         "learning_rate": float(training_config["learning_rate"]),
         "logging_steps": training_config["logging_steps"],
         "eval_steps": training_config["eval_steps"],
@@ -370,18 +381,24 @@ def build_dpo_config() -> "DPOConfig":  # type: ignore
         # quelle que soit la source de l'activation.
         "gradient_checkpointing_kwargs": {"use_reentrant": False},
         "report_to": training_config.get("report_to", ["wandb"]),
-        "dataloader_num_workers": training_config.get("dataloader_num_workers", 0),  # noqa: E501
-
+        "dataloader_num_workers": training_config.get(
+            "dataloader_num_workers", 0
+        ),  # noqa: E501
         # FIX DPO-2 — champs TrainingArguments
         "eval_strategy": training_config.get("evaluation_strategy", "steps"),
         "save_strategy": training_config.get("save_strategy", "steps"),
-        "load_best_model_at_end": training_config.get("load_best_model_at_end", True),   # noqa: E501
-        "metric_for_best_model": training_config.get("metric_for_best_model", "eval_loss"),  # noqa: E501
+        "load_best_model_at_end": training_config.get(
+            "load_best_model_at_end", True
+        ),  # noqa: E501
+        "metric_for_best_model": training_config.get(
+            "metric_for_best_model", "eval_loss"
+        ),  # noqa: E501
         "greater_is_better": training_config.get("greater_is_better", False),
         "warmup_ratio": float(training_config.get("warmup_ratio", 0.05)),
-        "lr_scheduler_type": training_config.get("lr_scheduler_type", "cosine"),  # noqa: E501
+        "lr_scheduler_type": training_config.get(
+            "lr_scheduler_type", "cosine"
+        ),  # noqa: E501
         "max_grad_norm": float(training_config.get("max_grad_norm", 1.0)),
-
         # OOM-4 : max_prompt_length SUPPRIMÉ — absent de DPOConfig dans
         # cette version de TRL. max_length seul est transmis.
         "beta": float(dpo_config.get("beta", 0.1)),
@@ -425,9 +442,7 @@ def resolve_ref_model(model) -> Optional[object]:
     dpo_config = CONFIG.get("dpo", {})
 
     if dpo_config.get("reference_free", False):
-        logger.info(
-            "reference_free=True — aucun ref_model chargé (πref non requis)."
-        )
+        logger.info("reference_free=True — aucun ref_model chargé (πref non requis).")
         return None
 
     if isinstance(model, PeftModel):
@@ -469,7 +484,9 @@ def build_trainer(
 
     # FIX DPO-1 — EarlyStoppingCallback absent dans la version originale
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=CONFIG["training"].get("early_stopping_patience", 2)  # noqa: E501
+        early_stopping_patience=CONFIG["training"].get(
+            "early_stopping_patience", 2
+        )  # noqa: E501
     )
 
     # NaNGuardCallback en premier pour stopper avant EarlyStopping
@@ -505,7 +522,7 @@ def run_clinical_evaluation(model, tokenizer) -> None:
     logger.info("Clinical DPO evaluation integration pending.")
 
 
-def train(publish_to_hf: bool = False):   # False par défaut en validation
+def train(publish_to_hf: bool = False):  # False par défaut en validation
     TrainingUtils.setup_logging(CONFIG["system"]["logging_level"])
     logger.info("Starting DPO validation run.")
 
@@ -536,7 +553,8 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
 
     logger.info(
         "Validation run — train=%d exemples, val=%d exemples.",
-        len(train_dataset), len(validation_dataset),
+        len(train_dataset),
+        len(validation_dataset),
     )
 
     print("=" * 60)
@@ -565,21 +583,19 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         training_type="dpo",
     )
 
-    resume_checkpoint = (
-        CONFIG["training"].get("resume_from_checkpoint")
-    )
+    resume_checkpoint = CONFIG["training"].get("resume_from_checkpoint")
 
     if resume_checkpoint is None:
-        resume_checkpoint = (
-            checkpoint_sync.restore_latest_checkpoint_from_huggingface()
-        )
+        resume_checkpoint = checkpoint_sync.restore_latest_checkpoint_from_huggingface()
 
     print("=" * 60)
     print("AUDIT DTYPE DES PARAMÈTRES ENTRAÎNABLES")
     dtype_counts = {}
     for name, param in model.named_parameters():
         if param.requires_grad:
-            dtype_counts[str(param.dtype)] = dtype_counts.get(str(param.dtype), 0) + 1  # noqa : E501
+            dtype_counts[str(param.dtype)] = (
+                dtype_counts.get(str(param.dtype), 0) + 1
+            )  # noqa : E501
             if param.dtype in (torch.bfloat16, torch.float16):
                 print(f"[ATTENDU FP32 !] {name} -> {param.dtype}")
     print("Résumé par dtype :", dtype_counts)
@@ -609,8 +625,12 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
     # (FIX HUB-1 à HUB-5).
     if publish_to_hf:
         if checkpoint_sync.has_checkpoint():
-            logger.info("Synchronisation des checkpoints DPO intermédiaires vers Hugging Face...")  # noqa: E501
-            checkpoints_synced = checkpoint_sync.sync_all_checkpoints_to_huggingface()  # noqa: E501
+            logger.info(
+                "Synchronisation des checkpoints DPO intermédiaires vers Hugging Face..."
+            )  # noqa: E501
+            checkpoints_synced = (
+                checkpoint_sync.sync_all_checkpoints_to_huggingface()
+            )  # noqa: E501
             if not checkpoints_synced:
                 raise RuntimeError(
                     "Échec de synchronisation d'au moins un checkpoint DPO "

@@ -33,7 +33,9 @@ class TrainingModelLoader:
 
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
-        self.engine = self.config.get("runtime", {}).get("engine", "transformers")  # noqa: E501
+        self.engine = self.config.get("runtime", {}).get(
+            "engine", "transformers"
+        )  # noqa: E501
 
     # ------------------------------------------------------------------
     # Point d'entrée unique
@@ -69,7 +71,9 @@ class TrainingModelLoader:
 
         load_kwargs: Dict[str, Any] = dict(
             pretrained_model_name_or_path=model_name,
-            trust_remote_code=self.config["model"].get("trust_remote_code", True),  # noqa: E501
+            trust_remote_code=self.config["model"].get(
+                "trust_remote_code", True
+            ),  # noqa: E501
             device_map=self.config["model"].get("device_map", "auto"),
         )
 
@@ -104,7 +108,9 @@ class TrainingModelLoader:
         enabled = self.config["training"].get("gradient_checkpointing", True)
 
         if enabled:
-            logger.info("Enabling gradient checkpointing (use_reentrant=False).")  # noqa: E501
+            logger.info(
+                "Enabling gradient checkpointing (use_reentrant=False)."
+            )  # noqa: E501
 
             # FIX BUG #4 — use_reentrant=False requis pour Qwen3
             # + DataCollatorForSeq2Seq (évite NaN silencieux sur certaines versions)  # noqa: E501
@@ -129,7 +135,7 @@ class TrainingModelLoader:
         # modèle est effectivement quantifié (cf. peft_setup.py).
         model = setup_peft_model(
             model=model,
-            config=self.config,     # ← décommenté : la config YAML est lue
+            config=self.config,  # ← décommenté : la config YAML est lue
         )
 
         logger.info("LoRA adapters applied successfully.")
@@ -159,7 +165,9 @@ class TrainingModelLoader:
             load_in_4bit,
         )
 
-        resolved_dtype = self._resolve_torch_dtype()  # réutilise la logique custom validée # noqa: E501
+        resolved_dtype = (
+            self._resolve_torch_dtype()
+        )  # réutilise la logique custom validée # noqa: E501
 
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_name,
@@ -183,8 +191,15 @@ class TrainingModelLoader:
             r=lora_cfg.get("r", 16),
             target_modules=lora_cfg.get(
                 "target_modules",
-                ["q_proj", "k_proj", "v_proj", "o_proj",
-                 "gate_proj", "up_proj", "down_proj"],
+                [
+                    "q_proj",
+                    "k_proj",
+                    "v_proj",
+                    "o_proj",
+                    "gate_proj",
+                    "up_proj",
+                    "down_proj",
+                ],
             ),
             lora_alpha=lora_cfg.get("lora_alpha", 16),
             lora_dropout=lora_cfg.get("lora_dropout", 0.0),
@@ -262,9 +277,7 @@ class TrainingModelLoader:
             load_in_4bit=True,
             bnb_4bit_quant_type=quant_cfg.get("bnb_4bit_quant_type", "nf4"),
             bnb_4bit_compute_dtype=compute_dtype,
-            bnb_4bit_use_double_quant=quant_cfg.get(
-                "bnb_4bit_use_double_quant", True
-            ),
+            bnb_4bit_use_double_quant=quant_cfg.get("bnb_4bit_use_double_quant", True),
         )
 
         logger.info(
@@ -285,6 +298,7 @@ class TrainingModelLoader:
             from backend.app.training.colab.colab_environment import (
                 get_training_dtype,
             )
+
             resolved = get_training_dtype()
             logger.info("torch_dtype=auto → résolu par runtime : %s", resolved)
             return resolved
@@ -311,9 +325,7 @@ class TrainingModelLoader:
             if parameter.requires_grad:
                 trainable_params += parameter.numel()
 
-        percentage = (
-            100 * trainable_params / total_params if total_params > 0 else 0.0
-        )
+        percentage = 100 * trainable_params / total_params if total_params > 0 else 0.0
 
         logger.info(
             "Trainable parameters: %s / %s (%.4f%%)",

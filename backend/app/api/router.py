@@ -20,27 +20,17 @@ api_router = APIRouter()
 # Core API Routes
 # ------------------------------------------------------------------
 
-api_router.include_router(
-    health_router
-)
+api_router.include_router(health_router)
 
-api_router.include_router(
-    inference_router
-)
+api_router.include_router(inference_router)
 
-api_router.include_router(
-    triage_router
-)
+api_router.include_router(triage_router)
 
-api_router.include_router(
-    audit_router
-)
+api_router.include_router(audit_router)
 
 
 # ------------------------------------------------------------------
 # Monitoring & Observability Routes (PHASE 7)
 # ------------------------------------------------------------------
 
-api_router.include_router(
-    monitoring_router
-)
+api_router.include_router(monitoring_router)

@@ -51,9 +51,7 @@ class _FakeInferenceClient:
 @pytest.fixture()
 def client():
 
-    app.dependency_overrides[
-        get_inference_client
-    ] = lambda: _FakeInferenceClient()
+    app.dependency_overrides[get_inference_client] = lambda: _FakeInferenceClient()
 
     audit_store.clear()
 
@@ -66,13 +64,9 @@ def client():
 @pytest.fixture()
 def auth_headers():
 
-    token = create_access_token(
-        subject="audit-test-user"
-    )
+    token = create_access_token(subject="audit-test-user")
 
-    return {
-        "Authorization": f"Bearer {token}"
-    }
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_interaction_is_persisted_to_audit_store(
@@ -92,11 +86,7 @@ def test_interaction_is_persisted_to_audit_store(
 
     assert len(entries) >= 1
 
-    triage_entries = [
-        e
-        for e in entries
-        if e["path"] == "/triage/"
-    ]
+    triage_entries = [e for e in entries if e["path"] == "/triage/"]
 
     assert len(triage_entries) == 1
 
@@ -130,10 +120,7 @@ def test_audit_endpoint_returns_real_data(
 
     assert body["total_logs"] >= 1
 
-    assert any(
-        log["endpoint"] == "/triage/"
-        for log in body["logs"]
-    )
+    assert any(log["endpoint"] == "/triage/" for log in body["logs"])
 
 
 def test_audit_endpoint_respects_limit(
@@ -178,16 +165,10 @@ def test_audit_entries_are_most_recent_first(
 
     entries = audit_store.read_entries()
 
-    triage_entries = [
-        e for e in entries if e["path"] == "/triage/"
-    ]
+    triage_entries = [e for e in entries if e["path"] == "/triage/"]
 
     assert len(triage_entries) >= 2
 
-    timestamps = [
-        e["timestamp"] for e in triage_entries
-    ]
+    timestamps = [e["timestamp"] for e in triage_entries]
 
-    assert timestamps == sorted(
-        timestamps, reverse=True
-    )
+    assert timestamps == sorted(timestamps, reverse=True)

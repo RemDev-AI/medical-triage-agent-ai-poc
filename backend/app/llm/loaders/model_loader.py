@@ -61,9 +61,7 @@ class ModelLoader:
         """
 
         if self.load_in_4bit and self.load_in_8bit:
-            raise ValueError(
-                "Cannot enable both 4-bit and 8-bit quantization."
-            )
+            raise ValueError("Cannot enable both 4-bit and 8-bit quantization.")
 
         logger.info("Starting model loading...")
 
@@ -104,9 +102,7 @@ class ModelLoader:
 
         if self.adapter_path:
 
-            adapter_is_local = Path(
-                self.adapter_path
-            ).exists()
+            adapter_is_local = Path(self.adapter_path).exists()
 
             if adapter_is_local:
                 logger.info(
@@ -124,20 +120,14 @@ class ModelLoader:
                 self.adapter_path,
             )
 
-            logger.info(
-                "PEFT adapter loaded successfully."
-            )
+            logger.info("PEFT adapter loaded successfully.")
 
             if self.merge_adapter:
-                logger.info(
-                    "Merging LoRA adapter into base model..."
-                )
+                logger.info("Merging LoRA adapter into base model...")
 
                 model = model.merge_and_unload()
 
-                logger.info(
-                    "LoRA adapter merged successfully."
-                )
+                logger.info("LoRA adapter merged successfully.")
 
         model.eval()
 
@@ -163,25 +153,13 @@ class ModelLoader:
             logger.warning("CUDA unavailable.")
             return
 
-        allocated = (
-            torch.cuda.memory_allocated()
-            / 1024**3
-        )
+        allocated = torch.cuda.memory_allocated() / 1024**3
 
-        reserved = (
-            torch.cuda.memory_reserved()
-            / 1024**3
-        )
+        reserved = torch.cuda.memory_reserved() / 1024**3
 
-        max_allocated = (
-            torch.cuda.max_memory_allocated()
-            / 1024**3
-        )
+        max_allocated = torch.cuda.max_memory_allocated() / 1024**3
 
-        max_reserved = (
-            torch.cuda.max_memory_reserved()
-            / 1024**3
-        )
+        max_reserved = torch.cuda.max_memory_reserved() / 1024**3
 
         logger.info(
             "GPU memory allocated: %.2f GB",

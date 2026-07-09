@@ -76,13 +76,9 @@ def get_gpu_usage() -> Dict[str, Any]:
         }
 
     except Exception as exc:
-        logger.exception(
-            "Unable to retrieve GPU metrics"
-        )
+        logger.exception("Unable to retrieve GPU metrics")
 
-        raise InferenceMonitoringError(
-            str(exc)
-        ) from exc
+        raise InferenceMonitoringError(str(exc)) from exc
 
 
 def get_active_containers() -> Dict[str, Any]:
@@ -112,13 +108,9 @@ def get_active_containers() -> Dict[str, Any]:
         }
 
     except Exception as exc:
-        logger.exception(
-            "Unable to retrieve backend metrics"
-        )
+        logger.exception("Unable to retrieve backend metrics")
 
-        raise InferenceMonitoringError(
-            str(exc)
-        ) from exc
+        raise InferenceMonitoringError(str(exc)) from exc
 
 
 def get_inference_latency() -> Dict[str, Any]:
@@ -147,13 +139,9 @@ def get_inference_latency() -> Dict[str, Any]:
         }
 
     except Exception as exc:
-        logger.exception(
-            "Unable to retrieve latency metrics"
-        )
+        logger.exception("Unable to retrieve latency metrics")
 
-        raise InferenceMonitoringError(
-            str(exc)
-        ) from exc
+        raise InferenceMonitoringError(str(exc)) from exc
 
 
 def get_inference_health() -> Dict[str, Any]:

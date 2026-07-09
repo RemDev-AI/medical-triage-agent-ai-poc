@@ -63,22 +63,16 @@ class GPUMonitor:
 
         gpu_metrics = get_gpu_usage()
 
-        latency_metrics = (
-            get_inference_latency()
-        )
+        latency_metrics = get_inference_latency()
 
-        container_metrics = (
-            get_active_containers()
-        )
+        container_metrics = get_active_containers()
 
         return {
             "provider": "huggingface",
             "gpu": gpu_metrics,
             "latency": latency_metrics,
             "containers": container_metrics,
-            "inference_request_count": (
-                self.get_request_count()
-            ),
+            "inference_request_count": (self.get_request_count()),
         }
 
     def health_status(self) -> Dict[str, Any]:

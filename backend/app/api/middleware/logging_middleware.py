@@ -23,9 +23,7 @@ from backend.app.monitoring.audit_store import (
 )
 
 
-logger = logging.getLogger(
-    "audit_logger"
-)
+logger = logging.getLogger("audit_logger")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,9 +31,7 @@ logging.basicConfig(
 )
 
 
-class AuditLoggingMiddleware(
-    BaseHTTPMiddleware
-):
+class AuditLoggingMiddleware(BaseHTTPMiddleware):
     """
     Middleware de journalisation.
 
@@ -64,13 +60,9 @@ class AuditLoggingMiddleware(
         call_next,
     ):
 
-        request_id = str(
-            uuid.uuid4()
-        )
+        request_id = str(uuid.uuid4())
 
-        start_time = (
-            time.perf_counter()
-        )
+        start_time = time.perf_counter()
 
         endpoint = request.url.path
 
@@ -83,48 +75,29 @@ class AuditLoggingMiddleware(
 
         try:
 
-            response = await call_next(
-                request
-            )
+            response = await call_next(request)
 
             latency_ms = round(
-                (
-                    time.perf_counter()
-                    - start_time
-                )
-                * 1000,
+                (time.perf_counter() - start_time) * 1000,
                 2,
             )
 
-            latency_monitor.record(
-                latency_ms
-            )
+            latency_monitor.record(latency_ms)
 
-            success = (
-                response.status_code < 400
-            )
+            success = response.status_code < 400
 
             request_tracker.end_request(
                 success=success,
             )
 
-            client_ip = (
-                request.client.host
-                if request.client
-                else "unknown"
-            )
+            client_ip = request.client.host if request.client else "unknown"
 
             audit_log = {
                 "request_id": request_id,
-                "timestamp": (
-                    datetime.utcnow()
-                    .isoformat()
-                ),
+                "timestamp": (datetime.utcnow().isoformat()),
                 "method": method,
                 "path": endpoint,
-                "status_code": (
-                    response.status_code
-                ),
+                "status_code": (response.status_code),
                 "client_ip": client_ip,
                 "latency_ms": latency_ms,
             }
@@ -138,43 +111,28 @@ class AuditLoggingMiddleware(
 
             record_entry(audit_log)
 
-            response.headers[
-                "X-Request-ID"
-            ] = request_id
+            response.headers["X-Request-ID"] = request_id
 
             return response
 
         except Exception:
 
             latency_ms = round(
-                (
-                    time.perf_counter()
-                    - start_time
-                )
-                * 1000,
+                (time.perf_counter() - start_time) * 1000,
                 2,
             )
 
-            latency_monitor.record(
-                latency_ms
-            )
+            latency_monitor.record(latency_ms)
 
             request_tracker.end_request(
                 success=False,
             )
 
-            client_ip = (
-                request.client.host
-                if request.client
-                else "unknown"
-            )
+            client_ip = request.client.host if request.client else "unknown"
 
             audit_log = {
                 "request_id": request_id,
-                "timestamp": (
-                    datetime.utcnow()
-                    .isoformat()
-                ),
+                "timestamp": (datetime.utcnow().isoformat()),
                 "method": method,
                 "path": endpoint,
                 "status_code": 500,

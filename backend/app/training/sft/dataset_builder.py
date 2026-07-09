@@ -40,30 +40,20 @@ random.seed(RANDOM_SEED)
 # ADDITIONAL RGPD PATTERNS
 # ==========================================================
 
-EMAIL_PATTERN = re.compile(
-    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
-)
+EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
-PHONE_PATTERN = re.compile(
-    r"(?:\+?\d[\d\s().-]{7,}\d)"
-)
+PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
 
-IP_PATTERN = re.compile(
-    r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-)
+IP_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 URL_PATTERN = re.compile(
     r"https?://[^\s]+|www\.[^\s]+",
     re.IGNORECASE,
 )
 
-SSN_PATTERN = re.compile(
-    r"\b\d{3}-\d{2}-\d{4}\b"
-)
+SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
-MRN_PATTERN = re.compile(
-    r"\b(?:MRN|mrn)[:\s#-]*[A-Z0-9]{5,20}\b"
-)
+MRN_PATTERN = re.compile(r"\b(?:MRN|mrn)[:\s#-]*[A-Z0-9]{5,20}\b")
 
 PATIENT_ID_PATTERN = re.compile(
     r"\b(?:PATIENT|Patient|patient)[-_ ]?(?:ID|Id|id)?[:\s#-]*[A-Z0-9]{4,20}\b"
@@ -82,9 +72,7 @@ PARTIAL_NAME_PATTERN = re.compile(
 # Reliquats observés :
 # LUC...Jean
 # DUR...Pierre
-TRUNCATED_NAME_PATTERN = re.compile(
-    r"\b[A-Z]{3,}\.\.\.[A-Z][a-z]+\b"
-)
+TRUNCATED_NAME_PATTERN = re.compile(r"\b[A-Z]{3,}\.\.\.[A-Z][a-z]+\b")
 
 CORRUPTED_MEDICAL_PATTERNS = [
     re.compile(
@@ -105,10 +93,7 @@ def contains_corrupted_medical_content(
     if not text:
         return False
 
-    return any(
-        pattern.search(text)
-        for pattern in CORRUPTED_MEDICAL_PATTERNS
-    )
+    return any(pattern.search(text) for pattern in CORRUPTED_MEDICAL_PATTERNS)
 
 
 def generate_id(text: str) -> str:
@@ -133,28 +118,35 @@ def confidence_score(record: dict) -> float:
 
 
 def clinical_tags(record: dict) -> list[str]:
-    text = (
-        record.get("instruction", "") + " " +
-        record.get("response", "")
-    ).lower()
+    text = (record.get("instruction", "") + " " + record.get("response", "")).lower()
 
     keywords = {
         "cardiology": [
-            "coeur", "heart", "cardiac",
-            "thoracique", "chest pain",
+            "coeur",
+            "heart",
+            "cardiac",
+            "thoracique",
+            "chest pain",
         ],
         "respiratory": [
-            "respiration", "breathing",
-            "toux", "cough", "lung",
+            "respiration",
+            "breathing",
+            "toux",
+            "cough",
+            "lung",
         ],
         "emergency": [
-            "urgence", "emergency",
-            "critical", "douleur sévère",
+            "urgence",
+            "emergency",
+            "critical",
+            "douleur sévère",
             "severe pain",
         ],
         "neurology": [
-            "migraine", "stroke",
-            "brain", "cerveau",
+            "migraine",
+            "stroke",
+            "brain",
+            "cerveau",
             "neurolog",
         ],
     }
@@ -174,10 +166,7 @@ def deduplicate(records: list[dict]) -> list[dict]:
 
     for record in records:
         signature = hashlib.md5(
-            (
-                record["instruction"] +
-                record["response"]
-            ).encode("utf-8")
+            (record["instruction"] + record["response"]).encode("utf-8")
         ).hexdigest()
 
         if signature not in seen:
@@ -206,10 +195,7 @@ def contains_residual_pii(
         TRUNCATED_NAME_PATTERN,
     )
 
-    return any(
-        pattern.search(text)
-        for pattern in patterns
-    )
+    return any(pattern.search(text) for pattern in patterns)
 
 
 def detect_residual_pii_types(
@@ -328,9 +314,7 @@ def load_standardized_datasets() -> list[dict]:
                 except Exception:
                     continue
 
-                metadata = dict(
-                    item.get("metadata", {})
-                )
+                metadata = dict(item.get("metadata", {}))
 
                 language = item.get(
                     "language",
@@ -340,28 +324,22 @@ def load_standardized_datasets() -> list[dict]:
                     ),
                 )
 
-                instruction = (
-                    item.get(
-                        "instruction",
-                        "",
-                    ).strip()
-                )
+                instruction = item.get(
+                    "instruction",
+                    "",
+                ).strip()
 
-                response = (
-                    item.get(
-                        "response",
-                        "",
-                    ).strip()
-                )
+                response = item.get(
+                    "response",
+                    "",
+                ).strip()
 
                 if not instruction or not response:
                     continue
 
                 records.append(
                     {
-                        "id": generate_id(
-                            instruction + response
-                        ),
+                        "id": generate_id(instruction + response),
                         "instruction": instruction,
                         "response": response,
                         "source": item.get("source"),
@@ -425,10 +403,7 @@ def balanced_sampling(
         TARGET_SAMPLE_SIZE - fr_target,
     )
 
-    sampled = (
-        fr_records[:fr_target]
-        + en_records[:en_target]
-    )
+    sampled = fr_records[:fr_target] + en_records[:en_target]
 
     random.shuffle(sampled)
 
@@ -455,56 +430,32 @@ def anonymize_records(
             language=record.get("language"),
         )
 
-        instruction = sanitize_partial_names(
-            instruction
-        )
+        instruction = sanitize_partial_names(instruction)
 
-        response = sanitize_partial_names(
-            response
-        )
+        response = sanitize_partial_names(response)
 
-        instruction_pii = (
-            detect_residual_pii_types(
-                instruction
-            )
-        )
+        instruction_pii = detect_residual_pii_types(instruction)
 
-        response_pii = (
-            detect_residual_pii_types(
-                response
-            )
-        )
+        response_pii = detect_residual_pii_types(response)
 
         if instruction_pii or response_pii:
 
             skipped_residual_pii += 1
 
-            for pii_type in (
-                instruction_pii +
-                response_pii
-            ):
+            for pii_type in instruction_pii + response_pii:
                 removal_stats[pii_type] += 1
 
-            print(
-                f"[PII] {instruction_pii + response_pii}"
-            )
+            print(f"[PII] {instruction_pii + response_pii}")
 
             continue
 
-        if (
-            contains_corrupted_medical_content(
-                instruction
-            )
-            or contains_corrupted_medical_content(
-                response
-            )
-        ):
+        if contains_corrupted_medical_content(
+            instruction
+        ) or contains_corrupted_medical_content(response):
 
             skipped_residual_pii += 1
 
-            removal_stats[
-                "CORRUPTED_MEDICAL_CONTENT"
-            ] += 1
+            removal_stats["CORRUPTED_MEDICAL_CONTENT"] += 1
 
             continue
 
@@ -529,43 +480,24 @@ def anonymize_records(
             elapsed = time.time() - start_time
 
             print(
-                f"[ANONYMIZATION] "
-                f"{index:,}/{len(records):,} "
-                f"| {elapsed:.1f}s"
+                f"[ANONYMIZATION] " f"{index:,}/{len(records):,} " f"| {elapsed:.1f}s"
             )
 
-    print(
-        f"\nResidual PII removed: "
-        f"{skipped_residual_pii}"
-    )
+    print(f"\nResidual PII removed: " f"{skipped_residual_pii}")
 
     if removal_stats:
 
-        print(
-            "\n=== RGPD AUDIT REPORT ==="
-        )
+        print("\n=== RGPD AUDIT REPORT ===")
 
-        total = sum(
-            removal_stats.values()
-        )
+        total = sum(removal_stats.values())
 
-        for pii_type, count in sorted(
-            removal_stats.items()
-        ):
+        for pii_type, count in sorted(removal_stats.items()):
 
-            percentage = (
-                count / total
-            ) * 100
+            percentage = (count / total) * 100
 
-            print(
-                f"{pii_type:<30} "
-                f"{count:>6} "
-                f"({percentage:5.2f}%)"
-            )
+            print(f"{pii_type:<30} " f"{count:>6} " f"({percentage:5.2f}%)")
 
-        print(
-            "=" * 40
-        )
+        print("=" * 40)
 
     return anonymized_records
 
@@ -582,7 +514,8 @@ def save_jsonl(records, path):
                 json.dumps(
                     record,
                     ensure_ascii=False,
-                ) + "\n"
+                )
+                + "\n"
             )
 
 
@@ -631,42 +564,25 @@ def main():
 
     records = deduplicate(records)
 
-    print(
-        f"After deduplication: "
-        f"{len(records):,}"
-    )
+    print(f"After deduplication: " f"{len(records):,}")
 
-    print(
-        f"Deduplication time: "
-        f"{time.time() - dedup_start:.2f}s"
-    )
+    print(f"Deduplication time: " f"{time.time() - dedup_start:.2f}s")
 
     sampling_start = time.time()
 
     records = balanced_sampling(records)
 
-    print(
-        f"After sampling: "
-        f"{len(records):,}"
-    )
+    print(f"After sampling: " f"{len(records):,}")
 
-    print(
-        f"Sampling time: "
-        f"{time.time() - sampling_start:.2f}s"
-    )
+    print(f"Sampling time: " f"{time.time() - sampling_start:.2f}s")
 
     anonymization_start = time.time()
 
     records = anonymize_records(records)
 
-    print(
-        f"Anonymization time: "
-        f"{time.time() - anonymization_start:.2f}s"
-    )
+    print(f"Anonymization time: " f"{time.time() - anonymization_start:.2f}s")
 
-    train, validation, test, clinical_eval = (
-        build_splits(records)
-    )
+    train, validation, test, clinical_eval = build_splits(records)
 
     save_jsonl(
         train,
@@ -688,19 +604,13 @@ def main():
         OUTPUT_DIR / "clinical_eval.jsonl",
     )
 
-    total_time = (
-        time.time() - pipeline_start
-    )
+    total_time = time.time() - pipeline_start
 
     print(
-        f"\nTotal pipeline time: "
-        f"{total_time:.2f}s "
-        f"({total_time / 60:.2f} min)"
+        f"\nTotal pipeline time: " f"{total_time:.2f}s " f"({total_time / 60:.2f} min)"
     )
 
-    print(
-        "\nSFT dataset build completed"
-    )
+    print("\nSFT dataset build completed")
 
 
 if __name__ == "__main__":

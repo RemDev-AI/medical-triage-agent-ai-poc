@@ -5,20 +5,14 @@ from datetime import datetime
 
 from backend.app.api.schemas import HealthResponse
 
-router = APIRouter(
-    prefix="/health",
-    tags=["Health"]
-)
+router = APIRouter(prefix="/health", tags=["Health"])
 
 
-@router.get(
-    "/",
-    response_model=HealthResponse
-)
+@router.get("/", response_model=HealthResponse)
 async def health_check():
     return HealthResponse(
         status="ok",
         service="medical-triage-api",
         version="1.0.0",
-        timestamp=datetime.utcnow()
+        timestamp=datetime.utcnow(),
     )

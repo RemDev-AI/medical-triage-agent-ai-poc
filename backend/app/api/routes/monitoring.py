@@ -34,9 +34,7 @@ async def monitoring_health():
     return {
         "status": "healthy",
         "service": "monitoring",
-        "timestamp": datetime.now(
-            tz=timezone.utc
-        ).isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
     }
 
 
@@ -70,9 +68,7 @@ async def get_gpu_metrics():
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                f"GPU monitoring error: {exc}"
-            ),
+            detail=(f"GPU monitoring error: {exc}"),
         )
 
 
@@ -118,10 +114,7 @@ async def get_inference_metrics():
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                f"Inference monitoring error: "
-                f"{exc}"
-            ),
+            detail=(f"Inference monitoring error: " f"{exc}"),
         )
 
 
@@ -136,32 +129,24 @@ async def get_monitoring_overview():
     """
 
     try:
-        gpu_stats = (
-            gpu_monitor.get_gpu_stats()
-        )
+        gpu_stats = gpu_monitor.get_gpu_stats()
     except Exception:
         gpu_stats = {
             "cuda_available": False,
         }
 
     try:
-        alerts = (
-            alert_manager.get_alerts()
-        )
+        alerts = alert_manager.get_alerts()
     except Exception:
         alerts = []
 
     try:
-        inference = (
-            get_inference_health()
-        )
+        inference = get_inference_health()
     except Exception:
         inference = {}
 
     return {
-        "timestamp": datetime.now(
-            tz=timezone.utc
-        ).isoformat(),
+        "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         "latency": latency_monitor.stats(),
         "requests": request_tracker.get_stats(),
         "gpu": gpu_stats,
@@ -179,9 +164,7 @@ async def monitoring_summary():
 
     latency = latency_monitor.stats()
 
-    requests = (
-        request_tracker.get_stats()
-    )
+    requests = request_tracker.get_stats()
 
     try:
         gpu = gpu_monitor.get_gpu_stats()
@@ -206,7 +189,5 @@ async def monitoring_summary():
             "cuda_available",
             False,
         ),
-        "active_alerts": len(
-            alert_manager.get_alerts()
-        ),
+        "active_alerts": len(alert_manager.get_alerts()),
     }

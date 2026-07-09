@@ -38,9 +38,7 @@ def _get_torch_dtype(
     """
 
     if compute_dtype not in _ALLOWED_DTYPES:
-        raise ValueError(
-            f"Unsupported compute dtype: {compute_dtype}"
-        )
+        raise ValueError(f"Unsupported compute dtype: {compute_dtype}")
 
     return _ALLOWED_DTYPES[compute_dtype]
 
@@ -77,22 +75,16 @@ def build_quantization_config(
 
     if load_in_4bit and load_in_8bit:
         raise ValueError(
-            "4-bit and 8-bit quantization "
-            "cannot be enabled simultaneously."
+            "4-bit and 8-bit quantization " "cannot be enabled simultaneously."
         )
 
     if not load_in_4bit and not load_in_8bit:
         return None
 
     if bnb_4bit_quant_type not in _ALLOWED_QUANT_TYPES:
-        raise ValueError(
-            f"Unsupported quantization type: "
-            f"{bnb_4bit_quant_type}"
-        )
+        raise ValueError(f"Unsupported quantization type: " f"{bnb_4bit_quant_type}")
 
-    torch_dtype = _get_torch_dtype(
-        compute_dtype
-    )
+    torch_dtype = _get_torch_dtype(compute_dtype)
 
     return BitsAndBytesConfig(
         load_in_4bit=load_in_4bit,

@@ -40,9 +40,7 @@ from backend.app.anonymization.spacy_setup import (
 # NLP ENGINE CONFIGURATION
 # ==========================================================
 
-provider = NlpEngineProvider(
-    nlp_configuration=get_presidio_configuration()
-)
+provider = NlpEngineProvider(nlp_configuration=get_presidio_configuration())
 
 nlp_engine = provider.create_engine()
 
@@ -77,9 +75,7 @@ for language in SUPPORTED_LANGUAGES:
             supported_language=language,
         )
 
-        analyzer.registry.add_recognizer(
-            recognizer
-        )
+        analyzer.registry.add_recognizer(recognizer)
 
 # ==========================================================
 # CUSTOM PHONE RECOGNIZER
@@ -88,22 +84,12 @@ for language in SUPPORTED_LANGUAGES:
 PHONE_PATTERNS = [
     Pattern(
         name="fr_phone",
-        regex=(
-            r"(?<!\d)"
-            r"(?:0[1-9])"
-            r"(?:[\s.-]?\d{2}){4}"
-            r"(?!\d)"
-        ),
+        regex=(r"(?<!\d)" r"(?:0[1-9])" r"(?:[\s.-]?\d{2}){4}" r"(?!\d)"),
         score=0.90,
     ),
     Pattern(
         name="international_phone",
-        regex=(
-            r"(?<!\d)"
-            r"\+\d{1,3}"
-            r"(?:[\s.-]?\d{1,4}){2,6}"
-            r"(?!\d)"
-        ),
+        regex=(r"(?<!\d)" r"\+\d{1,3}" r"(?:[\s.-]?\d{1,4}){2,6}" r"(?!\d)"),
         score=0.90,
     ),
     Pattern(
@@ -129,9 +115,7 @@ for language in SUPPORTED_LANGUAGES:
         supported_language=language,
     )
 
-    analyzer.registry.add_recognizer(
-        phone_recognizer
-    )
+    analyzer.registry.add_recognizer(phone_recognizer)
 
 # ==========================================================
 # ENTITY PRIORITY
@@ -252,6 +236,7 @@ MEDICAL_WHITELIST = {
 # MEDICAL EPONYM DETECTION
 # ==========================================================
 
+
 def is_medical_eponym(text: str) -> bool:
     """
     Vérifie si un terme correspond à un
@@ -259,10 +244,7 @@ def is_medical_eponym(text: str) -> bool:
     classification ou signe médical.
     """
 
-    normalized = (
-        text.strip()
-        .lower()
-    )
+    normalized = text.strip().lower()
 
     return normalized in MEDICAL_WHITELIST
 
@@ -305,10 +287,7 @@ def _entities_overlap(
     Détecte tout recouvrement partiel ou total.
     """
 
-    return (
-        entity_a.start < entity_b.end
-        and entity_b.start < entity_a.end
-    )
+    return entity_a.start < entity_b.end and entity_b.start < entity_a.end
 
 
 def _resolve_overlaps(
@@ -390,23 +369,16 @@ def detect_pii(
     results = _resolve_overlaps(results)
 
     audit_logger.info(
-        "PII detection executed | "
-        f"language={language} | "
-        f"findings={len(results)}"
+        "PII detection executed | " f"language={language} | " f"findings={len(results)}"
     )
 
     filtered_results: list[RecognizerResult] = []
 
     for result in results:
 
-        entity_text = text[
-            result.start:result.end
-        ]
+        entity_text = text[result.start : result.end]
 
-        if (
-            result.entity_type == "PERSON"
-            and result.score < PERSON_SCORE_THRESHOLD
-        ):
+        if result.entity_type == "PERSON" and result.score < PERSON_SCORE_THRESHOLD:
 
             audit_logger.debug(
                 "Low-confidence PERSON ignored | "
@@ -416,15 +388,9 @@ def detect_pii(
 
             continue
 
-        if (
-            result.entity_type == "PERSON"
-            and is_medical_eponym(entity_text)
-        ):
+        if result.entity_type == "PERSON" and is_medical_eponym(entity_text):
 
-            audit_logger.debug(
-                "Medical eponym ignored | "
-                f"text={entity_text}"
-            )
+            audit_logger.debug("Medical eponym ignored | " f"text={entity_text}")
 
             continue
 
@@ -432,10 +398,7 @@ def detect_pii(
 
     results = filtered_results
 
-    audit_logger.info(
-        "PII filtering completed | "
-        f"remaining_findings={len(results)}"
-    )
+    audit_logger.info("PII filtering completed | " f"remaining_findings={len(results)}")
 
     return results
 

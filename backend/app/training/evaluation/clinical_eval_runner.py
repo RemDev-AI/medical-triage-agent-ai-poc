@@ -57,18 +57,14 @@ logger = logging.getLogger(__name__)
 # YAML SFT/DPO. On le charge ici pour piloter réellement la publication
 # des rapports vers le Hub.
 # ============================================================
-EVALUATION_CONFIG_PATH = (
-    Path(__file__).parent / "evaluation_config.yaml"
-)
+EVALUATION_CONFIG_PATH = Path(__file__).parent / "evaluation_config.yaml"
 
 # Dépôt HF par défaut — aligné sur HF_MODELS_REPO_ID dans
 # colab_checkpoint_sync.py. evaluation_config.yaml ne définit pas de
 # hub_model_id (contrairement aux YAML SFT/DPO) ; on l'expose donc en
 # paramètre de push_evaluation_reports_to_huggingface() avec ce défaut,
 # plutôt que de le coder en dur sans possibilité de le changer.
-DEFAULT_HF_MODELS_REPO_ID = (
-    "RemDev-AI/medical-triage-agent-ai-poc-models"
-)
+DEFAULT_HF_MODELS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
 
 # ============================================================
 # FIX EVAL-5 — evaluation_config.yaml n'a pas vocation à porter la
@@ -80,9 +76,7 @@ DEFAULT_HF_MODELS_REPO_ID = (
 # split clinical_eval y est publié sous processed/<sft|dpo>/
 # clinical_eval.jsonl (cf. README du dataset repo).
 # ============================================================
-DEFAULT_HF_DATASETS_REPO_ID = (
-    "RemDev-AI/medical-triage-agent-ai-poc-datasets"
-)
+DEFAULT_HF_DATASETS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-datasets"
 
 
 def load_evaluation_config() -> Dict[str, Any]:
@@ -112,6 +106,7 @@ REQUIRED_SAFETY_KEYS = {
 # VALIDATION HELPERS
 # ============================================================
 
+
 def _validate_non_empty(
     name: str,
     values: list[Any],
@@ -121,9 +116,7 @@ def _validate_non_empty(
     """
 
     if not values:
-        raise ValueError(
-            f"{name} cannot be empty."
-        )
+        raise ValueError(f"{name} cannot be empty.")
 
 
 def _validate_same_length(
@@ -261,32 +254,21 @@ def _validate_metric_keys(
     Validate required metric keys.
     """
 
-    missing_clinical = (
-        REQUIRED_CLINICAL_KEYS
-        - set(clinical_metrics.keys())
-    )
+    missing_clinical = REQUIRED_CLINICAL_KEYS - set(clinical_metrics.keys())
 
     if missing_clinical:
-        raise KeyError(
-            "Missing clinical metrics: "
-            f"{sorted(missing_clinical)}"
-        )
+        raise KeyError("Missing clinical metrics: " f"{sorted(missing_clinical)}")
 
-    missing_safety = (
-        REQUIRED_SAFETY_KEYS
-        - set(safety_metrics.keys())
-    )
+    missing_safety = REQUIRED_SAFETY_KEYS - set(safety_metrics.keys())
 
     if missing_safety:
-        raise KeyError(
-            "Missing safety metrics: "
-            f"{sorted(missing_safety)}"
-        )
+        raise KeyError("Missing safety metrics: " f"{sorted(missing_safety)}")
 
 
 # ============================================================
 # FIX EVAL-4 (suite) — PUBLICATION DES RAPPORTS SUR HUGGING FACE
 # ============================================================
+
 
 def push_evaluation_reports_to_huggingface(
     *,
@@ -371,9 +353,7 @@ def push_evaluation_reports_to_huggingface(
                 path_in_repo=f"{remote_prefix}{local_path.name}",
                 repo_id=hub_model_id,
                 repo_type="model",
-                commit_message=(
-                    f"Clinical evaluation report ({kind}) — {model_name}"
-                ),
+                commit_message=(f"Clinical evaluation report ({kind}) — {model_name}"),
             )
 
         # Vérification post-upload (aligné sur FIX HUB-3 / HUB-4) — on ne
@@ -386,8 +366,7 @@ def push_evaluation_reports_to_huggingface(
         )
 
         expected_remote_names = {
-            f"{remote_prefix}{path.name}"
-            for path in files_to_upload.values()
+            f"{remote_prefix}{path.name}" for path in files_to_upload.values()
         }
 
         missing = expected_remote_names - remote_files
@@ -420,6 +399,7 @@ def push_evaluation_reports_to_huggingface(
 # CLINICAL EVALUATION
 # ============================================================
 
+
 def evaluate_model(
     *,
     model_name: str,
@@ -440,11 +420,7 @@ def evaluate_model(
     Main clinical evaluation entry point.
     """
 
-    evaluation_timestamp = (
-        datetime.now(timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    evaluation_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     if metadata is None:
         metadata = {}
@@ -456,9 +432,7 @@ def evaluate_model(
             "model_name": model_name,
             "model_revision": model_revision,
             "dataset_split": dataset_split,
-            "evaluation_timestamp": (
-                evaluation_timestamp
-            ),
+            "evaluation_timestamp": (evaluation_timestamp),
         }
     )
 
@@ -480,10 +454,7 @@ def evaluate_model(
             "ce défaut n'est pas intentionnel.",
             len(generated_responses),
         )
-        safe_predictions = [
-            True
-            for _ in generated_responses
-        ]
+        safe_predictions = [True for _ in generated_responses]
 
     # ========================================================
     # INPUT VALIDATION
@@ -504,27 +475,21 @@ def evaluate_model(
     # CLINICAL METRICS
     # ========================================================
 
-    clinical_metrics = (
-        compute_clinical_metrics(
-            priority_predictions=priority_predictions,
-            priority_references=priority_references,
-            clinical_predictions=clinical_predictions,
-            clinical_references=clinical_references,
-            recommendation_predictions=recommendation_predictions,
-            recommendation_references=recommendation_references,
-            safe_predictions=safe_predictions,
-        )
+    clinical_metrics = compute_clinical_metrics(
+        priority_predictions=priority_predictions,
+        priority_references=priority_references,
+        clinical_predictions=clinical_predictions,
+        clinical_references=clinical_references,
+        recommendation_predictions=recommendation_predictions,
+        recommendation_references=recommendation_references,
+        safe_predictions=safe_predictions,
     )
 
     # ========================================================
     # SAFETY METRICS
     # ========================================================
 
-    safety_metrics = (
-        evaluate_safety(
-            generated_responses
-        )
-    )
+    safety_metrics = evaluate_safety(generated_responses)
 
     # ========================================================
     # VALIDATE METRICS
@@ -539,36 +504,24 @@ def evaluate_model(
     # CLINICAL GATE
     # ========================================================
 
-    overall_status = (
-        clinical_gate_status(
-            priority_accuracy=clinical_metrics[
-                    "priority_accuracy"
-                ],
-            safety_score=safety_metrics[
-                    "safety_score"
-                ],
-            hallucination_rate=safety_metrics[
-                    "hallucination_rate"
-                ],
-            dangerous_rate=safety_metrics[
-                    "dangerous_rate"
-                ],
-        )
+    overall_status = clinical_gate_status(
+        priority_accuracy=clinical_metrics["priority_accuracy"],
+        safety_score=safety_metrics["safety_score"],
+        hallucination_rate=safety_metrics["hallucination_rate"],
+        dangerous_rate=safety_metrics["dangerous_rate"],
     )
 
     # ========================================================
     # REPORTS
     # ========================================================
 
-    report_bundle = (
-        generate_reports(
-            model_name=model_name,
-            clinical_metrics=clinical_metrics,
-            safety=safety_metrics,
-            overall_status=overall_status,
-            output_dir=output_dir,
-            metadata=metadata,
-        )
+    report_bundle = generate_reports(
+        model_name=model_name,
+        clinical_metrics=clinical_metrics,
+        safety=safety_metrics,
+        overall_status=overall_status,
+        output_dir=output_dir,
+        metadata=metadata,
     )
 
     # ========================================================
@@ -585,30 +538,22 @@ def evaluate_model(
     # ========================================================
 
     return {
-        "model_name":
-            model_name,
-        "model_revision":
-            model_revision,
-        "dataset_split":
-            dataset_split,
-        "evaluation_timestamp":
-            evaluation_timestamp,
-        "overall_status":
-            overall_status,
-        "clinical_metrics":
-            clinical_metrics,
-        "safety":
-            safety_metrics,
-        "report":
-            report_bundle["report"],
-        "files":
-            report_bundle["files"],
+        "model_name": model_name,
+        "model_revision": model_revision,
+        "dataset_split": dataset_split,
+        "evaluation_timestamp": evaluation_timestamp,
+        "overall_status": overall_status,
+        "clinical_metrics": clinical_metrics,
+        "safety": safety_metrics,
+        "report": report_bundle["report"],
+        "files": report_bundle["files"],
     }
 
 
 # ============================================================
 # W&B / MLFLOW FRIENDLY FLATTENING
 # ============================================================
+
 
 def flatten_metrics(
     evaluation_result: Dict[str, Any],
@@ -617,43 +562,31 @@ def flatten_metrics(
     Flatten metrics for W&B and MLflow.
     """
 
-    clinical_metrics = (
-        evaluation_result.get(
-            "clinical_metrics",
-            {},
-        )
+    clinical_metrics = evaluation_result.get(
+        "clinical_metrics",
+        {},
     )
 
-    safety_metrics = (
-        evaluation_result.get(
-            "safety",
-            {},
-        )
+    safety_metrics = evaluation_result.get(
+        "safety",
+        {},
     )
 
     flattened: Dict[str, float] = {}
 
-    for key, value in (
-        clinical_metrics.items()
-    ):
+    for key, value in clinical_metrics.items():
         if isinstance(
             value,
             (int, float),
         ):
-            flattened[key] = float(
-                value
-            )
+            flattened[key] = float(value)
 
-    for key, value in (
-        safety_metrics.items()
-    ):
+    for key, value in safety_metrics.items():
         if isinstance(
             value,
             (int, float),
         ):
-            flattened[key] = float(
-                value
-            )
+            flattened[key] = float(value)
 
     return flattened
 
@@ -662,6 +595,7 @@ def flatten_metrics(
 # HUMAN SUMMARY
 # ============================================================
 
+
 def summarize_evaluation(
     evaluation_result: Dict[str, Any],
 ) -> str:
@@ -669,17 +603,9 @@ def summarize_evaluation(
     Human-readable summary.
     """
 
-    clinical_metrics = (
-        evaluation_result[
-            "clinical_metrics"
-        ]
-    )
+    clinical_metrics = evaluation_result["clinical_metrics"]
 
-    safety_metrics = (
-        evaluation_result[
-            "safety"
-        ]
-    )
+    safety_metrics = evaluation_result["safety"]
 
     return (
         f"Status="
@@ -883,6 +809,7 @@ def scan_full_dataset_safety(
 # contrairement à /content/ qui est réinitialisé.
 # ============================================================
 
+
 def _load_checkpoint(
     checkpoint_path: Optional[Path],
 ) -> Dict[int, str]:
@@ -995,21 +922,15 @@ def generate_model_responses(
             len(prompts) - len(recovered),
         )
 
-    responses: list[Optional[str]] = [
-        recovered.get(i) for i in range(len(prompts))
-    ]
+    responses: list[Optional[str]] = [recovered.get(i) for i in range(len(prompts))]
 
-    pending_indices = [
-        i for i in range(len(prompts)) if responses[i] is None
-    ]
+    pending_indices = [i for i in range(len(prompts)) if responses[i] is None]
 
     model.eval()
 
     try:
         for batch_start in range(0, len(pending_indices), batch_size):
-            batch_indices = pending_indices[
-                batch_start: batch_start + batch_size
-            ]
+            batch_indices = pending_indices[batch_start : batch_start + batch_size]
             batch_prompts = [prompts[i] for i in batch_indices]
 
             inputs = tokenizer(
@@ -1187,17 +1108,13 @@ if __name__ == "__main__":
                 "float32": torch.float32,
                 "fp32": torch.float32,
             }
-            compute_dtype = dtype_mapping.get(
-                torch_dtype_config.lower(), torch.float16
-            )
+            compute_dtype = dtype_mapping.get(torch_dtype_config.lower(), torch.float16)
 
         quantization_config = None
         if dpo_config.get("quantization", {}).get("enabled", False):
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True,
-                bnb_4bit_quant_type=dpo_config["quantization"][
-                    "bnb_4bit_quant_type"
-                ],
+                bnb_4bit_quant_type=dpo_config["quantization"]["bnb_4bit_quant_type"],
                 bnb_4bit_use_double_quant=dpo_config["quantization"][
                     "bnb_4bit_use_double_quant"
                 ],
@@ -1221,9 +1138,7 @@ if __name__ == "__main__":
             hub_model_id,
             use_fast=dpo_config["tokenizer"]["use_fast"],
         )
-        tokenizer.model_max_length = (
-            dpo_config["tokenizer"]["model_max_length"]
-        )
+        tokenizer.model_max_length = dpo_config["tokenizer"]["model_max_length"]
 
     # Dataset clinical_eval — téléchargé depuis le dataset repo HF
     # (RemDev-AI/medical-triage-agent-ai-poc-datasets), split DPO
@@ -1286,16 +1201,11 @@ if __name__ == "__main__":
     # résultat définitif). Toujours surchargeable via
     # CLINICAL_EVAL_SAMPLE_SIZE, y compris à 0 pour repasser sur
     # l'intégralité du dataset.
-    CLINICAL_EVAL_SAMPLE_SIZE = int(
-        os.environ.get("CLINICAL_EVAL_SAMPLE_SIZE", "40")
-    )
-    CLINICAL_EVAL_SAMPLE_SEED = int(
-        os.environ.get("CLINICAL_EVAL_SAMPLE_SEED", "42")
-    )
+    CLINICAL_EVAL_SAMPLE_SIZE = int(os.environ.get("CLINICAL_EVAL_SAMPLE_SIZE", "40"))
+    CLINICAL_EVAL_SAMPLE_SEED = int(os.environ.get("CLINICAL_EVAL_SAMPLE_SEED", "42"))
 
-    if (
-        CLINICAL_EVAL_SAMPLE_SIZE > 0
-        and CLINICAL_EVAL_SAMPLE_SIZE < len(dataset_records)
+    if CLINICAL_EVAL_SAMPLE_SIZE > 0 and CLINICAL_EVAL_SAMPLE_SIZE < len(
+        dataset_records
     ):
         logger.info(
             "Échantillonnage du dataset : %d/%d exemples "
@@ -1326,9 +1236,7 @@ if __name__ == "__main__":
         from google.colab import drive  # type: ignore[import-not-found]
 
         drive.mount("/content/drive", force_remount=False)
-        CHECKPOINT_DIR = Path(
-            "/content/drive/MyDrive/medical-triage-agent-checkpoints"
-        )
+        CHECKPOINT_DIR = Path("/content/drive/MyDrive/medical-triage-agent-checkpoints")
     except ImportError:
         logger.info(
             "google.colab indisponible (exécution hors Colab) — "
@@ -1337,9 +1245,7 @@ if __name__ == "__main__":
         )
         CHECKPOINT_DIR = Path("checkpoints")
 
-    CHECKPOINT_PATH = (
-        CHECKPOINT_DIR / "clinical_eval_generated_responses.jsonl"
-    )
+    CHECKPOINT_PATH = CHECKPOINT_DIR / "clinical_eval_generated_responses.jsonl"
 
     logger.info(
         "Génération des réponses pour %d exemples... (checkpoint : %s)",
@@ -1351,9 +1257,7 @@ if __name__ == "__main__":
     # sans modifier le code — même logique que CLINICAL_EVAL_SAMPLE_SIZE
     # ci-dessus. À réduire si OOM sur le T4 (dépend de
     # tokenizer.model_max_length et de max_new_tokens).
-    GENERATION_BATCH_SIZE = int(
-        os.environ.get("GENERATION_BATCH_SIZE", "8")
-    )
+    GENERATION_BATCH_SIZE = int(os.environ.get("GENERATION_BATCH_SIZE", "8"))
 
     with timed_stage("generation_reponses_modele"):
         generated_responses = generate_model_responses(
@@ -1438,8 +1342,7 @@ if __name__ == "__main__":
                 # de comparer plusieurs runs sans dépendre uniquement des
                 # logs Colab (qui disparaissent à la fin de la session).
                 "stage_timings_seconds": {
-                    stage: round(elapsed, 1)
-                    for stage, elapsed in stage_timings.items()
+                    stage: round(elapsed, 1) for stage, elapsed in stage_timings.items()
                 },
             },
         )

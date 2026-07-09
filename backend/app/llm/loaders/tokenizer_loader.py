@@ -49,20 +49,14 @@ def load_tokenizer(
     if tokenizer.pad_token is None:
 
         if tokenizer.eos_token is None:
-            raise ValueError(
-                "Tokenizer has no pad_token and no eos_token."
-            )
+            raise ValueError("Tokenizer has no pad_token and no eos_token.")
 
         tokenizer.pad_token = tokenizer.eos_token
 
-        logger.info(
-            "Pad token automatically set to EOS token."
-        )
+        logger.info("Pad token automatically set to EOS token.")
 
     tokenizer.padding_side = "left"
 
-    logger.info(
-        "Tokenizer loaded successfully."
-    )
+    logger.info("Tokenizer loaded successfully.")
 
     return tokenizer

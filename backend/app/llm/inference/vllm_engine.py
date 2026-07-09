@@ -113,8 +113,7 @@ def get_vllm_engine():
             max_lora_rank=64,
             dtype="bfloat16",
             max_model_len=(
-                runtime_config.max_input_tokens
-                + runtime_config.max_output_tokens
+                runtime_config.max_input_tokens + runtime_config.max_output_tokens
             ),
             trust_remote_code=True,
             gpu_memory_utilization=0.85,
@@ -128,15 +127,9 @@ def get_vllm_engine():
             _resolve_adapter_repository(),
         )
 
-        _engine_instance = (
-            AsyncLLMEngine.from_engine_args(
-                engine_args
-            )
-        )
+        _engine_instance = AsyncLLMEngine.from_engine_args(engine_args)
 
-        logger.info(
-            "vLLM AsyncLLMEngine initialized."
-        )
+        logger.info("vLLM AsyncLLMEngine initialized.")
 
         return _engine_instance
 
@@ -186,9 +179,7 @@ async def generate_response_vllm(
         _resolve_adapter_repository(),
     )
 
-    resolved_request_id = (
-        request_id or str(uuid.uuid4())
-    )
+    resolved_request_id = request_id or str(uuid.uuid4())
 
     final_output = None
 
@@ -202,8 +193,7 @@ async def generate_response_vllm(
 
     if final_output is None or not final_output.outputs:
         raise RuntimeError(
-            "vLLM did not return any output for "
-            f"request_id={resolved_request_id}"
+            "vLLM did not return any output for " f"request_id={resolved_request_id}"
         )
 
     raw_text = final_output.outputs[0].text

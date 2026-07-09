@@ -14,10 +14,7 @@ from backend.app.monitoring.audit_store import (
     read_entries,
 )
 
-router = APIRouter(
-    prefix="/audit",
-    tags=["Audit"]
-)
+router = APIRouter(prefix="/audit", tags=["Audit"])
 
 
 @router.get(
@@ -53,27 +50,13 @@ async def audit_logs(
 
     logs = [
         AuditLogEntry(
-            request_id=entry.get(
-                "request_id", "unknown"
-            ),
-            endpoint=entry.get(
-                "path", "unknown"
-            ),
-            method=entry.get(
-                "method", "unknown"
-            ),
-            status_code=entry.get(
-                "status_code", 0
-            ),
-            timestamp=entry.get(
-                "timestamp"
-            ),
-            latency_ms=entry.get(
-                "latency_ms", 0.0
-            ),
-            client_ip=entry.get(
-                "client_ip"
-            ),
+            request_id=entry.get("request_id", "unknown"),
+            endpoint=entry.get("path", "unknown"),
+            method=entry.get("method", "unknown"),
+            status_code=entry.get("status_code", 0),
+            timestamp=entry.get("timestamp"),
+            latency_ms=entry.get("latency_ms", 0.0),
+            client_ip=entry.get("client_ip"),
         )
         for entry in raw_entries
     ]

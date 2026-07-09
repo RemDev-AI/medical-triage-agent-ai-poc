@@ -41,6 +41,7 @@ Notes on Kaggle specifics
 from __future__ import annotations
 
 import logging
+
 # import shutil
 import tempfile  # noqa : F401
 from pathlib import Path
@@ -51,9 +52,7 @@ from huggingface_hub import snapshot_download
 
 logger = logging.getLogger(__name__)
 
-HF_MODELS_REPO_ID = (
-    "RemDev-AI/medical-triage-agent-ai-poc-models"
-)
+HF_MODELS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
 
 # Default Kaggle-friendly local checkpoint location.
 # `/kaggle/working` is the only writable, session-scoped directory
@@ -83,9 +82,7 @@ class KaggleCheckpointSync:
         self.training_type = training_type.lower()
 
         if self.training_type not in {"sft", "dpo"}:
-            raise ValueError(
-                "training_type must be 'sft' or 'dpo'."
-            )
+            raise ValueError("training_type must be 'sft' or 'dpo'.")
 
         self.hf_repo_id = hf_repo_id
         self.cleanup_after_upload = cleanup_after_upload
@@ -110,15 +107,12 @@ class KaggleCheckpointSync:
         checkpoints = [
             checkpoint
             for checkpoint in self.local_checkpoint_dir.iterdir()
-            if checkpoint.is_dir()
-            and checkpoint.name.startswith("checkpoint-")
+            if checkpoint.is_dir() and checkpoint.name.startswith("checkpoint-")
         ]
 
         return sorted(
             checkpoints,
-            key=lambda x: int(
-                x.name.replace("checkpoint-", "")
-            ),
+            key=lambda x: int(x.name.replace("checkpoint-", "")),
         )
 
     def get_latest_checkpoint(self) -> Optional[Path]:
@@ -178,11 +172,7 @@ class KaggleCheckpointSync:
             "",
         )
 
-        return (
-            f"checkpoint-"
-            f"{self.training_type}-"
-            f"{step}"
-        )
+        return f"checkpoint-" f"{self.training_type}-" f"{step}"
 
     def cleanup_checkpoint(
         self,
@@ -213,9 +203,7 @@ class KaggleCheckpointSync:
 
         except Exception:
 
-            logger.exception(
-                "Checkpoint cleanup failed."
-            )
+            logger.exception("Checkpoint cleanup failed.")
 
             return False
 
@@ -228,33 +216,18 @@ class KaggleCheckpointSync:
         Models repository.
         """
 
-        remote_name = (
-            self._build_remote_checkpoint_name(
-                checkpoint_path
-            )
-        )
+        remote_name = self._build_remote_checkpoint_name(checkpoint_path)
 
         try:
 
             api = HfApi()
 
             api.upload_folder(
-
                 folder_path=str(checkpoint_path),
-
                 repo_id=self.hf_repo_id,
-
                 repo_type="model",
-
-                path_in_repo=(
-                    "checkpoints/"
-                    f"{self.training_type}/"
-                    f"{remote_name}"
-                ),
-
-                commit_message=(
-                    f"Upload {remote_name}"
-                ),
+                path_in_repo=("checkpoints/" f"{self.training_type}/" f"{remote_name}"),
+                commit_message=(f"Upload {remote_name}"),
             )
 
             logger.info(
@@ -264,17 +237,13 @@ class KaggleCheckpointSync:
 
             if self.cleanup_after_upload:
 
-                self.cleanup_checkpoint(
-                    checkpoint_path
-                )
+                self.cleanup_checkpoint(checkpoint_path)
 
             return True
 
         except Exception:
 
-            logger.exception(
-                "Checkpoint upload failed."
-            )
+            logger.exception("Checkpoint upload failed.")
 
             return False
 
@@ -285,19 +254,13 @@ class KaggleCheckpointSync:
         Upload latest checkpoint only.
         """
 
-        latest_checkpoint = (
-            self.get_latest_checkpoint()
-        )
+        latest_checkpoint = self.get_latest_checkpoint()
 
         if latest_checkpoint is None:
-            logger.warning(
-                "No checkpoint available."
-            )
+            logger.warning("No checkpoint available.")
             return False
 
-        return self.sync_checkpoint_to_huggingface(
-            latest_checkpoint
-        )
+        return self.sync_checkpoint_to_huggingface(latest_checkpoint)
 
     def sync_all_checkpoints_to_huggingface(
         self,
@@ -309,19 +272,13 @@ class KaggleCheckpointSync:
         checkpoints = self.get_checkpoints()
 
         if not checkpoints:
-            logger.warning(
-                "No checkpoints found."
-            )
+            logger.warning("No checkpoints found.")
             return False
 
         success = True
 
         for checkpoint in checkpoints:
-            uploaded = (
-                self.sync_checkpoint_to_huggingface(
-                    checkpoint
-                )
-            )
+            uploaded = self.sync_checkpoint_to_huggingface(checkpoint)
 
             if not uploaded:
                 success = False
@@ -366,9 +323,7 @@ class KaggleCheckpointSync:
                 repo_type="model",
             )
 
-            prefix = (
-                f"checkpoints/{self.training_type}/"
-            )
+            prefix = f"checkpoints/{self.training_type}/"
 
             checkpoint_dirs = set()
 
@@ -392,13 +347,8 @@ class KaggleCheckpointSync:
                 return None
 
             latest_checkpoint = max(
-
                 checkpoint_dirs,
-
-                key=lambda name: int(
-                    name.split("-")[-1]
-                ),
-
+                key=lambda name: int(name.split("-")[-1]),
             )
 
             logger.info(
@@ -407,31 +357,14 @@ class KaggleCheckpointSync:
             )
 
             local_path = snapshot_download(
-
                 repo_id=self.hf_repo_id,
-
                 repo_type="model",
-
-                allow_patterns=[
-                    (
-                        f"{prefix}"
-                        f"{latest_checkpoint}/*"
-                    )
-                ],
-
-                local_dir=str(
-                    self.local_checkpoint_dir
-                ),
-
+                allow_patterns=[(f"{prefix}" f"{latest_checkpoint}/*")],
+                local_dir=str(self.local_checkpoint_dir),
                 local_dir_use_symlinks=False,
-
             )
 
-            checkpoint_path = (
-                Path(local_path)
-                / prefix
-                / latest_checkpoint
-            )
+            checkpoint_path = Path(local_path) / prefix / latest_checkpoint
 
             logger.info(
                 "Checkpoint restored into %s",
@@ -442,9 +375,7 @@ class KaggleCheckpointSync:
 
         except Exception:
 
-            logger.exception(
-                "Unable to restore checkpoint from Hugging Face."
-            )
+            logger.exception("Unable to restore checkpoint from Hugging Face.")
 
             return None
 
@@ -467,15 +398,11 @@ class KaggleCheckpointSync:
 
         if local_checkpoint is not None:
 
-            logger.info(
-                "Using local checkpoint."
-            )
+            logger.info("Using local checkpoint.")
 
             return local_checkpoint
 
-        logger.info(
-            "No local checkpoint found. Restoring from Hugging Face..."
-        )
+        logger.info("No local checkpoint found. Restoring from Hugging Face...")
 
         return self.restore_latest_checkpoint_from_huggingface()
 
@@ -490,12 +417,7 @@ class KaggleCheckpointSync:
         Upload latest checkpoint to HF Hub.
         """
 
-        return {
-
-            "huggingface":
-            self.sync_latest_checkpoint_to_huggingface()
-
-        }
+        return {"huggingface": self.sync_latest_checkpoint_to_huggingface()}
 
     # ==========================================================
     # Status
@@ -511,33 +433,13 @@ class KaggleCheckpointSync:
         latest = self.get_latest_checkpoint()
 
         return {
-
-            "training_type":
-            self.training_type,
-
-            "hf_repo_id":
-            self.hf_repo_id,
-
-            "local_checkpoint_dir":
-            str(self.local_checkpoint_dir),
-
-            "cleanup_after_upload":
-            self.cleanup_after_upload,
-
-            "has_checkpoint":
-            latest is not None,
-
-            "latest_checkpoint":
-            (
-                str(latest)
-                if latest
-                else None
-            ),
-
-            "checkpoint_count":
-            len(
-                self.get_checkpoints()
-            ),
+            "training_type": self.training_type,
+            "hf_repo_id": self.hf_repo_id,
+            "local_checkpoint_dir": str(self.local_checkpoint_dir),
+            "cleanup_after_upload": self.cleanup_after_upload,
+            "has_checkpoint": latest is not None,
+            "latest_checkpoint": (str(latest) if latest else None),
+            "checkpoint_count": len(self.get_checkpoints()),
         }
 
 
@@ -550,28 +452,19 @@ def create_default_checkpoint_sync(
     """
 
     return KaggleCheckpointSync(
-
         local_checkpoint_dir=output_dir,
-
         training_type=training_type,
-
         hf_repo_id=HF_MODELS_REPO_ID,
-
     )
 
 
 if __name__ == "__main__":
 
-    logging.basicConfig(
-        level=logging.INFO
-    )
+    logging.basicConfig(level=logging.INFO)
 
     sync = KaggleCheckpointSync(
-
         local_checkpoint_dir=KAGGLE_DEFAULT_CHECKPOINT_DIR,
-
         training_type="sft",
-
     )
 
     print(sync.get_status())

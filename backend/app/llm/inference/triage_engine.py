@@ -71,15 +71,11 @@ class TriageEngine:
     def __init__(
         self,
         model: Optional[PreTrainedModel] = None,
-        tokenizer: Optional[
-            PreTrainedTokenizerBase
-        ] = None,
+        tokenizer: Optional[PreTrainedTokenizerBase] = None,
         model_name: str = "Qwen3-Medical-Triage",
     ) -> None:
 
-        if not runtime_config.use_vllm and (
-            model is None or tokenizer is None
-        ):
+        if not runtime_config.use_vllm and (model is None or tokenizer is None):
             raise ValueError(
                 "model and tokenizer are required "
                 "when runtime_config.use_vllm is "
@@ -127,9 +123,7 @@ class TriageEngine:
                 raw_response,
             )
 
-            latency_seconds = (
-                time.time() - start_time
-            )
+            latency_seconds = time.time() - start_time
 
             metadata = build_generation_metadata(
                 latency_seconds=latency_seconds,
@@ -150,9 +144,7 @@ class TriageEngine:
 
         except Exception:
 
-            logger.exception(
-                "Triage inference failed."
-            )
+            logger.exception("Triage inference failed.")
 
             raise
 
@@ -179,26 +171,18 @@ class TriageEngine:
             "RECOMMANDATIONS",
         )
 
-        priority, priority_matched = (
-            self.normalize_priority(
-                priority,
-            )
+        priority, priority_matched = self.normalize_priority(
+            priority,
         )
 
-        justification_matched = (
-            justification != "Non disponible"
-        )
+        justification_matched = justification != "Non disponible"
 
-        recommendations_matched = (
-            recommendations != "Non disponible"
-        )
+        recommendations_matched = recommendations != "Non disponible"
 
-        confidence_score = (
-            self._compute_confidence(
-                priority_matched,
-                justification_matched,
-                recommendations_matched,
-            )
+        confidence_score = self._compute_confidence(
+            priority_matched,
+            justification_matched,
+            recommendations_matched,
         )
 
         return {
@@ -227,10 +211,7 @@ class TriageEngine:
         if not field_matches:
             return 0.0
 
-        ratio = (
-            sum(1 for m in field_matches if m)
-            / len(field_matches)
-        )
+        ratio = sum(1 for m in field_matches if m) / len(field_matches)
 
         if ratio == 1.0:
             return _CONFIDENCE_FULL_MATCH
@@ -252,10 +233,7 @@ class TriageEngine:
         Extract section field from model output.
         """
 
-        pattern = (
-            rf"{field_name}\s*:\s*(.*?)"
-            rf"(?=\n[A-ZÉ]+:|\Z)"
-        )
+        pattern = rf"{field_name}\s*:\s*(.*?)" rf"(?=\n[A-ZÉ]+:|\Z)"
 
         match = re.search(
             pattern,

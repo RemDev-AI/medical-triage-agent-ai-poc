@@ -29,26 +29,13 @@ class GenerateResponse(BaseModel):
 class TriageRequest(BaseModel):
     patient_id: Optional[str] = None
 
-    symptoms: List[str] = Field(
-        ...,
-        min_items=1,
-        max_items=20
-    )
+    symptoms: List[str] = Field(..., min_items=1, max_items=20)
 
-    medical_history: Optional[List[str]] = Field(
-        default_factory=list
-    )
+    medical_history: Optional[List[str]] = Field(default_factory=list)
 
-    age: Optional[int] = Field(
-        default=None,
-        ge=0,
-        le=120
-    )
+    age: Optional[int] = Field(default=None, ge=0, le=120)
 
-    priority_context: Optional[str] = Field(
-        default="standard",
-        max_length=256
-    )
+    priority_context: Optional[str] = Field(default="standard", max_length=256)
 
 
 class TriageResponse(BaseModel):
@@ -56,11 +43,7 @@ class TriageResponse(BaseModel):
     justification: str
     recommendations: List[str]
 
-    confidence_score: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0
-    )
+    confidence_score: float = Field(..., ge=0.0, le=1.0)
 
     generated_at: datetime
     latency_seconds: float

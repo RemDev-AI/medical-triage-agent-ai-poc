@@ -140,16 +140,11 @@ def read_entries(
             continue
 
         try:
-            entries.append(
-                json.loads(line)
-            )
+            entries.append(json.loads(line))
         except json.JSONDecodeError:
             continue
 
-        if (
-            limit is not None
-            and len(entries) >= limit
-        ):
+        if limit is not None and len(entries) >= limit:
             break
 
     return entries
@@ -170,11 +165,7 @@ def count_entries() -> int:
             encoding="utf-8",
         ) as handle:
 
-            return sum(
-                1
-                for line in handle
-                if line.strip()
-            )
+            return sum(1 for line in handle if line.strip())
 
 
 def clear() -> None:

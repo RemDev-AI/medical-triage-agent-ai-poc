@@ -60,10 +60,7 @@ def format_symptoms(
     if not symptoms:
         return "- Aucun symptôme renseigné"
 
-    return "\n".join(
-        f"- {symptom.strip()}"
-        for symptom in symptoms
-    )
+    return "\n".join(f"- {symptom.strip()}" for symptom in symptoms)
 
 
 def format_medical_history(
@@ -76,10 +73,7 @@ def format_medical_history(
     if not medical_history:
         return "- Aucun antécédent connu"
 
-    return "\n".join(
-        f"- {item.strip()}"
-        for item in medical_history
-    )
+    return "\n".join(f"- {item.strip()}" for item in medical_history)
 
 
 def format_vital_signs(
@@ -92,10 +86,7 @@ def format_vital_signs(
     if not vital_signs:
         return "- Non renseignés"
 
-    return "\n".join(
-        f"- {key}: {value}"
-        for key, value in vital_signs.items()
-    )
+    return "\n".join(f"- {key}: {value}" for key, value in vital_signs.items())
 
 
 def build_triage_prompt(

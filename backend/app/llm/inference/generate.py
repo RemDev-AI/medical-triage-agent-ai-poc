@@ -84,10 +84,7 @@ async def generate_response(
 
     if runtime_config.use_vllm:
 
-        logger.info(
-            "Dispatching generation to vLLM "
-            "AsyncLLMEngine."
-        )
+        logger.info("Dispatching generation to vLLM " "AsyncLLMEngine.")
 
         from backend.app.llm.inference.vllm_engine import (
             generate_response_vllm,
@@ -104,14 +101,10 @@ async def generate_response(
 
     if model is None or tokenizer is None:
         raise ValueError(
-            "model and tokenizer are required "
-            "when runtime_config.use_vllm is False."
+            "model and tokenizer are required " "when runtime_config.use_vllm is False."
         )
 
-    logger.info(
-        "Starting inference generation "
-        "(Transformers backend)."
-    )
+    logger.info("Starting inference generation " "(Transformers backend).")
 
     prompt = _build_chat_prompt(
         system_prompt=system_prompt,
@@ -124,14 +117,9 @@ async def generate_response(
         truncation=True,
     )
 
-    device = next(
-        model.parameters()
-    ).device
+    device = next(model.parameters()).device
 
-    inputs = {
-        key: value.to(device)
-        for key, value in inputs.items()
-    }
+    inputs = {key: value.to(device) for key, value in inputs.items()}
 
     with torch.inference_mode():
 
@@ -148,7 +136,7 @@ async def generate_response(
 
     generated_tokens = output_ids[
         0,
-        inputs["input_ids"].shape[1]:,
+        inputs["input_ids"].shape[1] :,
     ]
 
     response = tokenizer.decode(
@@ -160,10 +148,7 @@ async def generate_response(
         response=response,
     )
 
-    logger.info(
-        "Inference generation completed "
-        "(Transformers backend)."
-    )
+    logger.info("Inference generation completed " "(Transformers backend).")
 
     return response
 

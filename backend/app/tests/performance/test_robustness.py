@@ -46,15 +46,10 @@ class _FailingInferenceClient:
     """
 
     async def generate(self, **kwargs):
-        raise TimeoutError(
-            "Simulated inference backend timeout"
-        )
+        raise TimeoutError("Simulated inference backend timeout")
 
     async def triage(self, **kwargs):
-        raise ConnectionError(
-            "Simulated inference backend "
-            "unavailable"
-        )
+        raise ConnectionError("Simulated inference backend " "unavailable")
 
 
 class _WorkingInferenceClient:
@@ -79,21 +74,15 @@ class _WorkingInferenceClient:
 @pytest.fixture()
 def auth_headers():
 
-    token = create_access_token(
-        subject="robustness-test-user"
-    )
+    token = create_access_token(subject="robustness-test-user")
 
-    return {
-        "Authorization": f"Bearer {token}"
-    }
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture()
 def client_with_failure():
 
-    app.dependency_overrides[
-        get_inference_client
-    ] = lambda: _FailingInferenceClient()
+    app.dependency_overrides[get_inference_client] = lambda: _FailingInferenceClient()
 
     with TestClient(app) as test_client:
         yield test_client
@@ -104,9 +93,7 @@ def client_with_failure():
 @pytest.fixture()
 def client_healthy():
 
-    app.dependency_overrides[
-        get_inference_client
-    ] = lambda: _WorkingInferenceClient()
+    app.dependency_overrides[get_inference_client] = lambda: _WorkingInferenceClient()
 
     with TestClient(app) as test_client:
         yield test_client
@@ -117,6 +104,7 @@ def client_healthy():
 # ----------------------------------------------------
 # Validation des entrées
 # ----------------------------------------------------
+
 
 def test_triage_rejects_empty_symptoms(
     client_healthy,
@@ -179,6 +167,7 @@ def test_requests_without_token_are_rejected(
 # Pannes du backend d'inférence
 # ----------------------------------------------------
 
+
 def test_triage_failure_returns_500_not_crash(
     client_with_failure,
     auth_headers,
@@ -192,9 +181,7 @@ def test_triage_failure_returns_500_not_crash(
 
     assert response.status_code == 500
 
-    assert (
-        "detail" in response.json()
-    )
+    assert "detail" in response.json()
 
 
 def test_generate_failure_returns_500_not_crash(
@@ -235,6 +222,7 @@ def test_inference_failure_raises_alert(
 # Non-régression : compteurs de trafic
 # ----------------------------------------------------
 
+
 def test_request_tracker_is_not_double_counted(
     client_healthy,
     auth_headers,
@@ -262,6 +250,7 @@ def test_request_tracker_is_not_double_counted(
 # ----------------------------------------------------
 # Non-régression : gpu_monitor.increment_request
 # ----------------------------------------------------
+
 
 def test_gpu_monitor_increment_request_exists():
     """

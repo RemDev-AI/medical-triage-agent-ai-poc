@@ -111,10 +111,7 @@ class AlertManager:
             self._create_alert(
                 "CRITICAL",
                 "LATENCY_CRITICAL",
-                (
-                    f"Latency is "
-                    f"{latency_ms:.2f} ms"
-                ),
+                (f"Latency is " f"{latency_ms:.2f} ms"),
             )
 
         elif latency_ms >= self.LATENCY_WARNING_MS:
@@ -122,10 +119,7 @@ class AlertManager:
             self._create_alert(
                 "WARNING",
                 "LATENCY_WARNING",
-                (
-                    f"Latency is "
-                    f"{latency_ms:.2f} ms"
-                ),
+                (f"Latency is " f"{latency_ms:.2f} ms"),
             )
 
     def evaluate_errors(self) -> None:
@@ -145,10 +139,7 @@ class AlertManager:
             self._create_alert(
                 "CRITICAL",
                 "ERROR_RATE_CRITICAL",
-                (
-                    f"Error rate is "
-                    f"{error_rate}%"
-                ),
+                (f"Error rate is " f"{error_rate}%"),
             )
 
         elif error_rate >= self.ERROR_RATE_WARNING:
@@ -156,10 +147,7 @@ class AlertManager:
             self._create_alert(
                 "WARNING",
                 "ERROR_RATE_WARNING",
-                (
-                    f"Error rate is "
-                    f"{error_rate}%"
-                ),
+                (f"Error rate is " f"{error_rate}%"),
             )
 
     def evaluate_gpu(self) -> None:
@@ -184,56 +172,32 @@ class AlertManager:
             0.0,
         )
 
-        if (
-            gpu_utilization
-            >= self.GPU_UTILIZATION_CRITICAL
-        ):
+        if gpu_utilization >= self.GPU_UTILIZATION_CRITICAL:
             self._create_alert(
                 "CRITICAL",
                 "GPU_UTILIZATION_CRITICAL",
-                (
-                    f"GPU utilization is "
-                    f"{gpu_utilization}%"
-                ),
+                (f"GPU utilization is " f"{gpu_utilization}%"),
             )
 
-        elif (
-            gpu_utilization
-            >= self.GPU_UTILIZATION_WARNING
-        ):
+        elif gpu_utilization >= self.GPU_UTILIZATION_WARNING:
             self._create_alert(
                 "WARNING",
                 "GPU_UTILIZATION_WARNING",
-                (
-                    f"GPU utilization is "
-                    f"{gpu_utilization}%"
-                ),
+                (f"GPU utilization is " f"{gpu_utilization}%"),
             )
 
-        if (
-            vram_utilization
-            >= self.VRAM_UTILIZATION_CRITICAL
-        ):
+        if vram_utilization >= self.VRAM_UTILIZATION_CRITICAL:
             self._create_alert(
                 "CRITICAL",
                 "VRAM_UTILIZATION_CRITICAL",
-                (
-                    f"VRAM utilization is "
-                    f"{vram_utilization}%"
-                ),
+                (f"VRAM utilization is " f"{vram_utilization}%"),
             )
 
-        elif (
-            vram_utilization
-            >= self.VRAM_UTILIZATION_WARNING
-        ):
+        elif vram_utilization >= self.VRAM_UTILIZATION_WARNING:
             self._create_alert(
                 "WARNING",
                 "VRAM_UTILIZATION_WARNING",
-                (
-                    f"VRAM utilization is "
-                    f"{vram_utilization}%"
-                ),
+                (f"VRAM utilization is " f"{vram_utilization}%"),
             )
 
     def evaluate_containers(self) -> None:
@@ -254,30 +218,18 @@ class AlertManager:
             0,
         )
 
-        if (
-            active_containers
-            >= self.CONTAINER_CRITICAL
-        ):
+        if active_containers >= self.CONTAINER_CRITICAL:
             self._create_alert(
                 "CRITICAL",
                 "CONTAINER_CRITICAL",
-                (
-                    f"Active containers: "
-                    f"{active_containers}"
-                ),
+                (f"Active containers: " f"{active_containers}"),
             )
 
-        elif (
-            active_containers
-            >= self.CONTAINER_WARNING
-        ):
+        elif active_containers >= self.CONTAINER_WARNING:
             self._create_alert(
                 "WARNING",
                 "CONTAINER_WARNING",
-                (
-                    f"Active containers: "
-                    f"{active_containers}"
-                ),
+                (f"Active containers: " f"{active_containers}"),
             )
 
     def evaluate_all(self) -> None:
@@ -303,29 +255,11 @@ class AlertManager:
 
         alerts = self.get_alerts()
 
-        critical = len(
-            [
-                a
-                for a in alerts
-                if a["level"] == "CRITICAL"
-            ]
-        )
+        critical = len([a for a in alerts if a["level"] == "CRITICAL"])
 
-        warning = len(
-            [
-                a
-                for a in alerts
-                if a["level"] == "WARNING"
-            ]
-        )
+        warning = len([a for a in alerts if a["level"] == "WARNING"])
 
-        info = len(
-            [
-                a
-                for a in alerts
-                if a["level"] == "INFO"
-            ]
-        )
+        info = len([a for a in alerts if a["level"] == "INFO"])
 
         return {
             "critical": critical,

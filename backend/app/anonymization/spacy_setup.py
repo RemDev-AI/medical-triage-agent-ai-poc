@@ -96,9 +96,7 @@ def load_spacy_model(
         Instance SpaCy Language.
     """
 
-    model_name = get_model_name(
-        language
-    )
+    model_name = get_model_name(language)
 
     try:
         return spacy.load(model_name)
@@ -116,29 +114,16 @@ def load_spacy_model(
 
 if __name__ == "__main__":
 
-    print(
-        "\nSupported languages:"
-    )
+    print("\nSupported languages:")
 
     for lang in supported_languages():
 
-        nlp = load_spacy_model(
-            lang
-        )
+        nlp = load_spacy_model(lang)
 
-        print(
-            f"[OK] Language={lang} "
-            f"Model={get_model_name(lang)}"
-        )
+        print(f"[OK] Language={lang} " f"Model={get_model_name(lang)}")
 
-        print(
-            f"Pipeline: {nlp.pipe_names}"
-        )
+        print(f"Pipeline: {nlp.pipe_names}")
 
-    print(
-        "\nPresidio configuration:"
-    )
+    print("\nPresidio configuration:")
 
-    print(
-        get_presidio_configuration()
-    )
+    print(get_presidio_configuration())

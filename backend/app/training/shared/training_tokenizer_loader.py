@@ -116,9 +116,7 @@ class TrainingTokenizerLoader:
         tokenizer.padding_side = padding_side
 
         if tokenizer.pad_token is None:
-            logger.info(
-                "Tokenizer has no pad token. Using EOS token."
-            )
+            logger.info("Tokenizer has no pad token. Using EOS token.")
 
             tokenizer.pad_token = tokenizer.eos_token
 
@@ -214,18 +212,12 @@ class TrainingTokenizerLoader:
         """
 
         if tokenizer.eos_token is None:
-            raise ValueError(
-                "Tokenizer EOS token is not configured."
-            )
+            raise ValueError("Tokenizer EOS token is not configured.")
 
         if tokenizer.pad_token is None:
-            raise ValueError(
-                "Tokenizer PAD token is not configured."
-            )
+            raise ValueError("Tokenizer PAD token is not configured.")
 
-        logger.info(
-            "Tokenizer validation successful"
-        )
+        logger.info("Tokenizer validation successful")
 
         logger.info(
             "Vocabulary size: %s",
@@ -304,12 +296,18 @@ class TrainingTokenizerLoader:
             if tokenizer.bos_token_id is not None:
                 model.config.bos_token_id = tokenizer.bos_token_id
 
-        if hasattr(model, "generation_config") and model.generation_config is not None:  # noqa: E501
+        if (
+            hasattr(model, "generation_config") and model.generation_config is not None
+        ):  # noqa: E501
             model.generation_config.pad_token_id = tokenizer.pad_token_id
             if tokenizer.eos_token_id is not None:
-                model.generation_config.eos_token_id = tokenizer.eos_token_id  # noqa: E501
+                model.generation_config.eos_token_id = (
+                    tokenizer.eos_token_id
+                )  # noqa: E501
             if tokenizer.bos_token_id is not None:
-                model.generation_config.bos_token_id = tokenizer.bos_token_id  # noqa: E501
+                model.generation_config.bos_token_id = (
+                    tokenizer.bos_token_id
+                )  # noqa: E501
 
         logger.info(
             "Modèle synchronisé avec le tokenizer : pad_token_id=%s "
@@ -339,4 +337,6 @@ class TrainingTokenizerLoader:
             )
         """
 
-        return cls(config, preloaded_tokenizer=preloaded_tokenizer).prepare_for_training()  # noqa: E501
+        return cls(
+            config, preloaded_tokenizer=preloaded_tokenizer
+        ).prepare_for_training()  # noqa: E501

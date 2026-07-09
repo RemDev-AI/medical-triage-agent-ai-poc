@@ -47,9 +47,7 @@ def validate_no_pii(
 
     if not text or not text.strip():
 
-        audit_logger.info(
-            "Validation success | empty text"
-        )
+        audit_logger.info("Validation success | empty text")
 
         return True
 
@@ -71,9 +69,7 @@ def validate_no_pii(
         return False
 
     audit_logger.info(
-        "Validation success | "
-        f"language={language} | "
-        "no residual PII"
+        "Validation success | " f"language={language} | " "no residual PII"
     )
 
     return True
@@ -107,16 +103,8 @@ if __name__ == "__main__":
 
     print("\n=== FRENCH SAMPLE ===\n")
 
-    print(
-        validate_no_pii(
-            french_sample
-        )
-    )
+    print(validate_no_pii(french_sample))
 
     print("\n=== ENGLISH SAMPLE ===\n")
 
-    print(
-        validate_no_pii(
-            english_sample
-        )
-    )
+    print(validate_no_pii(english_sample))

@@ -39,13 +39,9 @@ from huggingface_hub.utils import HfHubHTTPError
 
 logger = logging.getLogger(__name__)
 
-HF_MODELS_REPO_ID = (
-    "RemDev-AI/medical-triage-agent-ai-poc-models"
-)
+HF_MODELS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
 
-HF_DATASETS_REPO_ID = (
-    "RemDev-AI/medical-triage-agent-ai-poc-datasets"
-)
+HF_DATASETS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-datasets"
 
 
 @dataclass
@@ -102,30 +98,22 @@ def login_to_huggingface(
                 add_to_git_credential=add_to_git_credential,
             )
 
-            logger.info(
-                "Successfully authenticated using HF_TOKEN_06."
-            )
+            logger.info("Successfully authenticated using HF_TOKEN_06.")
 
             return True
 
-        logger.info(
-            "No HF_TOKEN_06 found. Starting interactive login."
-        )
+        logger.info("No HF_TOKEN_06 found. Starting interactive login.")
 
         login(
             add_to_git_credential=add_to_git_credential,
         )
 
-        logger.info(
-            "Interactive Hugging Face login successful."
-        )
+        logger.info("Interactive Hugging Face login successful.")
 
         return True
 
     except Exception:
-        logger.exception(
-            "Failed to authenticate with Hugging Face."
-        )
+        logger.exception("Failed to authenticate with Hugging Face.")
         return False
 
 
@@ -176,9 +164,7 @@ def validate_models_repo_access(
         return False
 
     except Exception:
-        logger.exception(
-            "Failed validating models repository."
-        )
+        logger.exception("Failed validating models repository.")
         return False
 
 
@@ -203,9 +189,7 @@ def validate_datasets_repo_access(
         return False
 
     except Exception:
-        logger.exception(
-            "Failed validating dataset repository."
-        )
+        logger.exception("Failed validating dataset repository.")
         return False
 
 
@@ -235,22 +219,18 @@ def ensure_hf_login() -> HuggingFaceAuthStatus:
         success = login_to_huggingface()
 
         if not success:
-            raise RuntimeError(
-                "Unable to authenticate to Hugging Face Hub."
-            )
+            raise RuntimeError("Unable to authenticate to Hugging Face Hub.")
 
     status = validate_hf_access()
 
     if not status.models_repo_access:
         raise RuntimeError(
-            f"Unable to access model repository: "
-            f"{HF_MODELS_REPO_ID}"
+            f"Unable to access model repository: " f"{HF_MODELS_REPO_ID}"
         )
 
     if not status.datasets_repo_access:
         raise RuntimeError(
-            f"Unable to access dataset repository: "
-            f"{HF_DATASETS_REPO_ID}"
+            f"Unable to access dataset repository: " f"{HF_DATASETS_REPO_ID}"
         )
 
     logger.info(

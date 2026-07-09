@@ -58,7 +58,4 @@ def test_api_returns_json():
 
     response = client.get("/health")
 
-    assert "application/json" in response.headers.get(
-        "content-type",
-        ""
-    )
+    assert "application/json" in response.headers.get("content-type", "")
