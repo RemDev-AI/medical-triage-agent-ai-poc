@@ -117,7 +117,7 @@ def push_tokenizer() -> None:
     tokenizer = AutoTokenizer.from_pretrained(
         BASE_MODEL_NAME,
         trust_remote_code=True,
-    )
+    )  # nosec B615 - usage temporaire pour le POC, sans pinning de revision ; a durcir avec un SHA de commit fige avant la prod
 
     LOCAL_TOKENIZER_DIR.mkdir(
         parents=True,
