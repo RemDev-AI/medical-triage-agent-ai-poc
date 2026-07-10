@@ -378,7 +378,7 @@ class ColabCheckpointSync:
                 repo_id=self.hf_repo_id,
                 repo_type="model",
                 revision=self.revision,
-                allow_patterns=[(f"{prefix}" f"{latest_checkpoint}/*")],
+                allow_patterns=[f"{prefix}" f"{latest_checkpoint}/*"],
                 local_dir=str(self.local_checkpoint_dir),
                 local_dir_use_symlinks=False,
             )

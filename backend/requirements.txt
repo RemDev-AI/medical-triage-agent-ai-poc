@@ -135,7 +135,7 @@ pytest-cov>=6.0.0
 # CODE QUALITY
 # ==========================================================
 
-black
+black==25.1.0
 flake8
 isort
 mypy
