@@ -75,6 +75,41 @@ def validate_no_pii(
     return True
 
 
+def contains_pii(
+    text: str,
+    language: str | None = None,
+) -> bool:
+    """
+    Vérifie si le texte contient au moins une donnée
+    personnelle identifiable (PII).
+
+    Fonction complémentaire de `validate_no_pii` :
+    contains_pii(text) == (not validate_no_pii(text))
+
+    Args:
+        text:
+            Texte à analyser.
+
+        language:
+            "fr", "en" ou None pour auto-détection.
+
+    Returns:
+        True si au moins une PII est détectée dans le texte.
+    """
+
+    if not text or not text.strip():
+        return False
+
+    language = language or detect_language(text)
+
+    findings = detect_pii(
+        text=text,
+        language=language,
+    )
+
+    return len(findings) > 0
+
+
 # ==========================================================
 # LOCAL TEST
 # ==========================================================

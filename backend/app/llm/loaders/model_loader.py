@@ -188,3 +188,54 @@ class ModelLoader:
             "GPU peak reserved: %.2f GB",
             max_reserved,
         )
+
+
+# ==========================================================
+# FUNCTIONAL API
+# ==========================================================
+#
+# Wrapper de commodité autour de ModelLoader, permettant un
+# import et un appel simples (utilisé notamment par les tests
+# unitaires) :
+#
+#     from backend.app.llm.loaders.model_loader import load_model
+#     model = load_model()
+#
+# Tous les paramètres reprennent les valeurs par défaut de
+# ModelLoader et peuvent être surchargés au besoin.
+
+
+DEFAULT_BASE_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
+
+
+def load_model(
+    base_model_name: str = DEFAULT_BASE_MODEL_NAME,
+    adapter_path: Optional[str] = None,
+    load_in_4bit: bool = True,
+    load_in_8bit: bool = False,
+    compute_dtype: str = "bfloat16",
+    device_map: str = "auto",
+    merge_adapter: bool = False,
+    revision: str = "main",
+    adapter_revision: Optional[str] = None,
+) -> AutoModelForCausalLM:
+    """
+    Charge et retourne le modèle d'inférence (base + adaptateur
+    optionnel), via une interface fonctionnelle simple.
+
+    Voir `ModelLoader.load_model` pour le détail du comportement.
+    """
+
+    loader = ModelLoader(
+        base_model_name=base_model_name,
+        adapter_path=adapter_path,
+        load_in_4bit=load_in_4bit,
+        load_in_8bit=load_in_8bit,
+        compute_dtype=compute_dtype,
+        device_map=device_map,
+        merge_adapter=merge_adapter,
+        revision=revision,
+        adapter_revision=adapter_revision,
+    )
+
+    return loader.load_model()

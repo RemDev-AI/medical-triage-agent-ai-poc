@@ -93,3 +93,18 @@ def build_quantization_config(
         bnb_4bit_use_double_quant=use_double_quant,
         bnb_4bit_compute_dtype=torch_dtype,
     )
+
+
+# ==========================================================
+# ALIAS (API attendue par les tests / consommateurs externes)
+# ==========================================================
+#
+# `get_quantization_config` est un alias de `build_quantization_config`.
+# Conservé séparément (plutôt qu'un renommage) pour ne pas casser
+# l'import existant dans model_loader.py :
+#
+#     from backend.app.llm.loaders.quantization_loader import (
+#         build_quantization_config,
+#     )
+
+get_quantization_config = build_quantization_config

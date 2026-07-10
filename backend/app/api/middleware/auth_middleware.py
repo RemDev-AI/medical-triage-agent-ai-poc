@@ -1,12 +1,13 @@
 # medical-triage-agent-ai-poc/backend/app/api/middleware/auth_middleware.py
 
-from fastapi import Request, HTTPException
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from backend.app.core.security import verify_access_token
 
 
-EXCLUDED_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health/"}
+EXCLUDED_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health"}
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -19,21 +20,31 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization")
 
         if not auth_header:
-            raise HTTPException(status_code=401, detail="Authorization header missing")
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Authorization header missing"},
+            )
 
         try:
             scheme, token = auth_header.split()
-
-            if scheme.lower() != "bearer":
-                raise HTTPException(
-                    status_code=401, detail="Invalid authentication scheme"
-                )
-
-            verify_access_token(token)
-
         except ValueError:
-            raise HTTPException(
-                status_code=401, detail="Malformed Authorization header"
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Malformed Authorization header"},
+            )
+
+        if scheme.lower() != "bearer":
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid authentication scheme"},
+            )
+
+        try:
+            verify_access_token(token)
+        except Exception:
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Invalid or expired JWT token"},
             )
 
         return await call_next(request)

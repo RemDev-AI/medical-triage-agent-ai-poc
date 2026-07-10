@@ -20,9 +20,13 @@ from transformers import (
 
 logger = logging.getLogger(__name__)
 
+# Aligné avec DEFAULT_BASE_MODEL_NAME de model_loader.py, pour que
+# tokenizer et modèle par défaut restent cohérents entre eux.
+DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
+
 
 def load_tokenizer(
-    model_name: str,
+    model_name: str = DEFAULT_MODEL_NAME,
     revision: str = "main",
 ) -> PreTrainedTokenizerBase:
     """
