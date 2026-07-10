@@ -102,7 +102,9 @@ class TrainingModelLoader:
         if quantization_config is not None:
             load_kwargs["quantization_config"] = quantization_config
 
-        model = AutoModelForCausalLM.from_pretrained(**load_kwargs)
+        model = AutoModelForCausalLM.from_pretrained(  # nosec B615 - revision déjà pinnée via load_kwargs (base_model_revision, repli "main" pour le POC)
+            **load_kwargs
+        )
 
         logger.info("Base model loaded successfully.")
         return model

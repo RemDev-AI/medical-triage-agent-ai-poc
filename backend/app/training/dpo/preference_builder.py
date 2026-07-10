@@ -402,7 +402,10 @@ def build_preferences():
             metadata["anonymized"] = True
 
             preference_record = {
-                "id": hashlib.md5((prompt + chosen).encode("utf-8")).hexdigest(),
+                "id": hashlib.md5(  # nosec B324 - usage non cryptographique : simple identifiant déterministe, pas de sécurité requise
+                    (prompt + chosen).encode("utf-8"),
+                    usedforsecurity=False,
+                ).hexdigest(),
                 "prompt": prompt,
                 "chosen": chosen,
                 "rejected": rejected,

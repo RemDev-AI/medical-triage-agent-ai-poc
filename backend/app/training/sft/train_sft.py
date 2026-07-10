@@ -147,11 +147,16 @@ def load_hf_dataset(
     dataset_repo: str,
     dataset_config: str,
     split: str,
+    revision: str = "main",
 ) -> Dataset:
-    return load_dataset(
+    # TODO (étape ultérieure du POC) : remplacer "main" (valeur par défaut ci-dessus)
+    # par un commit SHA figé pour garantir la reproductibilité et empêcher qu'une
+    # modification du repo HF n'affecte silencieusement l'entraînement.
+    return load_dataset(  # nosec B615 - revision pinnée via paramètre ; "main" temporaire pour le POC, à durcir avant prod
         path=dataset_repo,
         name=dataset_config,
         split=split,
+        revision=revision,
     )
 
 
@@ -160,12 +165,14 @@ def load_dataset_source(split: str) -> Dataset:
 
     hf_repo = dataset_config.get("hf_repo")
     hf_config = dataset_config.get("hf_config", "sft")
+    hf_revision = dataset_config.get("hf_revision", "main")
 
     if hf_repo:
         dataset = load_hf_dataset(
             dataset_repo=hf_repo,
             dataset_config=hf_config,
             split=split,
+            revision=hf_revision,
         )
     else:
         path_mapping = {

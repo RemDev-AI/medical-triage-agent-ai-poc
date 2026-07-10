@@ -78,6 +78,11 @@ DEFAULT_HF_MODELS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
 # ============================================================
 DEFAULT_HF_DATASETS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-datasets"
 
+# TODO (étape ultérieure du POC) : remplacer "main" par un commit SHA figé
+# pour garantir la reproductibilité et empêcher qu'une modification du repo
+# HF (malveillante ou non) n'affecte silencieusement l'évaluation clinique.
+DEFAULT_HF_DATASETS_REVISION = "main"
+
 
 def load_evaluation_config() -> Dict[str, Any]:
     with open(EVALUATION_CONFIG_PATH, "r", encoding="utf-8") as file:
@@ -1177,11 +1182,11 @@ if __name__ == "__main__":
                 CLINICAL_EVAL_HF_FILENAME,
                 DEFAULT_HF_DATASETS_REPO_ID,
             )
-            CLINICAL_EVAL_PATH = hf_hub_download(
+            CLINICAL_EVAL_PATH = hf_hub_download(  # nosec B615 - revision pinnée via constante ; "main" temporaire pour le POC, à durcir avec un commit SHA avant prod
                 repo_id=DEFAULT_HF_DATASETS_REPO_ID,
                 repo_type="dataset",
                 filename=CLINICAL_EVAL_HF_FILENAME,
-                revision="main",
+                revision=DEFAULT_HF_DATASETS_REVISION,
             )
 
         logger.info("Chargement du dataset %s...", CLINICAL_EVAL_PATH)

@@ -97,7 +97,10 @@ def contains_corrupted_medical_content(
 
 
 def generate_id(text: str) -> str:
-    return hashlib.md5(text.encode("utf-8")).hexdigest()
+    return hashlib.md5(  # nosec B324 - usage non cryptographique : simple identifiant déterministe
+        text.encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
 def confidence_score(record: dict) -> float:
@@ -165,8 +168,9 @@ def deduplicate(records: list[dict]) -> list[dict]:
     unique = []
 
     for record in records:
-        signature = hashlib.md5(
-            (record["instruction"] + record["response"]).encode("utf-8")
+        signature = hashlib.md5(  # nosec B324 - usage non cryptographique : signature de déduplication, pas de sécurité requise
+            (record["instruction"] + record["response"]).encode("utf-8"),
+            usedforsecurity=False,
         ).hexdigest()
 
         if signature not in seen:

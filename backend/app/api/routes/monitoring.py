@@ -173,11 +173,11 @@ async def monitoring_summary():
 
     return {
         "healthy": True,
-        "total_requests": requests.get(
+        "total_requests": requests.get(  # nosec B113 - faux positif : `requests` est un dict (request_tracker.get_stats()), pas le module HTTP requests
             "total_requests",
             0,
         ),
-        "error_count": requests.get(
+        "error_count": requests.get(  # nosec B113 - faux positif : idem, dict local, aucun appel réseau
             "failed_requests",
             0,
         ),
