@@ -247,13 +247,11 @@ def load_hf_dataset(
     dataset_repo: str,
     dataset_config: str,
     split: str,
-    revision: str = "main",
 ) -> Dataset:
     return load_dataset(
         path=dataset_repo,
         name=dataset_config,
         split=split,
-        revision=revision,
     )
 
 
@@ -262,14 +260,12 @@ def load_dataset_source(split: str) -> Dataset:
 
     hf_repo = dataset_config.get("hf_repo")
     hf_config = dataset_config.get("hf_config", "dpo")
-    hf_revision = dataset_config.get("hf_revision") or "main"
 
     if hf_repo:
         dataset = load_hf_dataset(
             dataset_repo=hf_repo,
             dataset_config=hf_config,
             split=split,
-            revision=hf_revision,
         )
     else:
         path_mapping = {

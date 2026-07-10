@@ -44,15 +44,9 @@ class ModelLoader:
         compute_dtype: str = "bfloat16",
         device_map: str = "auto",
         merge_adapter: bool = False,
-        revision: str = "main",
-        adapter_revision: Optional[str] = None,
     ):
         self.base_model_name = base_model_name
         self.adapter_path = adapter_path
-        # Pin the Hub revision (commit SHA, tag, or branch) to avoid loading
-        # unexpected/changed remote content (Bandit B615).
-        self.revision = revision
-        self.adapter_revision = adapter_revision
         self.load_in_4bit = load_in_4bit
         self.load_in_8bit = load_in_8bit
         self.compute_dtype = compute_dtype
@@ -97,7 +91,6 @@ class ModelLoader:
 
         model = AutoModelForCausalLM.from_pretrained(
             self.base_model_name,
-            revision=self.revision,
             trust_remote_code=True,
             quantization_config=quantization_config,
             device_map=effective_device_map,
@@ -125,7 +118,6 @@ class ModelLoader:
             model = PeftModel.from_pretrained(
                 model,
                 self.adapter_path,
-                revision=self.adapter_revision,
             )
 
             logger.info("PEFT adapter loaded successfully.")

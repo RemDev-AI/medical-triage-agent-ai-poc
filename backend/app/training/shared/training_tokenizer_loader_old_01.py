@@ -86,11 +86,6 @@ class TrainingTokenizerLoader:
 
         tokenizer = AutoTokenizer.from_pretrained(
             pretrained_model_name_or_path=model_name,
-            # Pin de la révision Hub, même clé de config que
-            # training_model_loader.py, pour garantir que le tokenizer
-            # provient exactement de la même version du repo que le
-            # modèle (Bandit B615).
-            revision=self.config["model"].get("base_model_revision") or "main",
             trust_remote_code=self.config["model"].get(
                 "trust_remote_code",
                 True,

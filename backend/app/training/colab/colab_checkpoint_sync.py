@@ -76,6 +76,7 @@ class ColabCheckpointSync:
         training_type: str,
         hf_repo_id: str = HF_MODELS_REPO_ID,
         cleanup_after_upload: bool = True,
+        revision: str = "main",
     ) -> None:
 
         self.local_checkpoint_dir = Path(local_checkpoint_dir)
@@ -87,6 +88,11 @@ class ColabCheckpointSync:
 
         self.hf_repo_id = hf_repo_id
         self.cleanup_after_upload = cleanup_after_upload
+        # Pin the Hub revision (commit SHA, tag, or branch) used when
+        # downloading checkpoints, to avoid an unexpected concurrent push
+        # changing content mid-restore (Bandit B615). "main" preserves the
+        # existing "always get the latest" behavior.
+        self.revision = revision
 
         self.local_checkpoint_dir.mkdir(
             parents=True,
@@ -371,6 +377,7 @@ class ColabCheckpointSync:
             local_path = snapshot_download(
                 repo_id=self.hf_repo_id,
                 repo_type="model",
+                revision=self.revision,
                 allow_patterns=[(f"{prefix}" f"{latest_checkpoint}/*")],
                 local_dir=str(self.local_checkpoint_dir),
                 local_dir_use_symlinks=False,

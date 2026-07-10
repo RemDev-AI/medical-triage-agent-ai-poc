@@ -71,12 +71,6 @@ class TrainingModelLoader:
 
         load_kwargs: Dict[str, Any] = dict(
             pretrained_model_name_or_path=model_name,
-            # Pin de la révision Hub (commit SHA, tag ou branche) pour
-            # éviter qu'un push distant ne change le contenu du modèle
-            # entre deux runs (Bandit B615). Configurable via
-            # config["model"]["base_model_revision"] ; repli sur "main"
-            # si absente/vide.
-            revision=self.config["model"].get("base_model_revision") or "main",
             trust_remote_code=self.config["model"].get(
                 "trust_remote_code", True
             ),  # noqa: E501
@@ -177,7 +171,6 @@ class TrainingModelLoader:
 
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_name,
-            revision=self.config["model"].get("base_model_revision") or "main",
             max_seq_length=max_seq_length,
             # dtype=None,  # Unsloth choisit automatiquement bf16/fp16 selon le GPU  # noqa: E501
             dtype=resolved_dtype,  # source unique de vérité, plus de dtype=None # noqa: E501

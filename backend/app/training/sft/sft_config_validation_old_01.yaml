@@ -78,9 +78,6 @@ model:
   # par la branche transformers.
   max_seq_length: 2048
   hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
-  # Révision Hub (commit SHA) du modèle de base (base_model) chargé par
-  # training_model_loader.py. Repli sur "main" si absente/vide.
-  base_model_revision: ""
 
 lora:
   r: 8                               # rang réduit pour validation (prod : 16-64)
@@ -103,9 +100,6 @@ special_tokens: {}
 dataset:
   hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
   hf_config: "sft"
-  # Révision Hub (commit SHA) du dataset repo. Repli sur "main" dans
-  # train_sft.py (load_dataset_source) si absente/vide.
-  hf_revision: ""
   train_split: "train"
   validation_split: "validation"
   test_split: "test"

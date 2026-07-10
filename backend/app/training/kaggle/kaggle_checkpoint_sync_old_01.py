@@ -75,7 +75,6 @@ class KaggleCheckpointSync:
         training_type: str,
         hf_repo_id: str = HF_MODELS_REPO_ID,
         cleanup_after_upload: bool = True,
-        revision: str = "main",
     ) -> None:
 
         self.local_checkpoint_dir = Path(local_checkpoint_dir)
@@ -87,11 +86,6 @@ class KaggleCheckpointSync:
 
         self.hf_repo_id = hf_repo_id
         self.cleanup_after_upload = cleanup_after_upload
-        # Pin de la révision Hub (commit SHA, tag ou branche) utilisée
-        # lors du téléchargement des checkpoints, pour éviter qu'un push
-        # concurrent ne change le contenu en cours de restauration
-        # (Bandit B615). "main" préserve le comportement actuel.
-        self.revision = revision
 
         self.local_checkpoint_dir.mkdir(
             parents=True,
@@ -365,7 +359,6 @@ class KaggleCheckpointSync:
             local_path = snapshot_download(
                 repo_id=self.hf_repo_id,
                 repo_type="model",
-                revision=self.revision,
                 allow_patterns=[(f"{prefix}" f"{latest_checkpoint}/*")],
                 local_dir=str(self.local_checkpoint_dir),
                 local_dir_use_symlinks=False,

@@ -1049,11 +1049,6 @@ if __name__ == "__main__":
 
     hub_model_id = dpo_config["model"]["hub_model_id"]
     base_model_id = dpo_config["model"]["base_model"]
-    # Pin de la révision Hub (commit SHA, tag ou branche) du modèle/adapter
-    # évalué, pour éviter qu'un push distant ne change le contenu évalué
-    # entre deux runs (Bandit B615). "main" préserve le comportement
-    # actuel si la clé n'est pas définie dans la config.
-    hub_model_revision = dpo_config["model"].get("hub_revision") or "main"
 
     logger.info(
         "Chargement du modèle final (base=%s, adapter/hub=%s)...",
@@ -1135,14 +1130,12 @@ if __name__ == "__main__":
         # de risque d'écrasement ici.
         model = AutoPeftModelForCausalLM.from_pretrained(
             hub_model_id,
-            revision=hub_model_revision,
             device_map="auto",
             quantization_config=quantization_config,
         )
 
         tokenizer = AutoTokenizer.from_pretrained(
             hub_model_id,
-            revision=hub_model_revision,
             use_fast=dpo_config["tokenizer"]["use_fast"],
         )
         tokenizer.model_max_length = dpo_config["tokenizer"]["model_max_length"]
@@ -1181,7 +1174,6 @@ if __name__ == "__main__":
                 repo_id=DEFAULT_HF_DATASETS_REPO_ID,
                 repo_type="dataset",
                 filename=CLINICAL_EVAL_HF_FILENAME,
-                revision="main",
             )
 
         logger.info("Chargement du dataset %s...", CLINICAL_EVAL_PATH)

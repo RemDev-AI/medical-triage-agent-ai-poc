@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 def load_tokenizer(
     model_name: str,
-    revision: str = "main",
 ) -> PreTrainedTokenizerBase:
     """
     Load tokenizer from Hugging Face.
@@ -31,9 +30,6 @@ def load_tokenizer(
     Args:
         model_name:
             Hugging Face model identifier.
-        revision:
-            Hub revision (commit SHA, tag, or branch) to pin, to avoid
-            loading unexpected/changed remote content.
 
     Returns:
         Loaded tokenizer.
@@ -46,7 +42,6 @@ def load_tokenizer(
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
-        revision=revision,
         trust_remote_code=True,
         use_fast=True,
     )

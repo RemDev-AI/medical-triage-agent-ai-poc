@@ -1,49 +1,56 @@
-# medical-triage-agent-ai-poc/backend/app/training/kaggle/kaggle_checkpoint_sync.py
+# medical-triage-agent-ai-poc/backend/app/training/colab/colab_checkpoint_sync.py
 
 """
-Kaggle Notebooks Checkpoint Synchronization Utilities
+Google Colab Checkpoint Synchronization Utilities
 
 Features
 --------
 - Local checkpoint management
-- Kaggle working directory persistence awareness
 - Hugging Face Models synchronization
 - Automatic checkpoint discovery
-- Resume-from-checkpoint support
-- Automatic checkpoint uploads during training
+- Resume-from-checkpoint support (restauration depuis Hugging Face)
 
 Used by:
 - backend/app/training/sft/train_sft.py
 - backend/app/training/dpo/train_dpo.py
-- backend/app/training/evaluation/clinical_eval_runner.py
 
 Architecture
 ------------
 Hugging Face Models Repository:
     RemDev-AI/medical-triage-agent-ai-poc-models
 
-Notes on Kaggle specifics
---------------------------
-- Kaggle Notebooks do not provide a persistent mount equivalent to
-  Google Drive. The working directory (`/kaggle/working`) is only
-  preserved for the duration of the session and is capped in size
-  (commonly 20 GB), and outputs are only kept permanently if the
-  notebook is committed/saved as a Version.
-- Kaggle sessions also have a hard runtime limit (commonly 9h/12h
-  depending on the accelerator), which makes frequent Hugging Face
-  checkpoint uploads even more important than on Colab, since a
-  session can be pre-empted or time out without warning.
-- Because of this, `cleanup_after_upload` defaults to True to avoid
-  filling up the limited `/kaggle/working` quota with old checkpoints
-  once they are safely persisted to the Hugging Face Hub.
+NETTOYAGE (2026-07-07) — méthodes supprimées car jamais appelées par
+train_sft.py ni train_dpo.py, seuls consommateurs réels de ce module :
+    - sync_latest_checkpoint() / sync_latest_checkpoint_to_huggingface()
+      -> les deux scripts appellent sync_all_checkpoints_to_huggingface(),
+         qui boucle déjà sur chaque checkpoint via
+         sync_checkpoint_to_huggingface(). Le wrapper "latest" était un
+         doublon partiel, non branché sur le pipeline réel.
+    - get_resume_checkpoint() / auto_restore_checkpoint()
+      -> les deux scripts appellent directement
+         restore_latest_checkpoint_from_huggingface() (pas
+         auto_restore_checkpoint), et ne lisent jamais
+         get_resume_checkpoint().
+    - get_status()
+      -> ne reflète que l'état LOCAL (get_checkpoints() sur
+         local_checkpoint_dir), jamais l'état sur le Hub. Ni train_sft.py
+         ni train_dpo.py ne l'utilisent. Source de confusion : à un
+         instant T hors training, local_checkpoint_dir est presque
+         toujours vide (tout est déjà poussé + nettoyé sur HF), ce qui
+         rend cette méthode trompeuse pour un diagnostic manuel.
+    - bloc `if __name__ == "__main__":`
+      -> code de test mort, jamais exécuté par le pipeline (runpy cible
+         train_sft/train_dpo/clinical_eval_runner, jamais ce module).
+
+Si un besoin de diagnostic manuel (vérifier ce qui existe sur le Hub)
+réapparaît, utiliser directement
+`restore_latest_checkpoint_from_huggingface()` ou `get_checkpoints()`
+depuis un notebook, plutôt que de réintroduire ces wrappers.
 """
 
 from __future__ import annotations
 
 import logging
-
-# import shutil
-import tempfile  # noqa : F401
 from pathlib import Path
 from typing import Optional
 
@@ -54,18 +61,12 @@ logger = logging.getLogger(__name__)
 
 HF_MODELS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
 
-# Default Kaggle-friendly local checkpoint location.
-# `/kaggle/working` is the only writable, session-scoped directory
-# whose content Kaggle will offer to persist when a notebook Version
-# is committed.
-KAGGLE_DEFAULT_CHECKPOINT_DIR = "/kaggle/working/outputs"
 
-
-class KaggleCheckpointSync:
+class ColabCheckpointSync:
     """
     Manage training checkpoints across:
 
-    - Local filesystem (Kaggle `/kaggle/working` session storage)
+    - Local filesystem
     - Hugging Face Models repository
     """
 
@@ -75,7 +76,6 @@ class KaggleCheckpointSync:
         training_type: str,
         hf_repo_id: str = HF_MODELS_REPO_ID,
         cleanup_after_upload: bool = True,
-        revision: str = "main",
     ) -> None:
 
         self.local_checkpoint_dir = Path(local_checkpoint_dir)
@@ -87,11 +87,6 @@ class KaggleCheckpointSync:
 
         self.hf_repo_id = hf_repo_id
         self.cleanup_after_upload = cleanup_after_upload
-        # Pin de la révision Hub (commit SHA, tag ou branche) utilisée
-        # lors du téléchargement des checkpoints, pour éviter qu'un push
-        # concurrent ne change le contenu en cours de restauration
-        # (Bandit B615). "main" préserve le comportement actuel.
-        self.revision = revision
 
         self.local_checkpoint_dir.mkdir(
             parents=True,
@@ -135,23 +130,10 @@ class KaggleCheckpointSync:
 
     def has_checkpoint(self) -> bool:
         """
-        Check if checkpoints exist.
+        Check if checkpoints exist locally.
         """
 
         return self.get_latest_checkpoint() is not None
-
-    def get_resume_checkpoint(self) -> Optional[str]:
-        """
-        Return checkpoint path compatible with
-        Hugging Face Trainer.resume_from_checkpoint.
-        """
-
-        checkpoint = self.get_latest_checkpoint()
-
-        if checkpoint is None:
-            return None
-
-        return str(checkpoint)
 
     # ==========================================================
     # Hugging Face synchronization
@@ -186,10 +168,6 @@ class KaggleCheckpointSync:
     ) -> bool:
         """
         Delete local checkpoint after successful upload.
-
-        On Kaggle this is particularly important because
-        `/kaggle/working` has a limited quota (commonly 20 GB),
-        shared across all outputs of the session.
         """
 
         try:
@@ -224,6 +202,8 @@ class KaggleCheckpointSync:
 
         remote_name = self._build_remote_checkpoint_name(checkpoint_path)
 
+        remote_dir = "checkpoints/" f"{self.training_type}/" f"{remote_name}"
+
         try:
 
             api = HfApi()
@@ -232,13 +212,54 @@ class KaggleCheckpointSync:
                 folder_path=str(checkpoint_path),
                 repo_id=self.hf_repo_id,
                 repo_type="model",
-                path_in_repo=("checkpoints/" f"{self.training_type}/" f"{remote_name}"),
+                path_in_repo=remote_dir,
                 commit_message=(f"Upload {remote_name}"),
             )
 
             logger.info(
                 "Uploaded checkpoint %s",
                 remote_name,
+            )
+
+            # FIX HUB-4 — ne pas faire confiance à la seule absence
+            # d'exception de upload_folder(). On relit la liste des
+            # fichiers réellement présents sur le Hub sous remote_dir/
+            # et on la compare aux fichiers locaux attendus AVANT tout
+            # nettoyage local (cleanup_checkpoint supprime le checkpoint
+            # de façon irréversible).
+            local_files = {
+                str(path.relative_to(checkpoint_path)).replace("\\", "/")
+                for path in checkpoint_path.rglob("*")
+                if path.is_file()
+            }
+
+            remote_prefix = f"{remote_dir}/"
+            remote_files = {
+                file[len(remote_prefix) :]
+                for file in api.list_repo_files(
+                    repo_id=self.hf_repo_id,
+                    repo_type="model",
+                )
+                if file.startswith(remote_prefix)
+            }
+
+            missing_files = local_files - remote_files
+
+            if missing_files:
+                logger.error(
+                    "Vérification post-upload échouée pour %s : %d "
+                    "fichier(s) manquant(s) sur le Hub : %s. "
+                    "Nettoyage local ANNULÉ par précaution.",
+                    remote_name,
+                    len(missing_files),
+                    sorted(missing_files),
+                )
+                return False
+
+            logger.info(
+                "Vérification post-upload OK pour %s (%d fichier(s)).",
+                remote_name,
+                len(local_files),
             )
 
             if self.cleanup_after_upload:
@@ -252,21 +273,6 @@ class KaggleCheckpointSync:
             logger.exception("Checkpoint upload failed.")
 
             return False
-
-    def sync_latest_checkpoint_to_huggingface(
-        self,
-    ) -> bool:
-        """
-        Upload latest checkpoint only.
-        """
-
-        latest_checkpoint = self.get_latest_checkpoint()
-
-        if latest_checkpoint is None:
-            logger.warning("No checkpoint available.")
-            return False
-
-        return self.sync_checkpoint_to_huggingface(latest_checkpoint)
 
     def sync_all_checkpoints_to_huggingface(
         self,
@@ -365,13 +371,37 @@ class KaggleCheckpointSync:
             local_path = snapshot_download(
                 repo_id=self.hf_repo_id,
                 repo_type="model",
-                revision=self.revision,
                 allow_patterns=[(f"{prefix}" f"{latest_checkpoint}/*")],
                 local_dir=str(self.local_checkpoint_dir),
                 local_dir_use_symlinks=False,
             )
 
             checkpoint_path = Path(local_path) / prefix / latest_checkpoint
+
+            # FIX HUB-6 — snapshot_download(local_dir=...) crée
+            # systématiquement un sous-dossier "<local_dir>/.cache/huggingface/"  # noqa : E501
+            # (fichiers *.metadata de suivi du téléchargement incrémental).
+            # Comme local_dir == self.local_checkpoint_dir == output_dir
+            # (cf. create_default_checkpoint_sync), ce cache technique se
+            # retrouve mélangé au répertoire où train_sft.py sauvegarde
+            # ensuite le modèle final (trainer.save_model()). Sans
+            # nettoyage, ces fichiers de cache sont ensuite scannés par la
+            # vérification post-upload de train_sft.py (rglob(output_dir)),
+            # qui les signale à tort comme "manquants sur le Hub" — alors
+            # qu'ils n'ont jamais eu vocation à y être. Ce cache n'a plus
+            # aucune utilité une fois le checkpoint restauré : on le
+            # supprime immédiatement (best-effort, ne doit jamais faire
+            # échouer une restauration par ailleurs réussie).
+            cache_dir = self.local_checkpoint_dir / ".cache"
+            if cache_dir.exists():
+                import shutil
+
+                shutil.rmtree(cache_dir, ignore_errors=True)
+                logger.info(
+                    "Cache technique huggingface_hub (%s) nettoyé après "
+                    "restauration du checkpoint.",
+                    cache_dir,
+                )
 
             logger.info(
                 "Checkpoint restored into %s",
@@ -386,92 +416,17 @@ class KaggleCheckpointSync:
 
             return None
 
-    def auto_restore_checkpoint(
-        self,
-    ) -> Optional[str]:
-        """
-        Return a checkpoint usable by the Trainer.
-
-        Priority:
-
-        1. Local checkpoint
-
-        2. Hugging Face checkpoint
-
-        3. None
-        """
-
-        local_checkpoint = self.get_resume_checkpoint()
-
-        if local_checkpoint is not None:
-
-            logger.info("Using local checkpoint.")
-
-            return local_checkpoint
-
-        logger.info("No local checkpoint found. Restoring from Hugging Face...")
-
-        return self.restore_latest_checkpoint_from_huggingface()
-
-    # ==========================================================
-    # Combined synchronization
-    # ==========================================================
-
-    def sync_latest_checkpoint(
-        self,
-    ) -> dict:
-        """
-        Upload latest checkpoint to HF Hub.
-        """
-
-        return {"huggingface": self.sync_latest_checkpoint_to_huggingface()}
-
-    # ==========================================================
-    # Status
-    # ==========================================================
-
-    def get_status(
-        self,
-    ) -> dict:
-        """
-        Return synchronization status.
-        """
-
-        latest = self.get_latest_checkpoint()
-
-        return {
-            "training_type": self.training_type,
-            "hf_repo_id": self.hf_repo_id,
-            "local_checkpoint_dir": str(self.local_checkpoint_dir),
-            "cleanup_after_upload": self.cleanup_after_upload,
-            "has_checkpoint": latest is not None,
-            "latest_checkpoint": (str(latest) if latest else None),
-            "checkpoint_count": len(self.get_checkpoints()),
-        }
-
 
 def create_default_checkpoint_sync(
-    output_dir: str = KAGGLE_DEFAULT_CHECKPOINT_DIR,
-    training_type: str = "sft",
-) -> KaggleCheckpointSync:
+    output_dir: str,
+    training_type: str,
+) -> ColabCheckpointSync:
     """
     Factory helper.
     """
 
-    return KaggleCheckpointSync(
+    return ColabCheckpointSync(
         local_checkpoint_dir=output_dir,
         training_type=training_type,
         hf_repo_id=HF_MODELS_REPO_ID,
     )
-
-
-if __name__ == "__main__":
-
-    logging.basicConfig(level=logging.INFO)
-
-    sync = KaggleCheckpointSync(
-        local_checkpoint_dir=KAGGLE_DEFAULT_CHECKPOINT_DIR,
-        training_type="sft",
-    )
-
-    print(sync.get_status())
