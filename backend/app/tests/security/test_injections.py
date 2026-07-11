@@ -7,7 +7,7 @@ from backend.app.main import app
 client = TestClient(app)
 
 
-def test_sql_injection_attempt():
+def test_sql_injection_attempt(auth_headers):
     """
     Verify SQL injection payloads are rejected or sanitized.
     """
@@ -17,7 +17,7 @@ def test_sql_injection_attempt():
         "age": 35,
     }
 
-    response = client.post("/triage", json=payload)
+    response = client.post("/triage", json=payload, headers=auth_headers)
 
     assert response.status_code in [200, 400, 422]
 
@@ -26,7 +26,7 @@ def test_sql_injection_attempt():
         assert "DROP TABLE" not in str(data)
 
 
-def test_nosql_injection_attempt():
+def test_nosql_injection_attempt(auth_headers):
     """
     Verify NoSQL-style payloads are rejected.
     """
@@ -36,12 +36,12 @@ def test_nosql_injection_attempt():
         "age": 40,
     }
 
-    response = client.post("/triage", json=payload)
+    response = client.post("/triage", json=payload, headers=auth_headers)
 
     assert response.status_code in [400, 422]
 
 
-def test_xss_payload():
+def test_xss_payload(auth_headers):
     """
     Verify XSS payloads are not reflected.
     """
@@ -51,7 +51,7 @@ def test_xss_payload():
         "age": 25,
     }
 
-    response = client.post("/triage", json=payload)
+    response = client.post("/triage", json=payload, headers=auth_headers)
 
     assert response.status_code in [200, 400, 422]
 
@@ -60,7 +60,7 @@ def test_xss_payload():
         assert "<script>" not in body
 
 
-def test_prompt_injection_attempt():
+def test_prompt_injection_attempt(auth_headers):
     """
     Verify prompt injection does not bypass safeguards.
     """
@@ -72,7 +72,7 @@ def test_prompt_injection_attempt():
         "age": 50,
     }
 
-    response = client.post("/triage", json=payload)
+    response = client.post("/triage", json=payload, headers=auth_headers)
 
     assert response.status_code == 200
 
@@ -82,7 +82,7 @@ def test_prompt_injection_attempt():
     assert "medical records" not in body
 
 
-def test_large_payload():
+def test_large_payload(auth_headers):
     """
     Verify oversized payloads are handled safely.
     """
@@ -92,6 +92,6 @@ def test_large_payload():
         "age": 30,
     }
 
-    response = client.post("/triage", json=payload)
+    response = client.post("/triage", json=payload, headers=auth_headers)
 
     assert response.status_code in [200, 400, 413, 422]

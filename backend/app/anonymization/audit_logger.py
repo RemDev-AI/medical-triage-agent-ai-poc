@@ -26,7 +26,8 @@ from pathlib import Path
 # LOG DIRECTORY
 # ==========================================================
 
-LOG_DIR = Path("backend/logs")
+BASE_DIR = Path(__file__).resolve().parents[2]
+LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(
     parents=True,
     exist_ok=True,
@@ -42,15 +43,7 @@ LOGGER_NAME = "rgpd_audit"
 
 audit_logger = logging.getLogger(LOGGER_NAME)
 
-# audit_logger.setLevel(
-#     logging.INFO
-# )
-
-audit_logger.setLevel(logging.ERROR)
-
-# audit_logger.setLevel(
-#     logging.CRITICAL
-# )
+audit_logger.setLevel(logging.INFO)
 
 
 # Évite l'ajout multiple de handlers

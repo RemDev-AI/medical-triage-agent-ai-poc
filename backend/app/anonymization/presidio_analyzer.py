@@ -156,7 +156,14 @@ DEFAULT_ENTITIES = [
 # PERSON DETECTION TUNING
 # ==========================================================
 
-PERSON_SCORE_THRESHOLD = 0.92
+PERSON_SCORE_THRESHOLD = 0.6
+# NOTE: Presidio's spaCy-based PERSON recognizer emits a fixed
+# confidence score of 0.85 for NER-detected entities. A threshold
+# above that value (e.g. 0.92) silently discards every PERSON
+# detection regardless of the input text. Keep this threshold
+# comfortably below 0.85 so legitimate detections aren't dropped,
+# while still filtering out any lower-confidence custom recognizer
+# noise if one is added later.
 
 
 # ==========================================================

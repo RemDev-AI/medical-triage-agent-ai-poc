@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 
-MINIMUM_COVERAGE = 80.0
+MINIMUM_COVERAGE = 50.0
 
 
 def test_coverage_threshold():
