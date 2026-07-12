@@ -29,9 +29,15 @@ class GenerateResponse(BaseModel):
 class TriageRequest(BaseModel):
     patient_id: Optional[str] = None
 
-    symptoms: List[str] = Field(..., min_length=1, max_length=20)
+    # Texte libre décrivant les symptômes (aligné avec InferenceClient.triage
+    # qui attend `symptoms: str`). Corrige le bug: était List[str],
+    # ce qui rejetait en 422 tout payload envoyant une chaîne (cf.
+    # test_prompt_injection_attempt).
+    symptoms: str = Field(..., min_length=1, max_length=2000)
 
-    medical_history: Optional[List[str]] = Field(default_factory=list)
+    # Texte libre également, aligné avec InferenceClient.triage qui attend
+    # `medical_history: str | None` (et non une liste).
+    medical_history: Optional[str] = Field(default=None, max_length=2000)
 
     age: Optional[int] = Field(default=None, ge=0, le=120)
 

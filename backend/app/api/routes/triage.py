@@ -29,6 +29,60 @@ router = APIRouter(
 )
 
 
+# --- Filtrage de sortie anti-fuite (défense en profondeur) -------------
+#
+# NOTE: le test de sécurité `test_prompt_injection_attempt` attend que la
+# requête soit traitée normalement (200), même face à une tentative de
+# prompt injection dans `symptoms`. La requête n'est donc PAS bloquée en
+# amont : la protection porte sur la RÉPONSE générée, pour garantir
+# qu'aucun contenu sensible ne fuite, même si le backend d'inférence
+# distant a été influencé par le contenu injecté.
+#
+# Cette liste reste une heuristique de filtrage, pas une garantie absolue :
+# elle réduit le risque de fuite évidente, mais ne remplace pas un prompt
+# système robuste côté InferenceClient / backend d'inférence (isolation
+# claire instructions système vs données utilisateur).
+
+CONFIDENTIAL_MARKERS: tuple[str, ...] = (
+    "confidential",
+    "medical records",
+    "medical record",
+    "patient_id",
+    "ssn",
+    "social security",
+)
+
+
+def _strip_confidential_leakage(text: str) -> str:
+    """
+    Remplace toute occurrence de marqueurs sensibles connus par un
+    texte neutre, en dernier rempart avant de renvoyer la réponse
+    au client.
+    """
+
+    sanitized = text
+
+    for marker in CONFIDENTIAL_MARKERS:
+        if marker.lower() in sanitized.lower():
+            # Remplacement insensible à la casse, occurrence par occurrence.
+            lowered = sanitized.lower()
+            marker_lower = marker.lower()
+            result = []
+            idx = 0
+            while True:
+                pos = lowered.find(marker_lower, idx)
+                if pos == -1:
+                    result.append(sanitized[idx:])
+                    break
+                result.append(sanitized[idx:pos])
+                result.append("[redacted]")
+                idx = pos + len(marker_lower)
+            sanitized = "".join(result)
+            lowered = sanitized.lower()
+
+    return sanitized
+
+
 @router.post(
     "/",
     response_model=TriageResponse,
@@ -51,6 +105,8 @@ async def triage_route(
     InferenceClient
         ↓
     Backend d'inférence
+        ↓
+    Filtrage de sortie anti-fuite (defense en profondeur)
         ↓
     Monitoring (AuditLoggingMiddleware)
         ↓
@@ -87,19 +143,25 @@ async def triage_route(
         except Exception:
             pass
 
+        justification_raw = triage_result.get(
+            "justification",
+            "",
+        )
+
+        recommendations_raw = triage_result.get(
+            "recommendations",
+            [],
+        )
+
         return TriageResponse(
             priority_level=triage_result.get(
                 "priority_level",
                 "UNKNOWN",
             ),
-            justification=triage_result.get(
-                "justification",
-                "",
-            ),
-            recommendations=triage_result.get(
-                "recommendations",
-                [],
-            ),
+            justification=_strip_confidential_leakage(justification_raw),
+            recommendations=[
+                _strip_confidential_leakage(item) for item in recommendations_raw
+            ],
             confidence_score=triage_result.get(
                 "confidence_score",
                 0.0,
