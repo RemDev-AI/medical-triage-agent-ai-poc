@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 
+import httpx
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -121,6 +123,15 @@ async def triage_route(
     Cette route ne doit donc plus appeler
     request_tracker.increment_*() ni
     latency_monitor.record() elle-même.
+
+    NOTE (correctif étape 4 - gestion d'erreurs) :
+    Les erreurs provenant de l'appel au backend d'inférence distant
+    (httpx.HTTPStatusError, httpx.RequestError) sont désormais
+    distinguées des erreurs internes imprévues, et mappées vers des
+    codes HTTP appropriés (502/503) plutôt qu'un 500 générique.
+    Le détail brut de l'exception n'est plus jamais renvoyé au
+    client, afin d'éviter toute fuite d'information interne
+    (URL, stacktrace partielle, etc.).
     """
 
     start_time = time.perf_counter()
@@ -134,59 +145,101 @@ async def triage_route(
             priority_context=payload.priority_context,
         )
 
-        latency_seconds = time.perf_counter() - start_time
+    except httpx.HTTPStatusError as exc:
 
-        latency_ms = latency_seconds * 1000
+        # Le backend d'inférence distant a répondu avec un statut d'erreur
+        # (ex : filtrage/modération de contenu côté modèle, indisponibilité
+        # temporaire du service).
 
         try:
-            alert_manager.evaluate_latency(latency_ms)
+            alert_manager.raise_alert(
+                category="INFERENCE_UPSTREAM_ERROR",
+                message=f"Upstream status {exc.response.status_code}",
+            )
         except Exception:
             pass
 
-        justification_raw = triage_result.get(
-            "justification",
-            "",
+        raise HTTPException(
+            status_code=502,
+            detail="Triage engine is currently unavailable. Please retry later.",
         )
 
-        recommendations_raw = triage_result.get(
-            "recommendations",
-            [],
+    except httpx.RequestError:
+
+        # Erreur réseau lors de l'appel au backend d'inférence :
+        # timeout, DNS, connexion refusée, etc.
+
+        try:
+            alert_manager.raise_alert(
+                category="INFERENCE_NETWORK_ERROR",
+                message="Network error while contacting inference backend.",
+            )
+        except Exception:
+            pass
+
+        raise HTTPException(
+            status_code=503,
+            detail="Triage engine is currently unreachable. Please retry later.",
         )
 
-        return TriageResponse(
-            priority_level=triage_result.get(
-                "priority_level",
-                "UNKNOWN",
-            ),
-            justification=_strip_confidential_leakage(justification_raw),
-            recommendations=[
-                _strip_confidential_leakage(item) for item in recommendations_raw
-            ],
-            confidence_score=triage_result.get(
-                "confidence_score",
-                0.0,
-            ),
-            generated_at=triage_result.get(
-                "generated_at",
-                time.strftime("%Y-%m-%dT%H:%M:%S"),
-            ),
-            latency_seconds=round(
-                latency_seconds,
-                3,
-            ),
-        )
+    except Exception:
 
-    except Exception as exc:
+        # Erreur interne imprévue, non liée à un problème réseau/upstream
+        # identifié. On ne renvoie jamais le détail brut de l'exception
+        # au client (fuite d'info potentielle) ; il reste disponible côté
+        # serveur via alert_manager / logs applicatifs.
 
         try:
             alert_manager.raise_alert(
                 category="TRIAGE_ERROR",
-                message=str(exc),
+                message="Unexpected error during triage processing.",
             )
         except Exception:
             pass
 
         raise HTTPException(
             status_code=500,
-            detail=("Triage engine failed: " f"{str(exc)}"),
+            detail="An unexpected error occurred while processing the triage request.",
         )
+
+    latency_seconds = time.perf_counter() - start_time
+
+    latency_ms = latency_seconds * 1000
+
+    try:
+        alert_manager.evaluate_latency(latency_ms)
+    except Exception:
+        pass
+
+    justification_raw = triage_result.get(
+        "justification",
+        "",
+    )
+
+    recommendations_raw = triage_result.get(
+        "recommendations",
+        [],
+    )
+
+    return TriageResponse(
+        priority_level=triage_result.get(
+            "priority_level",
+            "UNKNOWN",
+        ),
+        justification=_strip_confidential_leakage(justification_raw),
+        recommendations=[
+            _strip_confidential_leakage(item) for item in recommendations_raw
+        ],
+        confidence_score=triage_result.get(
+            "confidence_score",
+            0.0,
+        ),
+        generated_at=triage_result.get(
+            "generated_at",
+            time.strftime("%Y-%m-%dT%H:%M:%S"),
+        ),
+        latency_seconds=round(
+            latency_seconds,
+            3,
+        ),
+    )
