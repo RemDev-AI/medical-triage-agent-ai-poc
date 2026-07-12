@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 
 
@@ -35,7 +35,7 @@ class RequestTracker:
 
         self.lock = threading.Lock()
 
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
 
         self.total_requests = 0
         self.success_requests = 0
@@ -137,7 +137,7 @@ class RequestTracker:
 
             self.method_counter.clear()
 
-            self.started_at = datetime.utcnow()
+            self.started_at = datetime.now(timezone.utc)
 
     def get_stats(self) -> Dict:
 

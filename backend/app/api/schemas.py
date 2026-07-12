@@ -29,7 +29,7 @@ class GenerateResponse(BaseModel):
 class TriageRequest(BaseModel):
     patient_id: Optional[str] = None
 
-    symptoms: List[str] = Field(..., min_items=1, max_items=20)
+    symptoms: List[str] = Field(..., min_length=1, max_length=20)
 
     medical_history: Optional[List[str]] = Field(default_factory=list)
 

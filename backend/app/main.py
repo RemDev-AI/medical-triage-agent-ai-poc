@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Depends
 
 from backend.app.api.router import api_router
@@ -37,52 +39,12 @@ ENVIRONMENT = "huggingface-space" if IS_HF_SPACE else "local"
 
 
 # =========================================================
-# APPLICATION
-# =========================================================
-
-app = FastAPI(
-    title="Medical Triage AI API",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
-
-
-# =========================================================
-# SECURITY
-# =========================================================
-
-setup_cors(app)
-
-app.add_middleware(AuditLoggingMiddleware)
-
-app.add_middleware(JWTAuthMiddleware)
-
-
-# =========================================================
-# ROUTERS
-#
-# NOTE (correctif étape 3) :
-# monitoring_router est déjà agrégé dans api_router
-# (cf. backend/app/api/router.py). Il ne doit PAS être
-# inclus une seconde fois ici, sous peine de dupliquer
-# l'ensemble des routes /monitoring/* sous deux chemins
-# distincts.
-# =========================================================
-
-app.include_router(
-    api_router,
-    dependencies=[Depends(rate_limit)],
-)
-
-
-# =========================================================
-# STARTUP EVENTS
+# LIFESPAN (remplace @app.on_event("startup"), déprécié)
 # =========================================================
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
 
     print("=" * 60)
     print("Medical Triage AI API")
@@ -114,6 +76,53 @@ async def startup_event() -> None:
         print("[DEPLOYMENT] Local environment")
 
     print("=" * 60)
+
+    yield
+
+    # (aucune action de shutdown requise pour le moment ;
+    # cet emplacement est prêt pour d'éventuels nettoyages
+    # futurs — fermeture de connexions, flush de buffers, etc.)
+
+
+# =========================================================
+# APPLICATION
+# =========================================================
+
+app = FastAPI(
+    title="Medical Triage AI API",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+
+
+# =========================================================
+# SECURITY
+# =========================================================
+
+setup_cors(app)
+
+app.add_middleware(AuditLoggingMiddleware)
+
+app.add_middleware(JWTAuthMiddleware)
+
+
+# =========================================================
+# ROUTERS
+#
+# NOTE (correctif étape 3) :
+# monitoring_router est déjà agrégé dans api_router
+# (cf. backend/app/api/router.py). Il ne doit PAS être
+# inclus une seconde fois ici, sous peine de dupliquer
+# l'ensemble des routes /monitoring/* sous deux chemins
+# distincts.
+# =========================================================
+
+app.include_router(
+    api_router,
+    dependencies=[Depends(rate_limit)],
+)
 
 
 # =========================================================

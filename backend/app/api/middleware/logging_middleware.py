@@ -7,7 +7,7 @@ import logging
 import time
 import uuid
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -94,7 +94,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
             audit_log = {
                 "request_id": request_id,
-                "timestamp": (datetime.utcnow().isoformat()),
+                "timestamp": (datetime.now(timezone.utc).isoformat()),
                 "method": method,
                 "path": endpoint,
                 "status_code": (response.status_code),
@@ -132,7 +132,7 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
             audit_log = {
                 "request_id": request_id,
-                "timestamp": (datetime.utcnow().isoformat()),
+                "timestamp": (datetime.now(timezone.utc).isoformat()),
                 "method": method,
                 "path": endpoint,
                 "status_code": 500,
