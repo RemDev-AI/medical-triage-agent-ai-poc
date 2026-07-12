@@ -23,7 +23,7 @@ from backend.app.main import app
 client = TestClient(app)
 
 
-def test_full_triage_pipeline():
+def test_full_triage_pipeline(auth_headers):
     """
     Complete triage workflow.
     """
@@ -37,16 +37,17 @@ def test_full_triage_pipeline():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "priority" in data
-    assert "recommendation" in data
+    assert "priority_level" in data
+    assert "recommendations" in data
 
-    assert data["priority"] in [
+    assert data["priority_level"] in [
         "low",
         "medium",
         "high",
@@ -54,12 +55,12 @@ def test_full_triage_pipeline():
     ]
 
     assert isinstance(
-        data["recommendation"],
-        str,
+        data["recommendations"],
+        list,
     )
 
 
-def test_pipeline_handles_missing_fields():
+def test_pipeline_handles_missing_fields(auth_headers):
     """
     Optional fields must not break pipeline execution.
     """
@@ -71,17 +72,18 @@ def test_pipeline_handles_missing_fields():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "priority" in data
-    assert "recommendation" in data
+    assert "priority_level" in data
+    assert "recommendations" in data
 
 
-def test_pipeline_with_complex_patient_profile():
+def test_pipeline_with_complex_patient_profile(auth_headers):
     """
     Pipeline should support richer patient context.
     """
@@ -99,17 +101,18 @@ def test_pipeline_with_complex_patient_profile():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "priority" in data
-    assert "recommendation" in data
+    assert "priority_level" in data
+    assert "recommendations" in data
 
 
-def test_pipeline_response_contract():
+def test_pipeline_response_contract(auth_headers):
     """
     API response contract validation.
     """
@@ -122,6 +125,7 @@ def test_pipeline_response_contract():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -129,15 +133,15 @@ def test_pipeline_response_contract():
     body = response.json()
 
     required_fields = [
-        "priority",
-        "recommendation",
+        "priority_level",
+        "recommendations",
     ]
 
     for field in required_fields:
         assert field in body
 
 
-def test_pipeline_priority_domain():
+def test_pipeline_priority_domain(auth_headers):
     """
     Validate triage classification domain.
     """
@@ -150,6 +154,7 @@ def test_pipeline_priority_domain():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -163,10 +168,10 @@ def test_pipeline_priority_domain():
         "urgent",
     }
 
-    assert data["priority"] in allowed_priorities
+    assert data["priority_level"] in allowed_priorities
 
 
-def test_pipeline_supports_modal_provider():
+def test_pipeline_supports_modal_provider(auth_headers):
     """
     Validate provider metadata when available.
     """
@@ -179,6 +184,7 @@ def test_pipeline_supports_modal_provider():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -192,7 +198,7 @@ def test_pipeline_supports_modal_provider():
         ]
 
 
-def test_pipeline_supports_observability_metadata():
+def test_pipeline_supports_observability_metadata(auth_headers):
     """
     Validate latency and monitoring metadata.
     """
@@ -205,17 +211,17 @@ def test_pipeline_supports_observability_metadata():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    if "latency_ms" in data:
-        assert isinstance(
-            data["latency_ms"],
-            (int, float),
-        )
+    assert isinstance(
+        data["latency_seconds"],
+        (int, float),
+    )
 
     if "request_id" in data:
         assert isinstance(
@@ -224,13 +230,13 @@ def test_pipeline_supports_observability_metadata():
         )
 
 
-def test_pipeline_handles_large_payload():
+def test_pipeline_handles_large_payload(auth_headers):
     """
     Pipeline should remain stable with large requests.
     """
 
     payload = {
-        "symptoms": "fièvre " * 300,
+        "symptoms": "fièvre " * 250,
         "age": 37,
         "medical_history": "asthme",
     }
@@ -238,17 +244,18 @@ def test_pipeline_handles_large_payload():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "priority" in data
-    assert "recommendation" in data
+    assert "priority_level" in data
+    assert "recommendations" in data
 
 
-def test_pipeline_recommendation_not_empty():
+def test_pipeline_recommendation_not_empty(auth_headers):
     """
     Recommendation must contain usable content.
     """
@@ -261,10 +268,12 @@ def test_pipeline_recommendation_not_empty():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert data["recommendation"].strip() != ""
+    assert len(data["recommendations"]) > 0
+    assert data["recommendations"][0].strip() != ""

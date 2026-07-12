@@ -1,0 +1,124 @@
+# ==========================================================
+# medical-triage-agent-ai-poc/backend/requirements-ci.txt
+#
+# Sous-ensemble de requirements.txt destiné exclusivement au
+# CI (lint / unit / security / integration / coverage /
+# performance). L'inférence LLM est mockée en CI et tourne
+# réellement sur HF Spaces (INFERENCE_API_URL) : torch, vllm,
+# transformers, accelerate, bitsandbytes, peft/trl, wandb,
+# torchao et jupyter sont donc exclus, ce qui évite le
+# "No space left on device" sur les runners GitHub Actions.
+#
+# ⚠️ Si un module sous test importe torch/transformers/vllm au
+# niveau module (pas seulement dans le code d'inférence réel),
+# l'import échouera en CI avec ce fichier. Dans ce cas, isoler
+# l'import derrière le code d'inférence (import différé /
+# lazy import dans la fonction, pas en haut du fichier) plutôt
+# que de réintroduire ces paquets ici.
+# ==========================================================
+
+# ==========================================================
+# CORE PYTHON
+# ==========================================================
+
+python-dotenv
+pydantic
+pydantic-settings
+
+# ==========================================================
+# API
+# ==========================================================
+
+fastapi
+uvicorn[standard]
+
+# ==========================================================
+# HUGGING FACE HUB (client léger, pas de modèle local)
+# ==========================================================
+
+huggingface_hub
+
+# ==========================================================
+# TOKENIZERS (léger, souvent requis en dépendance transitive
+# par spacy/presidio ; ne PAS confondre avec `transformers`)
+# ==========================================================
+
+tokenizers
+
+# ==========================================================
+# DATA PROCESSING
+# ==========================================================
+
+numpy
+pandas
+scikit-learn
+
+# ==========================================================
+# NLP / SPACY (utilisé par Presidio pour la détection PII,
+# donc nécessaire même en CI)
+# ==========================================================
+
+spacy>=3.8.0
+
+# French SpaCy model
+fr_core_news_md @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl
+
+# English SpaCy model
+en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl
+
+# Language detection
+langdetect
+
+faker>=25.0.0
+
+# ==========================================================
+# PRESIDIO RGPD
+# ==========================================================
+
+presidio-analyzer
+presidio-anonymizer
+
+# ==========================================================
+# OBSERVABILITY
+# ==========================================================
+
+prometheus-client
+
+# ==========================================================
+# HTTP / CLIENTS
+# ==========================================================
+
+httpx
+requests
+
+# ==========================================================
+# LOGGING
+# ==========================================================
+
+loguru
+
+# ==========================================================
+# SECURITY
+# ==========================================================
+
+python-jose[cryptography]
+passlib[bcrypt]
+
+# ==========================================================
+# TESTING
+# ==========================================================
+
+pytest
+pytest-asyncio
+pytest-cov>=6.0.0
+
+# ==========================================================
+# CODE QUALITY
+# (redondant avec le job lint qui les installe déjà séparément,
+#  mais gardé ici si test_coverage.py ou autres tests en dépendent)
+# ==========================================================
+
+black==25.1.0
+flake8
+isort
+mypy
