@@ -1,25 +1,93 @@
+# ==========================================================
 # medical-triage-agent-ai-poc/docker-compose.yml
-
-# version: "3.9"
+# ==========================================================
 
 services:
 
   backend:
-    build:
-      context: ./backend
     container_name: medical-triage-backend
+
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+      # Hugging Face
+      HF_TOKEN: ${HF_TOKEN}
+      HF_MODEL_ID: ${HF_MODEL_ID}
+      HF_SPACE_API_URL: ${HF_SPACE_API_URL}
+
+      # Google Colab GPU Free (future remote inference endpoint)
+      COLAB_API_URL: ${COLAB_API_URL:-}
+      COLAB_API_TOKEN: ${COLAB_API_TOKEN:-}
+
+      # Weights & Biases
+      WANDB_API_KEY: ${WANDB_API_KEY:-}
+      WANDB_PROJECT: ${WANDB_PROJECT:-medical-triage-agent-ai-poc}
+      WANDB_ENTITY: ${WANDB_ENTITY:-}
+
     ports:
       - "8000:8000"
+
     volumes:
-      - ./backend:/app
-    restart: always
+      - ./backend:/app/backend
+
+    networks:
+      - medical-triage-network
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8000/health"
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
 
   frontend:
+    container_name: medical-triage-frontend
+
     build:
       context: ./frontend
-    container_name: medical-triage-frontend
+      dockerfile: Dockerfile
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+
+      API_BASE_URL: http://backend:8000
+
+      HF_SPACE_API_URL: ${HF_SPACE_API_URL}
+
     ports:
       - "8501:8501"
+
     volumes:
       - ./frontend:/app
-    restart: always
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    networks:
+      - medical-triage-network
+
+networks:
+  medical-triage-network:
+    driver: bridge

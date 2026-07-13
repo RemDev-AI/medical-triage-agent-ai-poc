@@ -2,93 +2,465 @@
 
 """
 Analyse PII avec Microsoft Presidio.
+
+Support :
+- Français (FR)
+- Anglais (EN)
+
+Compatible avec le pipeline d'anonymisation médical bilingue.
 """
 
 from __future__ import annotations
+
+from langdetect import LangDetectException
+from langdetect import detect
 
 from presidio_analyzer import (
     AnalyzerEngine,
     Pattern,
     PatternRecognizer,
+    RecognizerResult,
+)
+from presidio_analyzer.nlp_engine import (
+    NlpEngineProvider,
 )
 
-from anonymization.spacy_setup import (
-    load_spacy_model,
-)
-
-from anonymization.pii_patterns import (
-    MEDICAL_PII_PATTERNS,
-)
-
-from anonymization.audit_logger import (
+from app.anonymization.audit_logger import (
     audit_logger,
 )
-
-nlp = load_spacy_model()
-
-analyzer = AnalyzerEngine(
-    supported_languages=["fr"],
+from app.anonymization.pii_patterns import (
+    get_pii_patterns,
+    supported_languages,
+)
+from app.anonymization.spacy_setup import (
+    get_presidio_configuration,
 )
 
-for pii_pattern in MEDICAL_PII_PATTERNS:
+# ==========================================================
+# NLP ENGINE CONFIGURATION
+# ==========================================================
 
-    recognizer = PatternRecognizer(
-        supported_entity=pii_pattern["name"],
-        patterns=[
-            Pattern(
-                name=pii_pattern["name"],
-                regex=pii_pattern["regex"],
-                score=pii_pattern["score"],
-            )
-        ],
-        supported_language="fr",
+provider = NlpEngineProvider(nlp_configuration=get_presidio_configuration())
+
+nlp_engine = provider.create_engine()
+
+# ==========================================================
+# ANALYZER
+# ==========================================================
+
+SUPPORTED_LANGUAGES = supported_languages()
+
+analyzer = AnalyzerEngine(
+    nlp_engine=nlp_engine,
+    supported_languages=SUPPORTED_LANGUAGES,
+)
+
+# ==========================================================
+# CUSTOM MEDICAL PATTERNS
+# ==========================================================
+
+for language in SUPPORTED_LANGUAGES:
+
+    for pii_pattern in get_pii_patterns(language):
+
+        recognizer = PatternRecognizer(
+            supported_entity=pii_pattern["name"],
+            patterns=[
+                Pattern(
+                    name=pii_pattern["name"],
+                    regex=pii_pattern["regex"],
+                    score=pii_pattern["score"],
+                )
+            ],
+            supported_language=language,
+        )
+
+        analyzer.registry.add_recognizer(recognizer)
+
+# ==========================================================
+# CUSTOM PHONE RECOGNIZER
+# ==========================================================
+
+PHONE_PATTERNS = [
+    Pattern(
+        name="fr_phone",
+        regex=(r"(?<!\d)" r"(?:0[1-9])" r"(?:[\s.-]?\d{2}){4}" r"(?!\d)"),
+        score=0.90,
+    ),
+    Pattern(
+        name="international_phone",
+        regex=(r"(?<!\d)" r"\+\d{1,3}" r"(?:[\s.-]?\d{1,4}){2,6}" r"(?!\d)"),
+        score=0.90,
+    ),
+    Pattern(
+        name="us_phone",
+        regex=(
+            r"(?<!\d)"
+            r"(?:\(\d{3}\)|\d{3})"
+            r"[\s.-]?"
+            r"\d{3}"
+            r"[\s.-]?"
+            r"\d{4}"
+            r"(?!\d)"
+        ),
+        score=0.90,
+    ),
+]
+
+for language in SUPPORTED_LANGUAGES:
+
+    phone_recognizer = PatternRecognizer(
+        supported_entity="PHONE_NUMBER",
+        patterns=PHONE_PATTERNS,
+        supported_language=language,
     )
 
-    analyzer.registry.add_recognizer(recognizer)
+    analyzer.registry.add_recognizer(phone_recognizer)
 
+# ==========================================================
+# ENTITY PRIORITY
+# ==========================================================
+
+ENTITY_PRIORITY = {
+    "EMAIL_ADDRESS": 100,
+    "FRENCH_SOCIAL_SECURITY": 99,
+    "US_SOCIAL_SECURITY": 99,
+    "MEDICAL_RECORD_NUMBER": 95,
+    "PATIENT_ID": 90,
+    "IP_ADDRESS": 88,
+    "URL": 87,
+    "PHONE_NUMBER": 85,
+    "PERSON": 50,
+    # "LOCATION": 40,
+}
+
+
+# ==========================================================
+# DEFAULT ENTITIES
+# ==========================================================
 
 DEFAULT_ENTITIES = [
     "PERSON",
     "EMAIL_ADDRESS",
     "PHONE_NUMBER",
-    "LOCATION",
+    # "LOCATION",
     "MEDICAL_RECORD_NUMBER",
     "PATIENT_ID",
     "FRENCH_SOCIAL_SECURITY",
+    "US_SOCIAL_SECURITY",
+    "IP_ADDRESS",
+    "URL",
 ]
+
+# ==========================================================
+# PERSON DETECTION TUNING
+# ==========================================================
+
+PERSON_SCORE_THRESHOLD = 0.6
+# NOTE: Presidio's spaCy-based PERSON recognizer emits a fixed
+# confidence score of 0.85 for NER-detected entities. A threshold
+# above that value (e.g. 0.92) silently discards every PERSON
+# detection regardless of the input text. Keep this threshold
+# comfortably below 0.85 so legitimate detections aren't dropped,
+# while still filtering out any lower-confidence custom recognizer
+# noise if one is added later.
+
+
+# ==========================================================
+# MEDICAL EPONYMS / SCORES / CLASSIFICATIONS
+# ==========================================================
+
+MEDICAL_EPONYMS = {
+    "hodgkin",
+    "crohn",
+    "parkinson",
+    "alzheimer",
+    "basedow",
+    "charcot",
+    "kaposi",
+    "paget",
+    "behcet",
+    "raynaud",
+    "gilbert",
+    "cushing",
+    "addison",
+    "wegener",
+    "babinski",
+    "murphy",
+    "wilson",
+    "huntington",
+    "sjogren",
+    "meniere",
+    "hashimoto",
+    "graves",
+    "berger",
+    "takayasu",
+    "ehlers-danlos",
+    "marfan",
+    "guillain-barre",
+    "tourette",
+}
+
+MEDICAL_SCORES = {
+    "lyon score",
+    "wells score",
+    "child-pugh",
+    "glasgow",
+    "apache ii",
+    "sofa score",
+    "meld score",
+    "rockall score",
+    "blatchford score",
+    "cha2ds2-vasc",
+}
+
+MEDICAL_CLASSIFICATIONS = {
+    "boston criteria",
+    "paris classification",
+    "tnm classification",
+    "gold classification",
+    "new york classification",
+}
+
+MEDICAL_SIGNS = {
+    "babinski",
+    "murphy",
+    "hoffmann",
+    "kernig",
+    "brudzinski",
+    "lasègue",
+}
+
+MEDICAL_WHITELIST = {
+    *(MEDICAL_EPONYMS),
+    *(MEDICAL_SCORES),
+    *(MEDICAL_CLASSIFICATIONS),
+    *(MEDICAL_SIGNS),
+}
+
+
+# ==========================================================
+# MEDICAL EPONYM DETECTION
+# ==========================================================
+
+
+def is_medical_eponym(text: str) -> bool:
+    """
+    Vérifie si un terme correspond à un
+    éponyme médical, score clinique,
+    classification ou signe médical.
+    """
+
+    normalized = text.strip().lower()
+
+    return normalized in MEDICAL_WHITELIST
+
+
+# ==========================================================
+# LANGUAGE DETECTION
+# ==========================================================
+
+
+def detect_language(text: str) -> str:
+    """
+    Détection automatique de langue.
+    """
+
+    if not text or not text.strip():
+        return "en"
+
+    try:
+        language = detect(text)
+
+    except LangDetectException:
+        return "en"
+
+    if language not in SUPPORTED_LANGUAGES:
+        return "en"
+
+    return language
+
+
+# ==========================================================
+# OVERLAP RESOLUTION
+# ==========================================================
+
+
+def _entities_overlap(
+    entity_a: RecognizerResult,
+    entity_b: RecognizerResult,
+) -> bool:
+    """
+    Détecte tout recouvrement partiel ou total.
+    """
+
+    return entity_a.start < entity_b.end and entity_b.start < entity_a.end
+
+
+def _resolve_overlaps(
+    results: list[RecognizerResult],
+) -> list[RecognizerResult]:
+    """
+    Conserve uniquement l'entité la plus prioritaire
+    lorsqu'il existe un chevauchement.
+    """
+
+    sorted_results = sorted(
+        results,
+        key=lambda item: (
+            ENTITY_PRIORITY.get(
+                item.entity_type,
+                0,
+            ),
+            item.score,
+        ),
+        reverse=True,
+    )
+
+    filtered: list[RecognizerResult] = []
+
+    for candidate in sorted_results:
+
+        has_conflict = any(
+            _entities_overlap(
+                candidate,
+                existing,
+            )
+            for existing in filtered
+        )
+
+        if not has_conflict:
+            filtered.append(candidate)
+
+    return sorted(
+        filtered,
+        key=lambda item: item.start,
+    )
+
+
+# ==========================================================
+# PUBLIC API
+# ==========================================================
 
 
 def detect_pii(
     text: str,
-    language: str = "fr",
-):
+    language: str | None = None,
+) -> list[RecognizerResult]:
     """
     Détection des entités PII.
+
+    Args:
+        text:
+            Texte à analyser.
+
+        language:
+            "fr", "en" ou None.
+
+    Returns:
+        Liste des entités détectées.
     """
+
+    if not text or not text.strip():
+        return []
+
+    language = language or detect_language(text)
 
     results = analyzer.analyze(
         text=text,
         entities=DEFAULT_ENTITIES,
         language=language,
+        score_threshold=0.85,
     )
 
+    results = _resolve_overlaps(results)
+
     audit_logger.info(
-        f"PII detection executed | findings={len(results)}"
+        "PII detection executed | " f"language={language} | " f"findings={len(results)}"
     )
+
+    filtered_results: list[RecognizerResult] = []
+
+    for result in results:
+
+        entity_text = text[result.start : result.end]
+
+        if result.entity_type == "PERSON" and result.score < PERSON_SCORE_THRESHOLD:
+
+            audit_logger.debug(
+                "Low-confidence PERSON ignored | "
+                f"text={entity_text} | "
+                f"score={result.score:.2f}"
+            )
+
+            continue
+
+        if result.entity_type == "PERSON" and is_medical_eponym(entity_text):
+
+            audit_logger.debug("Medical eponym ignored | " f"text={entity_text}")
+
+            continue
+
+        filtered_results.append(result)
+
+    results = filtered_results
+
+    audit_logger.info("PII filtering completed | " f"remaining_findings={len(results)}")
 
     return results
 
 
+# ==========================================================
+# LOCAL TEST
+# ==========================================================
+
 if __name__ == "__main__":
 
-    sample = """
+    french_sample = """
     Bonjour,
+
     Je suis Jean Dupont.
+
     Mon email est jean.dupont@gmail.com
+
+    Mon téléphone est 06 12 34 56 78
+
     MRN-458796
+
+    185067512345678
+
+    Mon IP est 192.168.10.15
+
+    Documentation :
+    https://hopital.fr/patient/123
     """
 
-    detections = detect_pii(sample)
+    english_sample = """
+    Hello,
 
-    for item in detections:
+    My name is John Smith.
+
+    My email is john.smith@gmail.com
+
+    My phone number is +1 555 123 4567
+
+    MRN-458796
+
+    123-45-6789
+
+    Server:
+    10.0.0.15
+
+    Website:
+    https://hospital.org/report
+    """
+
+    print("\n=== FRENCH SAMPLE ===\n")
+
+    for item in detect_pii(french_sample):
+        print(item)
+
+    print("\n=== ENGLISH SAMPLE ===\n")
+
+    for item in detect_pii(english_sample):
         print(item)

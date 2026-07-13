@@ -8,7 +8,7 @@
 # ---------------------------------------------------------
 # IMAGE PYTHON
 # ---------------------------------------------------------
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # ---------------------------------------------------------
 # VARIABLES D’ENVIRONNEMENT
@@ -59,10 +59,4 @@ HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 # ---------------------------------------------------------
 # LANCEMENT STREAMLIT
 # ---------------------------------------------------------
-CMD [
-  "streamlit",
-  "run",
-  "streamlit_app/app.py",
-  "--server.port=8501",
-  "--server.address=0.0.0.0"
-]
+CMD ["streamlit", "run", "streamlit_app/app.py", "--server.port=8501", "--server.address=0.0.0.0"]

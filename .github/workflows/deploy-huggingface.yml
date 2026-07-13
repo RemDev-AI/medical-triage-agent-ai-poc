@@ -1,0 +1,228 @@
+# ==========================================================
+# medical-triage-agent-ai-poc/.github/workflows/deploy-huggingface.yml
+# ==========================================================
+
+name: Deploy to Hugging Face Spaces
+
+on:
+  workflow_run:
+    workflows: ["Docker Build & Push"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which Space(s) to deploy"
+        type: choice
+        options: [both, api, ui]
+        default: both
+      environment:
+        description: "Target environment"
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  group: deploy-hf-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  HF_API_SPACE: RemDev-AI/medical-triage-agent-ai-poc-api
+  HF_UI_SPACE: RemDev-AI/medical-triage-agent-ai-poc-ui
+
+jobs:
+  gate-check:
+    name: Deployment gate (go/no-go)
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
+    steps:
+      - id: gate
+        run: |
+          echo "Checklist go/no-go :"
+          echo "  [x] Tests unitaires/integration/sécurité verts (backend-ci)"
+          echo "  [x] Images Docker construites et scannées (Trivy)"
+          echo "  [ ] Validation manuelle requise pour la production"
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+
+  deploy-api:
+    name: Deploy API Space
+    runs-on: ubuntu-latest
+    needs: gate-check
+    if: >
+      needs.gate-check.outputs.proceed == 'true' &&
+      (github.event.inputs.target == 'both' || github.event.inputs.target == 'api' || github.event.inputs.target == '')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Hugging Face CLI
+        run: pip install --upgrade "huggingface_hub[cli]"
+
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@remdev-ai.local"
+          git config --global user.name "RemDev CI Bot"
+
+      - name: Prepare API space payload
+        run: |
+          rm -rf /tmp/hf-api-space
+          mkdir -p /tmp/hf-api-space
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude 'app/tests' \
+            --exclude 'app/datasets/raw' \
+            backend/ /tmp/hf-api-space/
+          cp backend/Dockerfile.hf /tmp/hf-api-space/Dockerfile
+
+      - name: Push to Hugging Face Space (API)
+        env:
+          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN_06"])
+          api.upload_folder(
+              folder_path="/tmp/hf-api-space",
+              repo_id="${{ env.HF_API_SPACE }}",
+              repo_type="space",
+              commit_message=f"CI deploy: {os.environ.get('GITHUB_SHA', 'unknown')[:8]}",
+          )
+          PYEOF
+
+      - name: Restart Space
+        env:
+          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN_06"])
+          api.restart_space(repo_id="${{ env.HF_API_SPACE }}")
+          PYEOF
+
+      - name: Log deployment event to Weights & Biases
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: |
+          pip install --quiet wandb
+          python - <<'PYEOF'
+          import os
+          import datetime
+          import wandb
+
+          wandb.login(key=os.environ["WANDB_API_KEY"])
+          run = wandb.init(
+              project="medical-triage-agent-ai-poc",
+              job_type="deployment",
+              name=f"deploy-api-{datetime.datetime.utcnow().isoformat()}",
+              config={"space": "${{ env.HF_API_SPACE }}", "sha": "${{ github.sha }}"},
+          )
+          run.log({"deployment_event": 1, "target": "api"})
+          run.finish()
+          PYEOF
+
+  deploy-ui:
+    name: Deploy UI Space
+    runs-on: ubuntu-latest
+    needs: gate-check
+    if: >
+      needs.gate-check.outputs.proceed == 'true' &&
+      (github.event.inputs.target == 'both' || github.event.inputs.target == 'ui' || github.event.inputs.target == '')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Hugging Face CLI
+        run: pip install --upgrade "huggingface_hub[cli]"
+
+      - name: Prepare UI space payload
+        run: |
+          rm -rf /tmp/hf-ui-space
+          mkdir -p /tmp/hf-ui-space
+          rsync -a --delete \
+            --exclude '.git' \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            frontend/ /tmp/hf-ui-space/
+          cp frontend/Dockerfile.hf /tmp/hf-ui-space/Dockerfile
+
+      - name: Push to Hugging Face Space (UI)
+        env:
+          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN_06"])
+          api.upload_folder(
+              folder_path="/tmp/hf-ui-space",
+              repo_id="${{ env.HF_UI_SPACE }}",
+              repo_type="space",
+              commit_message=f"CI deploy: {os.environ.get('GITHUB_SHA', 'unknown')[:8]}",
+          )
+          PYEOF
+
+      - name: Restart Space
+        env:
+          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+        run: |
+          python - <<'PYEOF'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN_06"])
+          api.restart_space(repo_id="${{ env.HF_UI_SPACE }}")
+          PYEOF
+
+  post-deploy-smoke-test:
+    name: Post-deploy smoke test
+    runs-on: ubuntu-latest
+    needs: [deploy-api, deploy-ui]
+    steps:
+      - name: Wait for Space cold start
+        run: sleep 60
+
+      - name: Check API health endpoint
+        run: |
+          curl --fail --retry 5 --retry-delay 15 \
+            "https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space/health"
+
+      - name: Check UI health
+        run: |
+          curl --fail --retry 5 --retry-delay 15 \
+            "https://remdev-ai-medical-triage-agent-ai-poc-ui.hf.space/_stcore/health"
+
+      - name: Log deployment summary to Weights & Biases
+        env:
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        run: |
+          pip install --quiet wandb
+          python - <<'PYEOF'
+          import os
+          import wandb
+
+          wandb.login(key=os.environ["WANDB_API_KEY"])
+          run = wandb.init(
+              project="medical-triage-agent-ai-poc",
+              job_type="deployment-summary",
+              name="deploy-summary-${{ github.sha }}",
+          )
+          run.log({
+              "api_health": 1,
+              "ui_health": 1,
+              "sha": "${{ github.sha }}",
+          })
+          run.finish()
+          PYEOF

@@ -1,0 +1,300 @@
+# ==========================================================
+# medical-triage-agent-ai-poc/.github/workflows/backend-ci.yml
+# ==========================================================
+
+name: Backend CI
+
+on:
+  push:
+    branches: [main, dev-01]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    branches: [main, dev-01]
+    paths:
+      - "backend/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  WORKDIR: backend
+
+jobs:
+  lint:
+    name: Lint & static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black==25.1.0 mypy bandit
+      - name: Ruff (lint)
+        working-directory: ${{ env.WORKDIR }}
+        run: ruff check app --output-format=github --extend-exclude "app/training/colab/training_pipeline_colab.ipynb"
+      - name: Black (format check)
+        working-directory: ${{ env.WORKDIR }}
+        run: black --check --config pyproject.toml app
+      
+      - name: Bandit (security static analysis)
+        working-directory: ${{ env.WORKDIR }}
+        run: bandit -r app -ll -x app/tests -f screen
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "${{ env.WORKDIR }}/requirements.txt"
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Run unit tests
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          ENVIRONMENT: test
+          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
+          HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+        run: |
+          pytest app/tests/unit -v \
+            --cov=app --cov-report=xml --cov-report=term-missing \
+            --junitxml=junit-unit.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-coverage
+          path: ${{ env.WORKDIR }}/coverage.xml
+
+      - name: Upload JUnit report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-junit-unit
+          path: ${{ env.WORKDIR }}/junit-unit.xml
+
+  security-tests:
+    name: Security & injection tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "${{ env.WORKDIR }}/requirements.txt"
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run security test suite
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          ENVIRONMENT: test
+          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
+          HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+        run: |
+          pytest app/tests/security -v --junitxml=junit-security.xml
+
+      - name: Upload security JUnit report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-junit-security
+          path: ${{ env.WORKDIR }}/junit-security.xml
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: [unit-tests, security-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "${{ env.WORKDIR }}/requirements.txt"
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run integration tests
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          ENVIRONMENT: test
+          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
+          HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+        run: |
+          pytest app/tests/integration -v -k "not modal" --junitxml=junit-integration.xml
+
+      - name: Upload integration JUnit report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-junit-integration
+          path: ${{ env.WORKDIR }}/junit-integration.xml
+
+  # ==========================================================
+  # COVERAGE CHECK : agrège unit + security + integration +
+  # performance dans une seule exécution pour produire
+  # coverage.json, puis valide le seuil global via
+  # app/tests/test_coverage.py.
+  #
+  # Les tests "performance" (audit_trail, latency,
+  # robustness) exercent en profondeur des modules qui ne
+  # sont pas couverts ailleurs (app.monitoring.audit_store,
+  # latency_monitor, gpu_monitor, request_tracker,
+  # alerting) : les inclure ici donne une mesure de
+  # couverture globale plus fidèle à l'usage réel de l'API.
+  # ==========================================================
+
+  coverage-check:
+    name: Global coverage threshold
+    runs-on: ubuntu-latest
+    needs: [unit-tests, security-tests, integration-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "${{ env.WORKDIR }}/requirements.txt"
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install pytest pytest-cov pytest-asyncio httpx
+
+      - name: Run full suite with combined coverage
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          ENVIRONMENT: test
+          # Le moteur vLLM n'est pas sollicité par les
+          # tests de performance (InferenceClient est
+          # mocké) : USE_VLLM est désactivé pour garantir
+          # l'exécution sur les runners CI standard (sans
+          # GPU).
+          USE_VLLM: "false"
+          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
+          HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+        run: |
+          pytest app/tests/unit app/tests/security app/tests/integration app/tests/performance \
+            -k "not modal" \
+            --cov=app --cov-report=json:coverage.json --cov-report=term-missing
+
+      - name: Validate coverage threshold
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          ENVIRONMENT: test
+        run: |
+          pytest app/tests/test_coverage.py -v --junitxml=junit-coverage.xml
+
+      - name: Upload coverage json
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-coverage-json
+          path: ${{ env.WORKDIR }}/coverage.json
+
+      - name: Upload coverage JUnit report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-junit-coverage
+          path: ${{ env.WORKDIR }}/junit-coverage.xml
+
+  performance-tests:
+    name: Latency, robustness & audit trail tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "${{ env.WORKDIR }}/requirements.txt"
+
+      - name: Install dependencies
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run performance test suite
+        working-directory: ${{ env.WORKDIR }}
+        env:
+          ENVIRONMENT: test
+          # Le moteur vLLM n'est pas sollicité par ces
+          # tests (InferenceClient est mocké) : USE_VLLM
+          # est désactivé pour garantir l'exécution sur
+          # les runners CI standard (sans GPU).
+          USE_VLLM: "false"
+          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
+          HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+        run: |
+          pytest app/tests/performance -v --junitxml=junit-performance.xml
+
+      - name: Upload performance JUnit report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: backend-junit-performance
+          path: ${{ env.WORKDIR }}/junit-performance.xml

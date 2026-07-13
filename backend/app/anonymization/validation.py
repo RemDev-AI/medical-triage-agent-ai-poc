@@ -1,49 +1,145 @@
 # medical-triage-agent-ai-poc/backend/app/anonymization/validation.py
 
 """
-Validation conformité anonymisation RGPD.
+Validation de conformité RGPD après anonymisation.
+
+Support :
+- Français (FR)
+- Anglais (EN)
+
+Vérifie qu'aucune entité PII détectable ne subsiste
+après anonymisation.
 """
 
 from __future__ import annotations
 
-from anonymization.presidio_analyzer import (
+from app.anonymization.audit_logger import (
+    audit_logger,
+)
+from app.anonymization.presidio_analyzer import (
+    detect_language,
     detect_pii,
 )
 
-from anonymization.audit_logger import (
-    audit_logger,
-)
+# ==========================================================
+# PUBLIC API
+# ==========================================================
 
 
-def validate_no_pii(text: str) -> bool:
+def validate_no_pii(
+    text: str,
+    language: str | None = None,
+) -> bool:
     """
-    Vérifie qu'aucun PII n'est encore présent.
+    Vérifie qu'aucune donnée personnelle identifiable
+    (PII) n'est encore présente dans le texte.
+
+    Args:
+        text:
+            Texte à valider.
+
+        language:
+            "fr", "en" ou None pour auto-détection.
+
+    Returns:
+        True si aucune PII résiduelle n'est détectée.
     """
 
-    findings = detect_pii(text)
+    if not text or not text.strip():
+
+        audit_logger.info("Validation success | empty text")
+
+        return True
+
+    language = language or detect_language(text)
+
+    findings = detect_pii(
+        text=text,
+        language=language,
+    )
 
     if findings:
 
         audit_logger.warning(
-            f"Residual PII detected | count={len(findings)}"
+            "Residual PII detected | "
+            f"language={language} | "
+            f"count={len(findings)}"
         )
 
         return False
 
     audit_logger.info(
-        "Validation success | no residual PII"
+        "Validation success | " f"language={language} | " "no residual PII"
     )
 
     return True
 
 
-if __name__ == "__main__":
+def contains_pii(
+    text: str,
+    language: str | None = None,
+) -> bool:
+    """
+    Vérifie si le texte contient au moins une donnée
+    personnelle identifiable (PII).
 
-    sample = """
-    Bonjour,
-    mon email est [REDACTED]
+    Fonction complémentaire de `validate_no_pii` :
+    contains_pii(text) == (not validate_no_pii(text))
+
+    Args:
+        text:
+            Texte à analyser.
+
+        language:
+            "fr", "en" ou None pour auto-détection.
+
+    Returns:
+        True si au moins une PII est détectée dans le texte.
     """
 
-    is_valid = validate_no_pii(sample)
+    if not text or not text.strip():
+        return False
 
-    print(f"Validation: {is_valid}")
+    language = language or detect_language(text)
+
+    findings = detect_pii(
+        text=text,
+        language=language,
+    )
+
+    return len(findings) > 0
+
+
+# ==========================================================
+# LOCAL TEST
+# ==========================================================
+
+if __name__ == "__main__":
+
+    french_sample = """
+    Bonjour,
+
+    mon email est [REDACTED]
+
+    mon téléphone est [REDACTED]
+
+    MRN : [REDACTED]
+    """
+
+    english_sample = """
+    Hello,
+
+    my email is [REDACTED]
+
+    my phone number is [REDACTED]
+
+    MRN : [REDACTED]
+    """
+
+    print("\n=== FRENCH SAMPLE ===\n")
+
+    print(validate_no_pii(french_sample))
+
+    print("\n=== ENGLISH SAMPLE ===\n")
+
+    print(validate_no_pii(english_sample))
