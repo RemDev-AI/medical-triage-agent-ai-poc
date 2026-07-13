@@ -64,14 +64,14 @@ class AlertManager:
 
     def raise_alert(
         self,
-        category: str,
+        code: str,
         message: str,
         level: str = "ERROR",
     ) -> None:
 
         self._create_alert(
             level=level,
-            code=category,
+            code=code,
             message=message,
         )
 

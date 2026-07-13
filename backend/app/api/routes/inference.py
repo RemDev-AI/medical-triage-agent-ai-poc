@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import logging  # noqa : F401
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -21,6 +22,14 @@ from app.api.dependencies.inference import (
 from app.monitoring.alerting import (
     alert_manager,
 )
+
+
+# logger = logging.getLogger("audit_logger")
+
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(message)s",
+# )
 
 
 router = APIRouter(
@@ -93,6 +102,8 @@ async def generate_route(
             )
         except Exception:
             pass
+        # except Exception as alert_exc:
+        #     logger.warning(f"Failed to raise alert: {alert_exc}")
 
         raise HTTPException(
             status_code=500,
