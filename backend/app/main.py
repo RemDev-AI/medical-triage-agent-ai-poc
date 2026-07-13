@@ -130,14 +130,10 @@ app.include_router(
 # =========================================================
 
 
-@app.get(
-    "/health",
-    tags=["System"],
-)
+@app.get("/health", tags=["System"])
 async def health() -> dict:
-
     return {
-        "status": "healthy",
+        "status": "ok",  # avant : "healthy"
         "service": "Medical Triage AI",
         "version": app.version,
     }
