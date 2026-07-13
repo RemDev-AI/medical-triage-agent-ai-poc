@@ -89,14 +89,14 @@ jobs:
             --junitxml=junit-unit.xml
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage
           path: ${{ env.WORKDIR }}/coverage.xml
 
       - name: Upload JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-unit
@@ -134,7 +134,7 @@ jobs:
           pytest app/tests/security -v --junitxml=junit-security.xml
 
       - name: Upload security JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-security
@@ -174,7 +174,7 @@ jobs:
           pytest app/tests/integration -v -k "not modal" --junitxml=junit-integration.xml
 
       - name: Upload integration JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-integration
@@ -243,14 +243,14 @@ jobs:
           pytest app/tests/test_coverage.py -v --junitxml=junit-coverage.xml
 
       - name: Upload coverage json
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage-json
           path: ${{ env.WORKDIR }}/coverage.json
 
       - name: Upload coverage JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-coverage
@@ -293,7 +293,7 @@ jobs:
           pytest app/tests/performance -v --junitxml=junit-performance.xml
 
       - name: Upload performance JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-performance
