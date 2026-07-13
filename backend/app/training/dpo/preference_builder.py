@@ -30,7 +30,7 @@ from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 
-from backend.app.anonymization.presidio_anonymizer import (
+from app.anonymization.presidio_anonymizer import (
     anonymize_text,
 )
 

@@ -22,7 +22,7 @@ import torch
 from transformers import PreTrainedModel
 from transformers import PreTrainedTokenizerBase
 
-from backend.app.deployment.huggingface.hf_space_runtime import (
+from app.deployment.huggingface.hf_space_runtime import (
     runtime_config,
 )
 
@@ -86,7 +86,7 @@ async def generate_response(
 
         logger.info("Dispatching generation to vLLM " "AsyncLLMEngine.")
 
-        from backend.app.llm.inference.vllm_engine import (
+        from app.llm.inference.vllm_engine import (
             generate_response_vllm,
         )
 

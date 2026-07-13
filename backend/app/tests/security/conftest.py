@@ -2,9 +2,9 @@
 
 import pytest
 
-from backend.app.core.security import create_access_token
-from backend.app.main import app
-from backend.app.api.dependencies.inference import get_inference_client
+from app.core.security import create_access_token
+from app.main import app
+from app.api.dependencies.inference import get_inference_client
 
 
 @pytest.fixture

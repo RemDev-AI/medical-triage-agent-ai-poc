@@ -25,14 +25,14 @@ from presidio_analyzer.nlp_engine import (
     NlpEngineProvider,
 )
 
-from backend.app.anonymization.audit_logger import (
+from app.anonymization.audit_logger import (
     audit_logger,
 )
-from backend.app.anonymization.pii_patterns import (
+from app.anonymization.pii_patterns import (
     get_pii_patterns,
     supported_languages,
 )
-from backend.app.anonymization.spacy_setup import (
+from app.anonymization.spacy_setup import (
     get_presidio_configuration,
 )
 

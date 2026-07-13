@@ -34,16 +34,16 @@ import re  # noqa : F401
 
 import yaml
 
-from backend.app.training.evaluation.clinical_metrics import (
+from app.training.evaluation.clinical_metrics import (
     compute_clinical_metrics,
 )
-from backend.app.training.evaluation.clinical_thresholds import (
+from app.training.evaluation.clinical_thresholds import (
     clinical_gate_status,
 )
-from backend.app.training.evaluation.evaluation_report import (
+from app.training.evaluation.evaluation_report import (
     generate_reports,
 )
-from backend.app.training.evaluation.safety_evaluator import (
+from app.training.evaluation.safety_evaluator import (
     evaluate_safety,
 )
 
@@ -996,10 +996,10 @@ if __name__ == "__main__":
     import json
     import re  # noqa : F401
 
-    from backend.app.training.evaluation.dangerous_recommendation_detector import (  # noqa: E501
+    from app.training.evaluation.dangerous_recommendation_detector import (  # noqa: E501
         is_dangerous_response,
     )
-    from backend.app.training.evaluation.hallucination_detector import (
+    from app.training.evaluation.hallucination_detector import (
         contains_unsafe_claim,
         is_hallucinated,
     )
@@ -1098,7 +1098,7 @@ if __name__ == "__main__":
         # torch.float16 en dur, pour que train et eval restent alignés
         # même sur un GPU différent (ex. A100 : bf16 recommandé) sans
         # avoir à mettre à jour ce runner séparément.
-        from backend.app.training.colab.colab_environment import (
+        from app.training.colab.colab_environment import (
             get_training_dtype,
         )
 

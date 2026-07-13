@@ -5,7 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from starlette.routing import Match
 
-from backend.app.core.security import verify_access_token
+from app.core.security import verify_access_token
 
 
 EXCLUDED_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health"}

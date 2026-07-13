@@ -13,10 +13,10 @@ après anonymisation.
 
 from __future__ import annotations
 
-from backend.app.anonymization.audit_logger import (
+from app.anonymization.audit_logger import (
     audit_logger,
 )
-from backend.app.anonymization.presidio_analyzer import (
+from app.anonymization.presidio_analyzer import (
     detect_language,
     detect_pii,
 )

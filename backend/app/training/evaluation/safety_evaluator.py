@@ -25,17 +25,17 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from backend.app.training.evaluation.clinical_thresholds import (
+from app.training.evaluation.clinical_thresholds import (
     MAX_DANGEROUS_RATE,
     MAX_HALLUCINATION_RATE,
     MAX_UNSAFE_CLAIM_RATE,
     MIN_SAFETY_SCORE,
 )
-from backend.app.training.evaluation.dangerous_recommendation_detector import (  # noqa : F401
+from app.training.evaluation.dangerous_recommendation_detector import (  # noqa : F401
     dangerous_recommendation_rate,
     evaluate_responses as evaluate_dangerous_responses,
 )
-from backend.app.training.evaluation.hallucination_detector import (  # noqa : F401
+from app.training.evaluation.hallucination_detector import (  # noqa : F401
     evaluate_responses as evaluate_hallucination_responses,
     hallucination_rate,
     unsafe_claim_rate,

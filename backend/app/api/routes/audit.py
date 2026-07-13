@@ -5,11 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi import Query
 
-from backend.app.api.schemas import (
+from app.api.schemas import (
     AuditLogEntry,
     AuditResponse,
 )
-from backend.app.monitoring.audit_store import (
+from app.monitoring.audit_store import (
     count_entries,
     read_entries,
 )

@@ -31,10 +31,10 @@ import logging
 import threading
 from typing import Optional
 
-from backend.app.deployment.huggingface.hf_space_runtime import (
+from app.deployment.huggingface.hf_space_runtime import (
     runtime_config,
 )
-from backend.app.llm.inference.generate import (
+from app.llm.inference.generate import (
     clean_response,
     _build_chat_prompt,
 )

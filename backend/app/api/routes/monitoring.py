@@ -7,15 +7,15 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 from fastapi import HTTPException
 
-from backend.app.monitoring.alerting import alert_manager
-from backend.app.monitoring.gpu_monitor import gpu_monitor
-from backend.app.monitoring.inference_monitor import (
+from app.monitoring.alerting import alert_manager
+from app.monitoring.gpu_monitor import gpu_monitor
+from app.monitoring.inference_monitor import (
     get_inference_health,
 )
-from backend.app.monitoring.latency_monitor import (
+from app.monitoring.latency_monitor import (
     latency_monitor,
 )
-from backend.app.monitoring.request_tracker import (
+from app.monitoring.request_tracker import (
     request_tracker,
 )
 

@@ -103,7 +103,7 @@ def test_triage_endpoint_latency_is_measured(
     """
 
     payload = {
-        "symptoms": ["fièvre", "toux"],
+        "symptoms": "fièvre, toux",
         "age": 34,
     }
 
@@ -181,7 +181,7 @@ def test_latency_stats_endpoint_reflects_traffic(
         client.post(
             "/triage/",
             json={
-                "symptoms": ["douleur thoracique"],
+                "symptoms": "douleur thoracique",
             },
             headers=auth_headers,
         )

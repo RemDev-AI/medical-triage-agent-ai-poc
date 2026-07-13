@@ -113,7 +113,7 @@ def test_triage_rejects_empty_symptoms(
 
     response = client_healthy.post(
         "/triage/",
-        json={"symptoms": []},
+        json={"symptoms": ""},
         headers=auth_headers,
     )
 
@@ -128,7 +128,7 @@ def test_triage_rejects_invalid_age(
     response = client_healthy.post(
         "/triage/",
         json={
-            "symptoms": ["fièvre"],
+            "symptoms": "fièvre",
             "age": 250,
         },
         headers=auth_headers,
@@ -157,7 +157,7 @@ def test_requests_without_token_are_rejected(
 
     response = client_healthy.post(
         "/triage/",
-        json={"symptoms": ["fièvre"]},
+        json={"symptoms": "fièvre"},
     )
 
     assert response.status_code == 401
@@ -175,7 +175,7 @@ def test_triage_failure_returns_500_not_crash(
 
     response = client_with_failure.post(
         "/triage/",
-        json={"symptoms": ["fièvre"]},
+        json={"symptoms": "fièvre"},
         headers=auth_headers,
     )
 
@@ -238,7 +238,7 @@ def test_request_tracker_is_not_double_counted(
 
     client_healthy.post(
         "/triage/",
-        json={"symptoms": ["fièvre"]},
+        json={"symptoms": "fièvre"},
         headers=auth_headers,
     )
 

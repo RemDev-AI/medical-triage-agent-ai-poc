@@ -6,25 +6,25 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
 
-from backend.app.api.router import api_router
+from app.api.router import api_router
 
-from backend.app.api.middleware.auth_middleware import (
+from app.api.middleware.auth_middleware import (
     JWTAuthMiddleware,
 )
 
-from backend.app.api.middleware.logging_middleware import (
+from app.api.middleware.logging_middleware import (
     AuditLoggingMiddleware,
 )
 
-from backend.app.api.middleware.security_middleware import (
+from app.api.middleware.security_middleware import (
     setup_cors,
 )
 
-from backend.app.core.rate_limiter import (
+from app.core.rate_limiter import (
     rate_limit,
 )
 
-from backend.app.deployment.huggingface.hf_space_runtime import (
+from app.deployment.huggingface.hf_space_runtime import (
     runtime_config,
 )
 

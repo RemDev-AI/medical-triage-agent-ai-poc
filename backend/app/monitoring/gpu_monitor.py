@@ -6,13 +6,13 @@ import threading
 from typing import Any
 from typing import Dict
 
-from backend.app.monitoring.inference_monitor import (
+from app.monitoring.inference_monitor import (
     get_active_containers,
 )
-from backend.app.monitoring.inference_monitor import (
+from app.monitoring.inference_monitor import (
     get_gpu_usage,
 )
-from backend.app.monitoring.inference_monitor import (
+from app.monitoring.inference_monitor import (
     get_inference_latency,
 )
 

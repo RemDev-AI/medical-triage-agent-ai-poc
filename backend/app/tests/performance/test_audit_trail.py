@@ -76,7 +76,7 @@ def test_interaction_is_persisted_to_audit_store(
 
     response = client.post(
         "/triage/",
-        json={"symptoms": ["fièvre"]},
+        json={"symptoms": "fièvre"},
         headers=auth_headers,
     )
 
@@ -105,7 +105,7 @@ def test_audit_endpoint_returns_real_data(
 
     client.post(
         "/triage/",
-        json={"symptoms": ["fièvre"]},
+        json={"symptoms": "fièvre"},
         headers=auth_headers,
     )
 
@@ -153,13 +153,13 @@ def test_audit_entries_are_most_recent_first(
 
     client.post(
         "/triage/",
-        json={"symptoms": ["premier"]},
+        json={"symptoms": "premier"},
         headers=auth_headers,
     )
 
     client.post(
         "/triage/",
-        json={"symptoms": ["second"]},
+        json={"symptoms": "second"},
         headers=auth_headers,
     )
 

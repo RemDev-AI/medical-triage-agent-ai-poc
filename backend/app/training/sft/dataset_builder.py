@@ -24,7 +24,7 @@ from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 
-from backend.app.anonymization.presidio_anonymizer import anonymize_text
+from app.anonymization.presidio_anonymizer import anonymize_text
 
 INPUT_DIR = Path("backend/app/datasets/raw/standardized")
 OUTPUT_DIR = Path("backend/app/datasets/processed/sft")

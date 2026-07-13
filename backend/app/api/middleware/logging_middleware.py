@@ -12,13 +12,13 @@ from datetime import datetime, timezone
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend.app.monitoring.latency_monitor import (
+from app.monitoring.latency_monitor import (
     latency_monitor,
 )
-from backend.app.monitoring.request_tracker import (
+from app.monitoring.request_tracker import (
     request_tracker,
 )
-from backend.app.monitoring.audit_store import (
+from app.monitoring.audit_store import (
     record_entry,
 )
 
@@ -34,17 +34,6 @@ logging.basicConfig(
 class AuditLoggingMiddleware(BaseHTTPMiddleware):
     """
     Middleware de journalisation.
-
-    Responsabilités :
-
-    - audit des requêtes (persisté via audit_store,
-      cf. routes/audit.py — correctif étape 3)
-    - mesure de latence (source unique de vérité
-      pour latency_monitor, cf. NOTE ci-dessous)
-    - suivi du trafic (source unique de vérité
-      pour request_tracker)
-    - attribution d'un Request ID
-    - alimentation du monitoring
 
     NOTE (correctif étape 3) :
     Ce middleware est l'UNIQUE point d'incrémentation

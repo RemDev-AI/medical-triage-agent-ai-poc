@@ -16,23 +16,23 @@ from typing import Optional
 from transformers import PreTrainedModel
 from transformers import PreTrainedTokenizerBase
 
-from backend.app.llm.inference.generate import (
+from app.llm.inference.generate import (
     build_generation_metadata,
     clean_response,
     generate_response,
 )
 
-from backend.app.llm.inference.prompt_builder import (
+from app.llm.inference.prompt_builder import (
     SYSTEM_PROMPT,
     build_triage_prompt,
 )
 
-from backend.app.deployment.huggingface.hf_space_runtime import (
+from app.deployment.huggingface.hf_space_runtime import (
     runtime_config,
 )
 
 # PHASE 7 - Monitoring
-from backend.app.monitoring.gpu_monitor import gpu_monitor
+from app.monitoring.gpu_monitor import gpu_monitor
 
 logger = logging.getLogger(__name__)
 

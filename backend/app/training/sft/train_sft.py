@@ -42,20 +42,20 @@ from transformers import (
     TrainingArguments,
 )
 
-from backend.app.training.colab.colab_environment import (
+from app.training.colab.colab_environment import (
     apply_precision_arguments,
     resolve_quantization_settings,
 )
-from backend.app.training.shared.training_model_loader import (
+from app.training.shared.training_model_loader import (
     TrainingModelLoader,
 )
-from backend.app.training.shared.training_tokenizer_loader import (
+from app.training.shared.training_tokenizer_loader import (
     TrainingTokenizerLoader,
 )
-from backend.app.training.shared.training_utils import (
+from app.training.shared.training_utils import (
     TrainingUtils,
 )
-from backend.app.training.colab.colab_checkpoint_sync import (
+from app.training.colab.colab_checkpoint_sync import (
     create_default_checkpoint_sync,
 )
 

@@ -21,10 +21,10 @@ from __future__ import annotations
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
-from backend.app.anonymization.audit_logger import (
+from app.anonymization.audit_logger import (
     audit_logger,
 )
-from backend.app.anonymization.presidio_analyzer import (
+from app.anonymization.presidio_analyzer import (
     detect_language,
     detect_pii,
 )

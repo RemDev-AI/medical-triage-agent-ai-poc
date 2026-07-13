@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional  # noqa: F401
 import torch
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
-from backend.app.training.lora.peft_setup import setup_peft_model
+from app.training.lora.peft_setup import setup_peft_model
 
 logger = logging.getLogger(__name__)
 
@@ -304,7 +304,7 @@ class TrainingModelLoader:
 
         if dtype == "auto":
             # Source unique de vérité : même logique que apply_precision_arguments()  # noqa: E501
-            from backend.app.training.colab.colab_environment import (
+            from app.training.colab.colab_environment import (
                 get_training_dtype,
             )
 

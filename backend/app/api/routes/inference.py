@@ -8,17 +8,17 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from backend.app.api.schemas import (
+from app.api.schemas import (
     GenerateRequest,
     GenerateResponse,
 )
 
-from backend.app.api.dependencies.inference import (
+from app.api.dependencies.inference import (
     InferenceClient,
     get_inference_client,
 )
 
-from backend.app.monitoring.alerting import (
+from app.monitoring.alerting import (
     alert_manager,
 )
 
@@ -39,37 +39,6 @@ async def generate_route(
         get_inference_client,
     ),
 ):
-    """
-    Endpoint de génération générique.
-
-    Flux d'exécution :
-
-    Request
-        ↓
-    Validation Pydantic
-        ↓
-    InferenceClient
-        ↓
-    Backend d'inférence
-        ↓
-    Monitoring (AuditLoggingMiddleware)
-        ↓
-    Response
-
-    NOTE (correctif étape 3) :
-    Le comptage global des requêtes et la latence
-    globale sont déjà assurés par
-    AuditLoggingMiddleware (request_tracker,
-    latency_monitor) pour TOUTES les routes.
-    Cette route ne doit donc plus appeler
-    request_tracker.increment_*() ni
-    latency_monitor.record() elle-même, sous peine
-    de compter chaque requête deux fois.
-    Le chronométrage local ci-dessous sert
-    uniquement à renseigner le champ
-    `latency_seconds` de la réponse métier.
-    """
-
     start_time = time.perf_counter()
 
     try:
@@ -119,7 +88,7 @@ async def generate_route(
 
         try:
             alert_manager.raise_alert(
-                category="INFERENCE_ERROR",
+                code="INFERENCE_ERROR",
                 message=str(exc),
             )
         except Exception:

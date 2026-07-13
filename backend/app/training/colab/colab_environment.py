@@ -37,7 +37,7 @@ from typing import Any
 
 import torch
 
-from backend.app.training.colab.colab_gpu_detector import (
+from app.training.colab.colab_gpu_detector import (
     build_gpu_info,
     detect_gpu_type,
     should_use_4bit_quantization,

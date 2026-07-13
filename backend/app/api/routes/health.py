@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from datetime import datetime
 
-from backend.app.api.schemas import HealthResponse
+from app.api.schemas import HealthResponse
 
 router = APIRouter(prefix="/health", tags=["Health"])
 

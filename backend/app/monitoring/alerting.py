@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Dict
 from typing import List
 
-from backend.app.monitoring.gpu_monitor import (
+from app.monitoring.gpu_monitor import (
     gpu_monitor,
 )
-from backend.app.monitoring.latency_monitor import (
+from app.monitoring.latency_monitor import (
     latency_monitor,
 )
-from backend.app.monitoring.request_tracker import (
+from app.monitoring.request_tracker import (
     request_tracker,
 )
 
@@ -27,16 +27,6 @@ class Alert:
 
 
 class AlertManager:
-    """
-    Gestionnaire centralisé d'alertes.
-
-    Compatible :
-
-    - Hugging Face Spaces
-    - Backend d'inférence
-    - FastAPI
-    - Streamlit Dashboard
-    """
 
     LATENCY_WARNING_MS = 1000
     LATENCY_CRITICAL_MS = 3000
@@ -78,9 +68,6 @@ class AlertManager:
         message: str,
         level: str = "ERROR",
     ) -> None:
-        """
-        API utilisée par les routes FastAPI.
-        """
 
         self._create_alert(
             level=level,
@@ -92,10 +79,6 @@ class AlertManager:
         self,
         latency_ms: float | None = None,
     ) -> None:
-        """
-        Analyse des temps de réponse.
-        Compatible avec les routes FastAPI.
-        """
 
         if latency_ms is None:
 
@@ -123,9 +106,6 @@ class AlertManager:
             )
 
     def evaluate_errors(self) -> None:
-        """
-        Analyse du taux d'erreur API.
-        """
 
         stats = request_tracker.get_stats()
 
@@ -151,9 +131,6 @@ class AlertManager:
             )
 
     def evaluate_gpu(self) -> None:
-        """
-        Analyse des métriques GPU.
-        """
 
         metrics = gpu_monitor.get_gpu_stats()
 
@@ -201,10 +178,6 @@ class AlertManager:
             )
 
     def evaluate_containers(self) -> None:
-        """
-        Analyse de la charge du backend
-        d'inférence.
-        """
 
         metrics = gpu_monitor.get_gpu_stats()
 

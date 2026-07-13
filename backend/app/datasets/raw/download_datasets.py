@@ -14,13 +14,13 @@ Responsabilités :
 from pathlib import Path
 import logging
 
-from backend.utils.hf_utils import (
+from utils.hf_utils import (
     load_hf_dataset,
     export_jsonl,
     dataset_stats,
 )
 
-from backend.app.datasets.raw.dataset_registry import (
+from app.datasets.raw.dataset_registry import (
     DATASET_REGISTRY,
 )
 
