@@ -46,9 +46,7 @@ dependencies = [
     "presidio-analyzer",
     "presidio-anonymizer",
 
-    "mlflow",
     "wandb",
-    "prometheus-client",
 
     "loguru",
 
@@ -62,7 +60,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "pytest-cov>=6.0.0",
-    "black",
+    "black==25.1.0",
     "flake8",
     "isort",
     "mypy",
@@ -102,6 +100,9 @@ exclude = [
     ".pytest_cache",
     ".mypy_cache"
 ]
+
+[tool.ruff]
+extend-exclude = ["app/training/colab/training_pipeline_colab.ipynb"]
 
 [build-system]
 requires = [

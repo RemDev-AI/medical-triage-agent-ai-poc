@@ -9,10 +9,7 @@ from streamlit_app.config.settings import (
     REQUEST_TIMEOUT,
 )
 
-
-MONITORING_ENDPOINT = (
-    f"{API_BASE_URL}/monitoring/overview"
-)
+MONITORING_ENDPOINT = f"{API_BASE_URL}/monitoring/overview"
 
 
 def get_metrics() -> dict:
@@ -38,9 +35,7 @@ def get_metrics() -> dict:
             "latency": {},
             "requests": {},
             "gpu": {},
-            "alerts": [
-                "Monitoring API timeout"
-            ],
+            "alerts": ["Monitoring API timeout"],
         }
 
     except requests.RequestException as exc:
@@ -49,7 +44,5 @@ def get_metrics() -> dict:
             "latency": {},
             "requests": {},
             "gpu": {},
-            "alerts": [
-                f"Monitoring API error: {exc}"
-            ],
+            "alerts": [f"Monitoring API error: {exc}"],
         }

@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
+from app.main import app
 
 client = TestClient(app)
 
@@ -27,23 +27,23 @@ def test_method_not_allowed():
     assert response.status_code in [404, 405]
 
 
-def test_invalid_content_type():
+def test_invalid_content_type(auth_headers):
     """
     Invalid content-type should fail validation.
     """
 
+    headers = {**auth_headers, "Content-Type": "text/plain"}
+
     response = client.post(
         "/triage",
         data="invalid",
-        headers={
-            "Content-Type": "text/plain",
-        },
+        headers=headers,
     )
 
     assert response.status_code in [400, 415, 422]
 
 
-def test_empty_request_body():
+def test_empty_request_body(auth_headers):
     """
     Empty body should fail schema validation.
     """
@@ -51,6 +51,7 @@ def test_empty_request_body():
     response = client.post(
         "/triage",
         json={},
+        headers=auth_headers,
     )
 
     assert response.status_code in [400, 422]

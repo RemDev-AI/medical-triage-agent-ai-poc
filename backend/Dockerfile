@@ -2,6 +2,16 @@
 # medical-triage-agent-ai-poc/backend/Dockerfile
 # Backend FastAPI
 # Google Colab GPU Free compatible
+#
+# IMPORTANT : ce Dockerfile doit être buildé avec la RACINE
+# du dépôt comme contexte (et non ./backend), afin de
+# préserver la structure de package "backend.app.*" utilisée
+# par tous les imports Python du projet.
+#
+# Exemple :
+#   docker build -f backend/Dockerfile -t medical-triage-backend .
+#
+# Cf. docker-compose.yml (context: ., dockerfile: backend/Dockerfile)
 # ==========================================================
 
 FROM python:3.11-slim
@@ -33,17 +43,16 @@ RUN apt-get update && apt-get install -y \
 # PYTHON DEPENDENCIES
 # ==========================================================
 
-COPY requirements.txt .
-
+COPY requirements.txt ./requirements.txt
 RUN pip install --upgrade pip
-
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ==========================================================
 # APPLICATION
 # ==========================================================
 
-COPY . .
+# Copie du package "backend" complet (préserve backend.app.*)
+COPY . ./  
 
 # ==========================================================
 # NETWORK
@@ -65,11 +74,4 @@ HEALTHCHECK --interval=30s \
 # STARTUP
 # ==========================================================
 
-CMD [
-    "uvicorn",
-    "app.main:app",
-    "--host",
-    "0.0.0.0",
-    "--port",
-    "8000"
-]
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -35,7 +35,7 @@ from peft import (
 )
 from transformers import AutoModelForCausalLM
 
-from backend.app.training.lora.lora_config import (
+from app.training.lora.lora_config import (
     DEFAULT_LORA_CONFIG,
     LoRAHyperParameters,
     build_lora_config,
@@ -100,7 +100,9 @@ def prepare_model_for_lora(
     quantized = is_model_quantized(model)
 
     if quantized:
-        logger.info("Modèle quantifié détecté — preparing for k-bit training...")  # noqa: E501
+        logger.info(
+            "Modèle quantifié détecté — preparing for k-bit training..."
+        )  # noqa: E501
         model = prepare_model_for_kbit_training(
             model,
             use_gradient_checkpointing=gradient_checkpointing
@@ -114,10 +116,14 @@ def prepare_model_for_lora(
         if hasattr(model, "config"):
             model.config.use_cache = False
 
-    if gradient_checkpointing and not already_gradient_checkpointed and not quantized:  # noqa: E501
+    if (
+        gradient_checkpointing and not already_gradient_checkpointed and not quantized
+    ):  # noqa: E501
         # Le chemin quantifié gère déjà le gradient checkpointing via
         # prepare_model_for_kbit_training(use_gradient_checkpointing=...).
-        logger.info("Enabling gradient checkpointing (use_reentrant=False)...")  # noqa: E501
+        logger.info(
+            "Enabling gradient checkpointing (use_reentrant=False)..."
+        )  # noqa: E501
         model.gradient_checkpointing_enable(
             gradient_checkpointing_kwargs={"use_reentrant": False}
         )
@@ -165,7 +171,9 @@ def build_lora_config_from_yaml(config: Dict) -> LoraConfig:
         inference_mode=lora_section.get(
             "inference_mode", _DEFAULT_LORA_PARAMS.inference_mode
         ),
-        use_rslora=lora_section.get("use_rslora", _DEFAULT_LORA_PARAMS.use_rslora),  # noqa : E501
+        use_rslora=lora_section.get(
+            "use_rslora", _DEFAULT_LORA_PARAMS.use_rslora
+        ),  # noqa : E501
         use_dora=lora_section.get("use_dora", _DEFAULT_LORA_PARAMS.use_dora),
         init_lora_weights=lora_section.get(
             "init_lora_weights", _DEFAULT_LORA_PARAMS.init_lora_weights
@@ -284,11 +292,7 @@ def print_trainable_parameters(
         if param.requires_grad:
             trainable_params += param.numel()
 
-    ratio = (
-        100 * trainable_params / total_params
-        if total_params > 0
-        else 0.0
-    )
+    ratio = 100 * trainable_params / total_params if total_params > 0 else 0.0
 
     logger.info(
         "Trainable params: %s | Total params: %s | Trainable ratio: %.4f%%",
@@ -333,7 +337,7 @@ def get_gpu_memory_usage() -> Dict[str, object]:
 
 def setup_peft_model(
     model: AutoModelForCausalLM,
-    config: Optional[Dict] = None,      # ← FIX BUG #2 : paramètre ajouté
+    config: Optional[Dict] = None,  # ← FIX BUG #2 : paramètre ajouté
     already_gradient_checkpointed: bool = True,  # ← étape 1 : évite le double GC  # noqa : E501
 ) -> PeftModel:
     """
@@ -365,10 +369,7 @@ def setup_peft_model(
         PEFT model.
     """
 
-    total_params_before = sum(
-        param.numel()
-        for param in model.parameters()
-    )
+    total_params_before = sum(param.numel() for param in model.parameters())
 
     logger.info(
         "Model parameters before PEFT setup: %s",

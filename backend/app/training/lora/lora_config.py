@@ -48,9 +48,7 @@ class LoRAHyperParameters:
     )
 
     modules_to_save: Optional[tuple[str, ...]] = field(
-        default_factory=lambda: (
-            "lm_head",
-        )
+        default_factory=lambda: ("lm_head",)
     )
 
     inference_mode: bool = False
@@ -66,19 +64,13 @@ class LoRAHyperParameters:
         """
 
         if self.rank <= 0:
-            raise ValueError(
-                "LoRA rank must be greater than zero."
-            )
+            raise ValueError("LoRA rank must be greater than zero.")
 
         if self.alpha <= 0:
-            raise ValueError(
-                "LoRA alpha must be greater than zero."
-            )
+            raise ValueError("LoRA alpha must be greater than zero.")
 
         if not 0.0 <= self.dropout <= 1.0:
-            raise ValueError(
-                "LoRA dropout must be between 0.0 and 1.0."
-            )
+            raise ValueError("LoRA dropout must be between 0.0 and 1.0.")
 
     def to_dict(self) -> Dict[str, object]:
         """
@@ -123,9 +115,7 @@ def build_lora_config(
         task_type=params.task_type,
         target_modules=list(params.target_modules),
         modules_to_save=(
-            list(params.modules_to_save)
-            if params.modules_to_save
-            else None
+            list(params.modules_to_save) if params.modules_to_save else None
         ),
         inference_mode=params.inference_mode,
         use_rslora=params.use_rslora,
@@ -136,6 +126,4 @@ def build_lora_config(
 
 DEFAULT_LORA_HYPERPARAMETERS = LoRAHyperParameters()
 
-DEFAULT_LORA_CONFIG = build_lora_config(
-    DEFAULT_LORA_HYPERPARAMETERS
-)
+DEFAULT_LORA_CONFIG = build_lora_config(DEFAULT_LORA_HYPERPARAMETERS)

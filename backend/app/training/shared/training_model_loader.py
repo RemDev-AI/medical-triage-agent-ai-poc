@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional  # noqa: F401
 import torch
 from transformers import AutoModelForCausalLM, BitsAndBytesConfig
 
-from backend.app.training.lora.peft_setup import setup_peft_model
+from app.training.lora.peft_setup import setup_peft_model
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,9 @@ class TrainingModelLoader:
 
     def __init__(self, config: Dict[str, Any]) -> None:
         self.config = config
-        self.engine = self.config.get("runtime", {}).get("engine", "transformers")  # noqa: E501
+        self.engine = self.config.get("runtime", {}).get(
+            "engine", "transformers"
+        )  # noqa: E501
 
     # ------------------------------------------------------------------
     # Point d'entrée unique
@@ -69,7 +71,15 @@ class TrainingModelLoader:
 
         load_kwargs: Dict[str, Any] = dict(
             pretrained_model_name_or_path=model_name,
-            trust_remote_code=self.config["model"].get("trust_remote_code", True),  # noqa: E501
+            # Pin de la révision Hub (commit SHA, tag ou branche) pour
+            # éviter qu'un push distant ne change le contenu du modèle
+            # entre deux runs (Bandit B615). Configurable via
+            # config["model"]["base_model_revision"] ; repli sur "main"
+            # si absente/vide.
+            revision=self.config["model"].get("base_model_revision") or "main",
+            trust_remote_code=self.config["model"].get(
+                "trust_remote_code", True
+            ),  # noqa: E501
             device_map=self.config["model"].get("device_map", "auto"),
         )
 
@@ -92,7 +102,9 @@ class TrainingModelLoader:
         if quantization_config is not None:
             load_kwargs["quantization_config"] = quantization_config
 
-        model = AutoModelForCausalLM.from_pretrained(**load_kwargs)
+        model = AutoModelForCausalLM.from_pretrained(  # nosec B615 - revision déjà pinnée via load_kwargs (base_model_revision, repli "main" pour le POC)
+            **load_kwargs
+        )
 
         logger.info("Base model loaded successfully.")
         return model
@@ -104,7 +116,9 @@ class TrainingModelLoader:
         enabled = self.config["training"].get("gradient_checkpointing", True)
 
         if enabled:
-            logger.info("Enabling gradient checkpointing (use_reentrant=False).")  # noqa: E501
+            logger.info(
+                "Enabling gradient checkpointing (use_reentrant=False)."
+            )  # noqa: E501
 
             # FIX BUG #4 — use_reentrant=False requis pour Qwen3
             # + DataCollatorForSeq2Seq (évite NaN silencieux sur certaines versions)  # noqa: E501
@@ -129,7 +143,7 @@ class TrainingModelLoader:
         # modèle est effectivement quantifié (cf. peft_setup.py).
         model = setup_peft_model(
             model=model,
-            config=self.config,     # ← décommenté : la config YAML est lue
+            config=self.config,  # ← décommenté : la config YAML est lue
         )
 
         logger.info("LoRA adapters applied successfully.")
@@ -159,10 +173,13 @@ class TrainingModelLoader:
             load_in_4bit,
         )
 
-        resolved_dtype = self._resolve_torch_dtype()  # réutilise la logique custom validée # noqa: E501
+        resolved_dtype = (
+            self._resolve_torch_dtype()
+        )  # réutilise la logique custom validée # noqa: E501
 
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=model_name,
+            revision=self.config["model"].get("base_model_revision") or "main",
             max_seq_length=max_seq_length,
             # dtype=None,  # Unsloth choisit automatiquement bf16/fp16 selon le GPU  # noqa: E501
             dtype=resolved_dtype,  # source unique de vérité, plus de dtype=None # noqa: E501
@@ -183,8 +200,15 @@ class TrainingModelLoader:
             r=lora_cfg.get("r", 16),
             target_modules=lora_cfg.get(
                 "target_modules",
-                ["q_proj", "k_proj", "v_proj", "o_proj",
-                 "gate_proj", "up_proj", "down_proj"],
+                [
+                    "q_proj",
+                    "k_proj",
+                    "v_proj",
+                    "o_proj",
+                    "gate_proj",
+                    "up_proj",
+                    "down_proj",
+                ],
             ),
             lora_alpha=lora_cfg.get("lora_alpha", 16),
             lora_dropout=lora_cfg.get("lora_dropout", 0.0),
@@ -262,9 +286,7 @@ class TrainingModelLoader:
             load_in_4bit=True,
             bnb_4bit_quant_type=quant_cfg.get("bnb_4bit_quant_type", "nf4"),
             bnb_4bit_compute_dtype=compute_dtype,
-            bnb_4bit_use_double_quant=quant_cfg.get(
-                "bnb_4bit_use_double_quant", True
-            ),
+            bnb_4bit_use_double_quant=quant_cfg.get("bnb_4bit_use_double_quant", True),
         )
 
         logger.info(
@@ -282,9 +304,10 @@ class TrainingModelLoader:
 
         if dtype == "auto":
             # Source unique de vérité : même logique que apply_precision_arguments()  # noqa: E501
-            from backend.app.training.colab.colab_environment import (
+            from app.training.colab.colab_environment import (
                 get_training_dtype,
             )
+
             resolved = get_training_dtype()
             logger.info("torch_dtype=auto → résolu par runtime : %s", resolved)
             return resolved
@@ -311,9 +334,7 @@ class TrainingModelLoader:
             if parameter.requires_grad:
                 trainable_params += parameter.numel()
 
-        percentage = (
-            100 * trainable_params / total_params if total_params > 0 else 0.0
-        )
+        percentage = 100 * trainable_params / total_params if total_params > 0 else 0.0
 
         logger.info(
             "Trainable parameters: %s / %s (%.4f%%)",

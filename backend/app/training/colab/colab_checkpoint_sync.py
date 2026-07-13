@@ -59,9 +59,7 @@ from huggingface_hub import snapshot_download
 
 logger = logging.getLogger(__name__)
 
-HF_MODELS_REPO_ID = (
-    "RemDev-AI/medical-triage-agent-ai-poc-models"
-)
+HF_MODELS_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
 
 
 class ColabCheckpointSync:
@@ -78,6 +76,7 @@ class ColabCheckpointSync:
         training_type: str,
         hf_repo_id: str = HF_MODELS_REPO_ID,
         cleanup_after_upload: bool = True,
+        revision: str = "main",
     ) -> None:
 
         self.local_checkpoint_dir = Path(local_checkpoint_dir)
@@ -85,12 +84,15 @@ class ColabCheckpointSync:
         self.training_type = training_type.lower()
 
         if self.training_type not in {"sft", "dpo"}:
-            raise ValueError(
-                "training_type must be 'sft' or 'dpo'."
-            )
+            raise ValueError("training_type must be 'sft' or 'dpo'.")
 
         self.hf_repo_id = hf_repo_id
         self.cleanup_after_upload = cleanup_after_upload
+        # Pin the Hub revision (commit SHA, tag, or branch) used when
+        # downloading checkpoints, to avoid an unexpected concurrent push
+        # changing content mid-restore (Bandit B615). "main" preserves the
+        # existing "always get the latest" behavior.
+        self.revision = revision
 
         self.local_checkpoint_dir.mkdir(
             parents=True,
@@ -112,15 +114,12 @@ class ColabCheckpointSync:
         checkpoints = [
             checkpoint
             for checkpoint in self.local_checkpoint_dir.iterdir()
-            if checkpoint.is_dir()
-            and checkpoint.name.startswith("checkpoint-")
+            if checkpoint.is_dir() and checkpoint.name.startswith("checkpoint-")
         ]
 
         return sorted(
             checkpoints,
-            key=lambda x: int(
-                x.name.replace("checkpoint-", "")
-            ),
+            key=lambda x: int(x.name.replace("checkpoint-", "")),
         )
 
     def get_latest_checkpoint(self) -> Optional[Path]:
@@ -167,11 +166,7 @@ class ColabCheckpointSync:
             "",
         )
 
-        return (
-            f"checkpoint-"
-            f"{self.training_type}-"
-            f"{step}"
-        )
+        return f"checkpoint-" f"{self.training_type}-" f"{step}"
 
     def cleanup_checkpoint(
         self,
@@ -198,9 +193,7 @@ class ColabCheckpointSync:
 
         except Exception:
 
-            logger.exception(
-                "Checkpoint cleanup failed."
-            )
+            logger.exception("Checkpoint cleanup failed.")
 
             return False
 
@@ -213,35 +206,20 @@ class ColabCheckpointSync:
         Models repository.
         """
 
-        remote_name = (
-            self._build_remote_checkpoint_name(
-                checkpoint_path
-            )
-        )
+        remote_name = self._build_remote_checkpoint_name(checkpoint_path)
 
-        remote_dir = (
-            "checkpoints/"
-            f"{self.training_type}/"
-            f"{remote_name}"
-        )
+        remote_dir = "checkpoints/" f"{self.training_type}/" f"{remote_name}"
 
         try:
 
             api = HfApi()
 
             api.upload_folder(
-
                 folder_path=str(checkpoint_path),
-
                 repo_id=self.hf_repo_id,
-
                 repo_type="model",
-
                 path_in_repo=remote_dir,
-
-                commit_message=(
-                    f"Upload {remote_name}"
-                ),
+                commit_message=(f"Upload {remote_name}"),
             )
 
             logger.info(
@@ -263,7 +241,7 @@ class ColabCheckpointSync:
 
             remote_prefix = f"{remote_dir}/"
             remote_files = {
-                file[len(remote_prefix):]
+                file[len(remote_prefix) :]
                 for file in api.list_repo_files(
                     repo_id=self.hf_repo_id,
                     repo_type="model",
@@ -292,17 +270,13 @@ class ColabCheckpointSync:
 
             if self.cleanup_after_upload:
 
-                self.cleanup_checkpoint(
-                    checkpoint_path
-                )
+                self.cleanup_checkpoint(checkpoint_path)
 
             return True
 
         except Exception:
 
-            logger.exception(
-                "Checkpoint upload failed."
-            )
+            logger.exception("Checkpoint upload failed.")
 
             return False
 
@@ -316,19 +290,13 @@ class ColabCheckpointSync:
         checkpoints = self.get_checkpoints()
 
         if not checkpoints:
-            logger.warning(
-                "No checkpoints found."
-            )
+            logger.warning("No checkpoints found.")
             return False
 
         success = True
 
         for checkpoint in checkpoints:
-            uploaded = (
-                self.sync_checkpoint_to_huggingface(
-                    checkpoint
-                )
-            )
+            uploaded = self.sync_checkpoint_to_huggingface(checkpoint)
 
             if not uploaded:
                 success = False
@@ -373,9 +341,7 @@ class ColabCheckpointSync:
                 repo_type="model",
             )
 
-            prefix = (
-                f"checkpoints/{self.training_type}/"
-            )
+            prefix = f"checkpoints/{self.training_type}/"
 
             checkpoint_dirs = set()
 
@@ -399,13 +365,8 @@ class ColabCheckpointSync:
                 return None
 
             latest_checkpoint = max(
-
                 checkpoint_dirs,
-
-                key=lambda name: int(
-                    name.split("-")[-1]
-                ),
-
+                key=lambda name: int(name.split("-")[-1]),
             )
 
             logger.info(
@@ -414,31 +375,15 @@ class ColabCheckpointSync:
             )
 
             local_path = snapshot_download(
-
                 repo_id=self.hf_repo_id,
-
                 repo_type="model",
-
-                allow_patterns=[
-                    (
-                        f"{prefix}"
-                        f"{latest_checkpoint}/*"
-                    )
-                ],
-
-                local_dir=str(
-                    self.local_checkpoint_dir
-                ),
-
+                revision=self.revision,
+                allow_patterns=[f"{prefix}" f"{latest_checkpoint}/*"],
+                local_dir=str(self.local_checkpoint_dir),
                 local_dir_use_symlinks=False,
-
             )
 
-            checkpoint_path = (
-                Path(local_path)
-                / prefix
-                / latest_checkpoint
-            )
+            checkpoint_path = Path(local_path) / prefix / latest_checkpoint
 
             # FIX HUB-6 — snapshot_download(local_dir=...) crée
             # systématiquement un sous-dossier "<local_dir>/.cache/huggingface/"  # noqa : E501
@@ -474,9 +419,7 @@ class ColabCheckpointSync:
 
         except Exception:
 
-            logger.exception(
-                "Unable to restore checkpoint from Hugging Face."
-            )
+            logger.exception("Unable to restore checkpoint from Hugging Face.")
 
             return None
 
@@ -490,11 +433,7 @@ def create_default_checkpoint_sync(
     """
 
     return ColabCheckpointSync(
-
         local_checkpoint_dir=output_dir,
-
         training_type=training_type,
-
         hf_repo_id=HF_MODELS_REPO_ID,
-
     )

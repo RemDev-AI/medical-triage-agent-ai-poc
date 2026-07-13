@@ -46,9 +46,7 @@ logger = logging.getLogger(__name__)
 # seuls include_metadata/include_thresholds étaient de vraies clés
 # mortes.
 # ============================================================
-EVALUATION_CONFIG_PATH = (
-    Path(__file__).parent / "evaluation_config.yaml"
-)
+EVALUATION_CONFIG_PATH = Path(__file__).parent / "evaluation_config.yaml"
 
 
 def load_evaluation_config() -> Dict[str, Any]:
@@ -68,16 +66,13 @@ DEFAULT_MARKDOWN_FILENAME = "evaluation_report.md"
 # HELPERS
 # ============================================================
 
+
 def _utc_timestamp() -> str:
     """
     Returns UTC timestamp in ISO-8601 format.
     """
 
-    return (
-        datetime.now(timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _ensure_directory(
@@ -101,6 +96,7 @@ def _ensure_directory(
 # JSON REPORT
 # ============================================================
 
+
 def save_json_report(
     report_data: Dict[str, Any],
     output_dir: str | Path,
@@ -113,9 +109,7 @@ def save_json_report(
         Path to generated file.
     """
 
-    output_path = _ensure_directory(
-        output_dir
-    ) / filename
+    output_path = _ensure_directory(output_dir) / filename
 
     with open(
         output_path,
@@ -135,6 +129,7 @@ def save_json_report(
 # ============================================================
 # MARKDOWN REPORT
 # ============================================================
+
 
 def build_markdown_report(
     report_data: Dict[str, Any],
@@ -199,12 +194,9 @@ def build_markdown_report(
         "",
     ]
 
-    for metric_name, metric_value in (
-        clinical_metrics.items()
-    ):
+    for metric_name, metric_value in clinical_metrics.items():
         lines.append(
-            f"- **{metric_name}**: "
-            f"{metric_value:.4f}"
+            f"- **{metric_name}**: " f"{metric_value:.4f}"
             if isinstance(
                 metric_value,
                 (float, int),
@@ -222,22 +214,14 @@ def build_markdown_report(
         ]
     )
 
-    for metric_name, metric_value in (
-        safety.items()
-    ):
+    for metric_name, metric_value in safety.items():
         if isinstance(
             metric_value,
             (float, int),
         ):
-            lines.append(
-                f"- **{metric_name}**: "
-                f"{metric_value:.4f}"
-            )
+            lines.append(f"- **{metric_name}**: " f"{metric_value:.4f}")
         else:
-            lines.append(
-                f"- **{metric_name}**: "
-                f"{metric_value}"
-            )
+            lines.append(f"- **{metric_name}**: " f"{metric_value}")
 
     # FIX EVAL-6 — section Thresholds, rendue uniquement si
     # reporting.include_thresholds=true ET des seuils sont disponibles
@@ -254,8 +238,7 @@ def build_markdown_report(
         )
         for threshold_name, threshold_value in thresholds.items():
             lines.append(
-                f"- **{threshold_name}**: "
-                f"{threshold_value:.4f}"
+                f"- **{threshold_name}**: " f"{threshold_value:.4f}"
                 if isinstance(threshold_value, (float, int))
                 else f"- **{threshold_name}**: {threshold_value}"
             )
@@ -286,9 +269,7 @@ def build_markdown_report(
             (
                 "Model passes clinical evaluation."
                 if overall_status == "PASS"
-                else
-                "Model does not satisfy clinical "
-                "evaluation requirements."
+                else "Model does not satisfy clinical " "evaluation requirements."
             ),
             "",
         ]
@@ -309,15 +290,9 @@ def save_markdown_report(
         Path to generated file.
     """
 
-    output_path = _ensure_directory(
-        output_dir
-    ) / filename
+    output_path = _ensure_directory(output_dir) / filename
 
-    markdown_content = (
-        build_markdown_report(
-            report_data
-        )
-    )
+    markdown_content = build_markdown_report(report_data)
 
     with open(
         output_path,
@@ -333,15 +308,14 @@ def save_markdown_report(
 # COMPLETE REPORT
 # ============================================================
 
+
 def create_evaluation_report(
     *,
     model_name: str,
     clinical_metrics: Dict[str, Any],
     safety: Dict[str, Any],
     overall_status: str,
-    metadata: Optional[
-        Dict[str, Any]
-    ] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Build canonical report structure.
@@ -358,24 +332,19 @@ def create_evaluation_report(
 
     return {
         "model_name": model_name,
-        "evaluation_timestamp":
-            _utc_timestamp(),
-        "overall_status":
-            overall_status,
-        "clinical_metrics":
-            clinical_metrics,
-        "safety":
-            safety,
-        "thresholds":
-            thresholds,
-        "metadata":
-            metadata or {},
+        "evaluation_timestamp": _utc_timestamp(),
+        "overall_status": overall_status,
+        "clinical_metrics": clinical_metrics,
+        "safety": safety,
+        "thresholds": thresholds,
+        "metadata": metadata or {},
     }
 
 
 # ============================================================
 # EXPORT API
 # ============================================================
+
 
 def export_evaluation_reports(
     *,
@@ -404,16 +373,15 @@ def export_evaluation_reports(
     )
 
     return {
-        "json_report":
-            str(json_path),
-        "markdown_report":
-            str(markdown_path),
+        "json_report": str(json_path),
+        "markdown_report": str(markdown_path),
     }
 
 
 # ============================================================
 # CONVENIENCE API
 # ============================================================
+
 
 def generate_reports(
     *,
@@ -422,23 +390,19 @@ def generate_reports(
     safety: Dict[str, Any],
     overall_status: str,
     output_dir: str | Path,
-    metadata: Optional[
-        Dict[str, Any]
-    ] = None,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     High-level helper used by
     clinical_eval_runner.py.
     """
 
-    report_data = (
-        create_evaluation_report(
-            model_name=model_name,
-            clinical_metrics=clinical_metrics,
-            safety=safety,
-            overall_status=overall_status,
-            metadata=metadata,
-        )
+    report_data = create_evaluation_report(
+        model_name=model_name,
+        clinical_metrics=clinical_metrics,
+        safety=safety,
+        overall_status=overall_status,
+        metadata=metadata,
     )
 
     files = export_evaluation_reports(

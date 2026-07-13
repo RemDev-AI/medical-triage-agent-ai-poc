@@ -116,6 +116,15 @@ model:
   # par la branche transformers.
   max_seq_length: 512
   hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
+  # Révision Hub (commit SHA) du modèle/adapter final évalué par
+  # clinical_eval_runner.py. À renseigner APRÈS le run d'entraînement,
+  # une fois le checkpoint final poussé sur le Hub : copier le commit
+  # SHA correspondant depuis l'onglet "Files and versions" du repo,
+  # dossier sft-final/ ou racine (modèle DPO), afin de figer exactement
+  # la version évaluée. Tant que cette clé est absente ou vide,
+  # clinical_eval_runner.py se replie sur "main" (dernier commit de la
+  # branche par défaut, potentiellement instable entre deux runs).
+  hub_revision: ""
 
 tokenizer:
   use_fast: true
@@ -129,6 +138,9 @@ special_tokens: {}
 dataset:
   hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
   hf_config: "dpo"
+  # Révision Hub (commit SHA) du dataset repo. Repli sur "main" dans
+  # train_dpo.py (load_dataset_source) si absente/vide.
+  hf_revision: ""
   train_split: "train"
   validation_split: "validation"
   test_split: "test"

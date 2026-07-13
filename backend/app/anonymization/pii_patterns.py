@@ -31,13 +31,7 @@ LANGUAGE_PATTERNS = {
         },
         {
             "name": "FRENCH_SOCIAL_SECURITY",
-            "regex": (
-                r"\b"
-                r"[12]"
-                r"(?:[\s.-]?\d{2}){6}"
-                r"[\s.-]?\d{2}"
-                r"\b"
-            ),
+            "regex": (r"\b" r"[12]" r"(?:[\s.-]?\d{2}){6}" r"[\s.-]?\d{2}" r"\b"),
             "score": 0.95,
         },
         {
@@ -54,10 +48,7 @@ LANGUAGE_PATTERNS = {
         },
         {
             "name": "URL",
-            "regex": (
-                r"(?:https?://|www\.)"
-                r"[^\s]+"
-            ),
+            "regex": (r"(?:https?://|www\.)" r"[^\s]+"),
             "score": 0.85,
         },
     ],
@@ -91,10 +82,7 @@ LANGUAGE_PATTERNS = {
         },
         {
             "name": "URL",
-            "regex": (
-                r"(?:https?://|www\.)"
-                r"[^\s]+"
-            ),
+            "regex": (r"(?:https?://|www\.)" r"[^\s]+"),
             "score": 0.85,
         },
     ],
@@ -104,15 +92,13 @@ LANGUAGE_PATTERNS = {
 # BACKWARD COMPATIBILITY
 # ==========================================================
 
-MEDICAL_PII_PATTERNS = (
-    LANGUAGE_PATTERNS["fr"]
-    + LANGUAGE_PATTERNS["en"]
-)
+MEDICAL_PII_PATTERNS = LANGUAGE_PATTERNS["fr"] + LANGUAGE_PATTERNS["en"]
 
 
 # ==========================================================
 # PUBLIC API
 # ==========================================================
+
 
 def get_pii_patterns(
     language: str,
@@ -139,9 +125,7 @@ def supported_languages() -> list[str]:
     Retourne les langues supportées.
     """
 
-    return list(
-        LANGUAGE_PATTERNS.keys()
-    )
+    return list(LANGUAGE_PATTERNS.keys())
 
 
 # ==========================================================
@@ -152,16 +136,10 @@ if __name__ == "__main__":
 
     for language in supported_languages():
 
-        patterns = get_pii_patterns(
-            language
-        )
+        patterns = get_pii_patterns(language)
 
-        print(
-            f"\nLanguage={language}"
-        )
+        print(f"\nLanguage={language}")
 
         for pattern in patterns:
 
-            print(
-                f" - {pattern['name']}"
-            )
+            print(f" - {pattern['name']}")

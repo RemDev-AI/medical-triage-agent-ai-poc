@@ -14,21 +14,19 @@ Responsabilités :
 from pathlib import Path
 import logging
 
-from backend.utils.hf_utils import (
+from utils.hf_utils import (
     load_hf_dataset,
     export_jsonl,
     dataset_stats,
 )
 
-from backend.app.datasets.raw.dataset_registry import (
+from app.datasets.raw.dataset_registry import (
     DATASET_REGISTRY,
 )
 
 logger = logging.getLogger(__name__)
 
-RAW_DATA_DIR = Path(
-    "backend/app/datasets/raw/data"
-)
+RAW_DATA_DIR = Path("backend/app/datasets/raw/data")
 
 
 def get_primary_split(dataset):
@@ -61,8 +59,7 @@ def get_primary_split(dataset):
             return dataset[split_name]
 
     raise ValueError(
-        "No supported split found. "
-        f"Available splits: {list(dataset.keys())}"
+        "No supported split found. " f"Available splits: {list(dataset.keys())}"
     )
 
 
@@ -90,27 +87,18 @@ def main():
                 subset=config.get("subset"),
             )
 
-            selected_dataset = get_primary_split(
-                dataset
-            )
+            selected_dataset = get_primary_split(dataset)
 
-            output_path = (
-                RAW_DATA_DIR /
-                f"{dataset_name}.jsonl"
-            )
+            output_path = RAW_DATA_DIR / f"{dataset_name}.jsonl"
 
             export_jsonl(
                 selected_dataset,
                 str(output_path),
             )
 
-            stats = dataset_stats(
-                selected_dataset
-            )
+            stats = dataset_stats(selected_dataset)
 
-            print(
-                f"SUCCESS: {dataset_name}"
-            )
+            print(f"SUCCESS: {dataset_name}")
             print(stats)
 
             success_count += 1
@@ -124,9 +112,7 @@ def main():
                 dataset_name,
             )
 
-            print(
-                f"ERROR: {dataset_name} -> {exc}"
-            )
+            print(f"ERROR: {dataset_name} -> {exc}")
 
     print("\n====================")
     print("DOWNLOAD SUMMARY")

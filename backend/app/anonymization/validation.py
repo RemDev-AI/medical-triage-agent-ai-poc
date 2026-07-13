@@ -13,10 +13,10 @@ après anonymisation.
 
 from __future__ import annotations
 
-from backend.app.anonymization.audit_logger import (
+from app.anonymization.audit_logger import (
     audit_logger,
 )
-from backend.app.anonymization.presidio_analyzer import (
+from app.anonymization.presidio_analyzer import (
     detect_language,
     detect_pii,
 )
@@ -47,9 +47,7 @@ def validate_no_pii(
 
     if not text or not text.strip():
 
-        audit_logger.info(
-            "Validation success | empty text"
-        )
+        audit_logger.info("Validation success | empty text")
 
         return True
 
@@ -71,12 +69,45 @@ def validate_no_pii(
         return False
 
     audit_logger.info(
-        "Validation success | "
-        f"language={language} | "
-        "no residual PII"
+        "Validation success | " f"language={language} | " "no residual PII"
     )
 
     return True
+
+
+def contains_pii(
+    text: str,
+    language: str | None = None,
+) -> bool:
+    """
+    Vérifie si le texte contient au moins une donnée
+    personnelle identifiable (PII).
+
+    Fonction complémentaire de `validate_no_pii` :
+    contains_pii(text) == (not validate_no_pii(text))
+
+    Args:
+        text:
+            Texte à analyser.
+
+        language:
+            "fr", "en" ou None pour auto-détection.
+
+    Returns:
+        True si au moins une PII est détectée dans le texte.
+    """
+
+    if not text or not text.strip():
+        return False
+
+    language = language or detect_language(text)
+
+    findings = detect_pii(
+        text=text,
+        language=language,
+    )
+
+    return len(findings) > 0
 
 
 # ==========================================================
@@ -107,16 +138,8 @@ if __name__ == "__main__":
 
     print("\n=== FRENCH SAMPLE ===\n")
 
-    print(
-        validate_no_pii(
-            french_sample
-        )
-    )
+    print(validate_no_pii(french_sample))
 
     print("\n=== ENGLISH SAMPLE ===\n")
 
-    print(
-        validate_no_pii(
-            english_sample
-        )
-    )
+    print(validate_no_pii(english_sample))

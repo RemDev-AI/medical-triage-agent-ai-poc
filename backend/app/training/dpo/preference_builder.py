@@ -30,17 +30,13 @@ from pathlib import Path
 
 from sklearn.model_selection import train_test_split
 
-from backend.app.anonymization.presidio_anonymizer import (
+from app.anonymization.presidio_anonymizer import (
     anonymize_text,
 )
 
-INPUT_DIR = Path(
-    "backend/app/datasets/processed/sft"
-)
+INPUT_DIR = Path("backend/app/datasets/processed/sft")
 
-OUTPUT_DIR = Path(
-    "backend/app/datasets/processed/dpo"
-)
+OUTPUT_DIR = Path("backend/app/datasets/processed/dpo")
 
 OUTPUT_DIR.mkdir(
     parents=True,
@@ -68,30 +64,20 @@ SLOW_PAIR_THRESHOLD = 0.5
 # ==========================================================
 
 
-EMAIL_PATTERN = re.compile(
-    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
-)
+EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
-PHONE_PATTERN = re.compile(
-    r"(?:\+?\d[\d\s().-]{7,}\d)"
-)
+PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s().-]{7,}\d)")
 
-IP_PATTERN = re.compile(
-    r"\b(?:\d{1,3}\.){3}\d{1,3}\b"
-)
+IP_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
 URL_PATTERN = re.compile(
     r"https?://[^\s]+|www\.[^\s]+",
     re.IGNORECASE,
 )
 
-SSN_PATTERN = re.compile(
-    r"\b\d{3}-\d{2}-\d{4}\b"
-)
+SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 
-MRN_PATTERN = re.compile(
-    r"\b(?:MRN|mrn)[:\s#-]*[A-Z0-9]{5,20}\b"
-)
+MRN_PATTERN = re.compile(r"\b(?:MRN|mrn)[:\s#-]*[A-Z0-9]{5,20}\b")
 
 PATIENT_ID_PATTERN = re.compile(
     r"\b(?:PATIENT|Patient|patient)[-_ ]?(?:ID|Id|id)?[:\s#-]*[A-Z0-9]{4,20}\b"
@@ -130,10 +116,7 @@ def contains_residual_pii(
         PATIENT_ID_PATTERN,
     )
 
-    return any(
-        pattern.search(text)
-        for pattern in patterns
-    )
+    return any(pattern.search(text) for pattern in patterns)
 
 
 # ==========================================================
@@ -317,9 +300,7 @@ def anonymize_preference_fields(
 
 def build_preferences():
 
-    sft_train = (
-        INPUT_DIR / "train.jsonl"
-    )
+    sft_train = INPUT_DIR / "train.jsonl"
 
     preferences = []
 
@@ -362,16 +343,12 @@ def build_preferences():
 
             t0 = time.time()
 
-            rejected = (
-                generate_rejected_response(
-                    chosen,
-                    language,
-                )
+            rejected = generate_rejected_response(
+                chosen,
+                language,
             )
 
-            rejected_time += (
-                time.time() - t0
-            )
+            rejected_time += time.time() - t0
 
             if rejected == chosen:
                 continue
@@ -393,9 +370,7 @@ def build_preferences():
                 language,
             )
 
-            anonymization_time += (
-                time.time() - t0
-            )
+            anonymization_time += time.time() - t0
 
             # --------------------------------------
             # pii validation
@@ -409,9 +384,7 @@ def build_preferences():
                 or contains_residual_pii(rejected)
             )
 
-            pii_time += (
-                time.time() - t0
-            )
+            pii_time += time.time() - t0
 
             if has_pii:
 
@@ -429,47 +402,28 @@ def build_preferences():
             metadata["anonymized"] = True
 
             preference_record = {
-                "id": hashlib.md5(
-                    (
-                        prompt + chosen
-                    ).encode(
-                        "utf-8"
-                    )
+                "id": hashlib.md5(  # nosec B324 - usage non cryptographique : simple identifiant déterministe, pas de sécurité requise
+                    (prompt + chosen).encode("utf-8"),
+                    usedforsecurity=False,
                 ).hexdigest(),
                 "prompt": prompt,
                 "chosen": chosen,
                 "rejected": rejected,
                 "language": language,
-                "clinical_quality_score":
-                    clinical_quality_score(
-                        chosen
-                    ),
-                "safety_score":
-                    safety_score(
-                        rejected
-                    ),
-                "source":
-                    item.get(
-                        "source",
-                        "unknown",
-                    ),
-                "metadata":
-                    metadata,
+                "clinical_quality_score": clinical_quality_score(chosen),
+                "safety_score": safety_score(rejected),
+                "source": item.get(
+                    "source",
+                    "unknown",
+                ),
+                "metadata": metadata,
             }
 
-            preferences.append(
-                preference_record
-            )
+            preferences.append(preference_record)
 
-            elapsed_pair = (
-                time.time()
-                - pair_start
-            )
+            elapsed_pair = time.time() - pair_start
 
-            if (
-                elapsed_pair
-                > SLOW_PAIR_THRESHOLD
-            ):
+            if elapsed_pair > SLOW_PAIR_THRESHOLD:
                 slow_pairs += 1
 
                 print(
@@ -479,16 +433,9 @@ def build_preferences():
                     f"{elapsed_pair:.2f}s"
                 )
 
-            if (
-                processed
-                % PROGRESS_INTERVAL
-                == 0
-            ):
+            if processed % PROGRESS_INTERVAL == 0:
 
-                elapsed = (
-                    time.time()
-                    - build_start
-                )
+                elapsed = time.time() - build_start
 
                 print(
                     f"[PROGRESS] "
@@ -497,51 +444,21 @@ def build_preferences():
                     f"{elapsed/processed:.4f}s/pair"
                 )
 
-    total_time = (
-        time.time()
-        - build_start
-    )
+    total_time = time.time() - build_start
 
     print("\n" + "=" * 60)
     print("DPO PIPELINE SUMMARY")
     print("=" * 60)
     print(f"Pairs processed: {processed:,}")
-    print(
-        f"Preferences generated: "
-        f"{len(preferences):,}"
-    )
-    print(
-        f"Residual PII removed: "
-        f"{skipped_residual_pii:,}"
-    )
-    print(
-        f"Slow pairs (>0.5s): "
-        f"{slow_pairs:,}"
-    )
-    print(
-        f"REANONYMIZE_DPO: "
-        f"{REANONYMIZE_DPO}"
-    )
-    print(
-        f"generate_rejected_response(): "
-        f"{rejected_time:.2f}s"
-    )
-    print(
-        f"anonymize_preference_fields(): "
-        f"{anonymization_time:.2f}s"
-    )
-    print(
-        f"contains_residual_pii(): "
-        f"{pii_time:.2f}s"
-    )
-    print(
-        f"Average time per pair: "
-        f"{total_time/max(processed, 1):.4f}s"
-    )
-    print(
-        f"Total build time: "
-        f"{total_time:.2f}s"
-    )
+    print(f"Preferences generated: " f"{len(preferences):,}")
+    print(f"Residual PII removed: " f"{skipped_residual_pii:,}")
+    print(f"Slow pairs (>0.5s): " f"{slow_pairs:,}")
+    print(f"REANONYMIZE_DPO: " f"{REANONYMIZE_DPO}")
+    print(f"generate_rejected_response(): " f"{rejected_time:.2f}s")
+    print(f"anonymize_preference_fields(): " f"{anonymization_time:.2f}s")
+    print(f"contains_residual_pii(): " f"{pii_time:.2f}s")
+    print(f"Average time per pair: " f"{total_time/max(processed, 1):.4f}s")
+    print(f"Total build time: " f"{total_time:.2f}s")
     print("=" * 60)
 
     return preferences
@@ -621,19 +538,11 @@ def main():
 
     pipeline_start = time.time()
 
-    print(
-        "\nBuilding DPO preferences..."
-    )
+    print("\nBuilding DPO preferences...")
 
-    preferences = (
-        build_preferences()
-    )
+    preferences = build_preferences()
 
-    train, validation, test, clinical_eval = (
-        split_preferences(
-            preferences
-        )
-    )
+    train, validation, test, clinical_eval = split_preferences(preferences)
 
     save_jsonl(
         train,
@@ -655,19 +564,11 @@ def main():
         OUTPUT_DIR / "clinical_eval.jsonl",
     )
 
-    total_pipeline = (
-        time.time()
-        - pipeline_start
-    )
+    total_pipeline = time.time() - pipeline_start
 
-    print(
-        f"\nTotal pipeline time: "
-        f"{total_pipeline:.2f}s"
-    )
+    print(f"\nTotal pipeline time: " f"{total_pipeline:.2f}s")
 
-    print(
-        "DPO dataset build completed"
-    )
+    print("DPO dataset build completed")
 
 
 if __name__ == "__main__":

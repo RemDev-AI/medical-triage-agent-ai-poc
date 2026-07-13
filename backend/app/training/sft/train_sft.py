@@ -42,20 +42,20 @@ from transformers import (
     TrainingArguments,
 )
 
-from backend.app.training.colab.colab_environment import (
+from app.training.colab.colab_environment import (
     apply_precision_arguments,
     resolve_quantization_settings,
 )
-from backend.app.training.shared.training_model_loader import (
+from app.training.shared.training_model_loader import (
     TrainingModelLoader,
 )
-from backend.app.training.shared.training_tokenizer_loader import (
+from app.training.shared.training_tokenizer_loader import (
     TrainingTokenizerLoader,
 )
-from backend.app.training.shared.training_utils import (
+from app.training.shared.training_utils import (
     TrainingUtils,
 )
-from backend.app.training.colab.colab_checkpoint_sync import (
+from app.training.colab.colab_checkpoint_sync import (
     create_default_checkpoint_sync,
 )
 
@@ -147,11 +147,16 @@ def load_hf_dataset(
     dataset_repo: str,
     dataset_config: str,
     split: str,
+    revision: str = "main",
 ) -> Dataset:
-    return load_dataset(
+    # TODO (étape ultérieure du POC) : remplacer "main" (valeur par défaut ci-dessus)
+    # par un commit SHA figé pour garantir la reproductibilité et empêcher qu'une
+    # modification du repo HF n'affecte silencieusement l'entraînement.
+    return load_dataset(  # nosec B615 - revision pinnée via paramètre ; "main" temporaire pour le POC, à durcir avant prod
         path=dataset_repo,
         name=dataset_config,
         split=split,
+        revision=revision,
     )
 
 
@@ -160,12 +165,14 @@ def load_dataset_source(split: str) -> Dataset:
 
     hf_repo = dataset_config.get("hf_repo")
     hf_config = dataset_config.get("hf_config", "sft")
+    hf_revision = dataset_config.get("hf_revision", "main")
 
     if hf_repo:
         dataset = load_hf_dataset(
             dataset_repo=hf_repo,
             dataset_config=hf_config,
             split=split,
+            revision=hf_revision,
         )
     else:
         path_mapping = {
@@ -254,8 +261,7 @@ def tokenize_function(examples, tokenizer, max_length: int):
 
     if skipped:
         logger.warning(
-            "%d exemple(s) entièrement masqués dans ce batch — "
-            "ils seront filtrés.",
+            "%d exemple(s) entièrement masqués dans ce batch — " "ils seront filtrés.",
             skipped,
         )
 
@@ -295,20 +301,22 @@ def prepare_datasets(tokenizer) -> Tuple[Dataset, Dataset]:
     before_train = len(train_dataset)
     before_val = len(validation_dataset)
 
-    train_dataset = train_dataset.filter(
-        lambda x: any(t != -100 for t in x["labels"])
-    )
+    train_dataset = train_dataset.filter(lambda x: any(t != -100 for t in x["labels"]))
     validation_dataset = validation_dataset.filter(
         lambda x: any(t != -100 for t in x["labels"])
     )
 
     logger.info(
         "Train : %d → %d exemples après filtre (-%d masqués).",
-        before_train, len(train_dataset), before_train - len(train_dataset),
+        before_train,
+        len(train_dataset),
+        before_train - len(train_dataset),
     )
     logger.info(
         "Validation : %d → %d exemples après filtre (-%d masqués).",
-        before_val, len(validation_dataset), before_val - len(validation_dataset),  # noqa : E501
+        before_val,
+        len(validation_dataset),
+        before_val - len(validation_dataset),  # noqa : E501
     )
 
     if len(validation_dataset) == 0:
@@ -327,9 +335,15 @@ def build_training_arguments() -> TrainingArguments:
     training_args = {
         "output_dir": training_config["output_dir"],
         "num_train_epochs": training_config["num_train_epochs"],
-        "per_device_train_batch_size": training_config["per_device_train_batch_size"],  # noqa : E501
-        "per_device_eval_batch_size": training_config["per_device_eval_batch_size"],  # noqa : E501
-        "gradient_accumulation_steps": training_config["gradient_accumulation_steps"],  # noqa : E501
+        "per_device_train_batch_size": training_config[
+            "per_device_train_batch_size"
+        ],  # noqa : E501
+        "per_device_eval_batch_size": training_config[
+            "per_device_eval_batch_size"
+        ],  # noqa : E501
+        "gradient_accumulation_steps": training_config[
+            "gradient_accumulation_steps"
+        ],  # noqa : E501
         "learning_rate": float(training_config["learning_rate"]),
         "weight_decay": float(training_config["weight_decay"]),
         "warmup_ratio": float(training_config["warmup_ratio"]),
@@ -354,7 +368,9 @@ def build_training_arguments() -> TrainingArguments:
         "lr_scheduler_type": training_config["lr_scheduler_type"],
         "max_grad_norm": float(training_config["max_grad_norm"]),
         "report_to": training_config.get("report_to", ["wandb"]),
-        "dataloader_num_workers": training_config.get("dataloader_num_workers", 0),  # noqa : E501
+        "dataloader_num_workers": training_config.get(
+            "dataloader_num_workers", 0
+        ),  # noqa : E501
         "remove_unused_columns": True,
     }
 
@@ -408,7 +424,7 @@ def publish_training_artifacts() -> None:
     logger.info("Training metadata saved.")
 
 
-def train(publish_to_hf: bool = False):   # False par défaut en validation
+def train(publish_to_hf: bool = False):  # False par défaut en validation
     TrainingUtils.setup_logging(CONFIG["system"]["logging_level"])
     logger.info("Starting SFT validation run.")
 
@@ -438,7 +454,8 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
 
     logger.info(
         "Validation run — train=%d exemples, val=%d exemples.",
-        len(train_dataset), len(validation_dataset),
+        len(train_dataset),
+        len(validation_dataset),
     )
 
     trainer = build_trainer(
@@ -453,14 +470,10 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         training_type="sft",
     )
 
-    resume_checkpoint = (
-        CONFIG["training"].get("resume_from_checkpoint")
-    )
+    resume_checkpoint = CONFIG["training"].get("resume_from_checkpoint")
 
     if resume_checkpoint is None:
-        resume_checkpoint = (
-            checkpoint_sync.restore_latest_checkpoint_from_huggingface()
-        )
+        resume_checkpoint = checkpoint_sync.restore_latest_checkpoint_from_huggingface()
 
     trainer.train(
         # resume_from_checkpoint=CONFIG["training"].get("resume_from_checkpoint")
@@ -490,11 +503,15 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
         #    checkpoint-N/ localement après upload réussi (cf.
         #    cleanup_after_upload=True par défaut dans ColabCheckpointSync).
         if checkpoint_sync.has_checkpoint():
-            logger.info("Synchronisation des checkpoints intermédiaires vers Hugging Face...")  # noqa: E501
+            logger.info(
+                "Synchronisation des checkpoints intermédiaires vers Hugging Face..."
+            )  # noqa: E501
             # FIX HUB-5 — la valeur de retour était auparavant ignorée :
             # un échec de push (ou d'un des deux, en cas de plusieurs
             # checkpoints) passait totalement inaperçu.
-            checkpoints_synced = checkpoint_sync.sync_all_checkpoints_to_huggingface()  # noqa: E501
+            checkpoints_synced = (
+                checkpoint_sync.sync_all_checkpoints_to_huggingface()
+            )  # noqa: E501
             if not checkpoints_synced:
                 raise RuntimeError(
                     "Échec de synchronisation d'au moins un checkpoint "
@@ -586,7 +603,7 @@ def train(publish_to_hf: bool = False):   # False par défaut en validation
 
             remote_prefix = f"{SFT_FINAL_MODEL_REMOTE_PREFIX}/"
             remote_files = {
-                file[len(remote_prefix):]
+                file[len(remote_prefix) :]
                 for file in hf_api.list_repo_files(
                     repo_id=CONFIG["model"]["hub_model_id"],
                     repo_type="model",

@@ -21,10 +21,10 @@ from __future__ import annotations
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
-from backend.app.anonymization.audit_logger import (
+from app.anonymization.audit_logger import (
     audit_logger,
 )
-from backend.app.anonymization.presidio_analyzer import (
+from app.anonymization.presidio_analyzer import (
     detect_language,
     detect_pii,
 )
@@ -140,9 +140,7 @@ def anonymize_text(
         "redact",
         "mask",
     }:
-        raise ValueError(
-            f"Unknown strategy: {strategy}"
-        )
+        raise ValueError(f"Unknown strategy: {strategy}")
 
     language = language or detect_language(text)
 
@@ -154,9 +152,7 @@ def anonymize_text(
     if not analyzer_results:
 
         audit_logger.info(
-            "Anonymization skipped | "
-            f"language={language} | "
-            "findings=0"
+            "Anonymization skipped | " f"language={language} | " "findings=0"
         )
 
         return text
@@ -167,29 +163,25 @@ def anonymize_text(
 
     else:
 
-        operators = {
-            "DEFAULT": ANONYMIZATION_OPERATORS[
-                strategy
-            ]
-        }
+        operators = {"DEFAULT": ANONYMIZATION_OPERATORS[strategy]}
 
-#    safe_results = []
+    #    safe_results = []
 
-#    for result in analyzer_results:
+    #    for result in analyzer_results:
 
-#        entity_text = text[
-#            result.start:result.end
-#        ]
+    #        entity_text = text[
+    #            result.start:result.end
+    #        ]
 
-#        if (
-#            result.entity_type == "PERSON"
-#            and entity_text.lower() in MEDICAL_WHITELIST
-#        ):
-#            continue
+    #        if (
+    #            result.entity_type == "PERSON"
+    #            and entity_text.lower() in MEDICAL_WHITELIST
+    #        ):
+    #            continue
 
-#        safe_results.append(result)
+    #        safe_results.append(result)
 
-#    analyzer_results = safe_results
+    #    analyzer_results = safe_results
 
     anonymized_result = anonymizer.anonymize(
         text=text,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict
 
 
@@ -35,7 +35,7 @@ class RequestTracker:
 
         self.lock = threading.Lock()
 
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
 
         self.total_requests = 0
         self.success_requests = 0
@@ -62,13 +62,9 @@ class RequestTracker:
 
             self.active_requests += 1
 
-            self.endpoint_counter[
-                endpoint
-            ] += 1
+            self.endpoint_counter[endpoint] += 1
 
-            self.method_counter[
-                method.upper()
-            ] += 1
+            self.method_counter[method.upper()] += 1
 
     def end_request(
         self,
@@ -121,11 +117,7 @@ class RequestTracker:
             return 0.0
 
         return round(
-            (
-                self.failed_requests
-                / self.total_requests
-            )
-            * 100,
+            (self.failed_requests / self.total_requests) * 100,
             2,
         )
 
@@ -145,39 +137,21 @@ class RequestTracker:
 
             self.method_counter.clear()
 
-            self.started_at = (
-                datetime.utcnow()
-            )
+            self.started_at = datetime.now(timezone.utc)
 
     def get_stats(self) -> Dict:
 
         with self.lock:
 
             return {
-                "started_at": (
-                    self.started_at.isoformat()
-                ),
-                "total_requests": (
-                    self.total_requests
-                ),
-                "success_requests": (
-                    self.success_requests
-                ),
-                "failed_requests": (
-                    self.failed_requests
-                ),
-                "active_requests": (
-                    self.active_requests
-                ),
-                "error_rate_percent": (
-                    self.get_error_rate()
-                ),
-                "endpoint_usage": dict(
-                    self.endpoint_counter
-                ),
-                "method_usage": dict(
-                    self.method_counter
-                ),
+                "started_at": (self.started_at.isoformat()),
+                "total_requests": (self.total_requests),
+                "success_requests": (self.success_requests),
+                "failed_requests": (self.failed_requests),
+                "active_requests": (self.active_requests),
+                "error_rate_percent": (self.get_error_rate()),
+                "endpoint_usage": dict(self.endpoint_counter),
+                "method_usage": dict(self.method_counter),
             }
 
     def health_status(self) -> Dict:

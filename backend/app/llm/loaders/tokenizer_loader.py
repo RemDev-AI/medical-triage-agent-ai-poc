@@ -7,33 +7,46 @@ Features:
 - Hugging Face tokenizer loading
 - automatic pad token configuration
 - inference-ready setup
+
+Note: transformers est importé en lazy (à l'intérieur de la fonction)
+et non en tête de module, afin que ce module reste importable en CI
+même quand transformers n'est pas installé (cf. requirements-ci.txt).
 """
 
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from transformers import (
-    AutoTokenizer,
-    PreTrainedTokenizerBase,
-)
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
 
+# Aligné avec DEFAULT_BASE_MODEL_NAME de model_loader.py, pour que
+# tokenizer et modèle par défaut restent cohérents entre eux.
+DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
+
 
 def load_tokenizer(
-    model_name: str,
-) -> PreTrainedTokenizerBase:
+    model_name: str = DEFAULT_MODEL_NAME,
+    revision: str = "main",
+) -> "PreTrainedTokenizerBase":
     """
     Load tokenizer from Hugging Face.
 
     Args:
         model_name:
             Hugging Face model identifier.
+        revision:
+            Hub revision (commit SHA, tag, or branch) to pin, to avoid
+            loading unexpected/changed remote content.
 
     Returns:
         Loaded tokenizer.
     """
+
+    from transformers import AutoTokenizer
 
     logger.info(
         "Loading tokenizer: %s",
@@ -42,6 +55,7 @@ def load_tokenizer(
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
+        revision=revision,
         trust_remote_code=True,
         use_fast=True,
     )
@@ -49,20 +63,14 @@ def load_tokenizer(
     if tokenizer.pad_token is None:
 
         if tokenizer.eos_token is None:
-            raise ValueError(
-                "Tokenizer has no pad_token and no eos_token."
-            )
+            raise ValueError("Tokenizer has no pad_token and no eos_token.")
 
         tokenizer.pad_token = tokenizer.eos_token
 
-        logger.info(
-            "Pad token automatically set to EOS token."
-        )
+        logger.info("Pad token automatically set to EOS token.")
 
     tokenizer.padding_side = "left"
 
-    logger.info(
-        "Tokenizer loaded successfully."
-    )
+    logger.info("Tokenizer loaded successfully.")
 
     return tokenizer

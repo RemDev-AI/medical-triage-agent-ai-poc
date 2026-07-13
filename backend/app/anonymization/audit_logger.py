@@ -26,7 +26,8 @@ from pathlib import Path
 # LOG DIRECTORY
 # ==========================================================
 
-LOG_DIR = Path("backend/logs")
+BASE_DIR = Path(__file__).resolve().parents[2]
+LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(
     parents=True,
     exist_ok=True,
@@ -40,42 +41,24 @@ LOG_FILE = LOG_DIR / "anonymization_audit.log"
 
 LOGGER_NAME = "rgpd_audit"
 
-audit_logger = logging.getLogger(
-    LOGGER_NAME
-)
+audit_logger = logging.getLogger(LOGGER_NAME)
 
-# audit_logger.setLevel(
-#     logging.INFO
-# )
-
-audit_logger.setLevel(
-    logging.ERROR
-)
-
-# audit_logger.setLevel(
-#     logging.CRITICAL
-# )
+audit_logger.setLevel(logging.INFO)
 
 
 # Évite l'ajout multiple de handlers
 if not audit_logger.handlers:
 
-    formatter = logging.Formatter(
-        "%(asctime)s | %(levelname)s | %(message)s"
-    )
+    formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
 
     file_handler = logging.FileHandler(
         LOG_FILE,
         encoding="utf-8",
     )
 
-    file_handler.setFormatter(
-        formatter
-    )
+    file_handler.setFormatter(formatter)
 
-    audit_logger.addHandler(
-        file_handler
-    )
+    audit_logger.addHandler(file_handler)
 
     # Évite la duplication via le logger racine
     audit_logger.propagate = False
@@ -86,23 +69,12 @@ if not audit_logger.handlers:
 
 if __name__ == "__main__":
 
-    audit_logger.info(
-        "Audit logger initialized"
-    )
+    audit_logger.info("Audit logger initialized")
+
+    audit_logger.info("PII detection executed | " "language=fr | " "findings=3")
 
     audit_logger.info(
-        "PII detection executed | "
-        "language=fr | "
-        "findings=3"
+        "Anonymization applied | " "language=en | " "strategy=replace | " "findings=2"
     )
 
-    audit_logger.info(
-        "Anonymization applied | "
-        "language=en | "
-        "strategy=replace | "
-        "findings=2"
-    )
-
-    print(
-        f"Audit log file: {LOG_FILE}"
-    )
+    print(f"Audit log file: {LOG_FILE}")

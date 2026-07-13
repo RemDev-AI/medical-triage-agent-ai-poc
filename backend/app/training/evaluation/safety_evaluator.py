@@ -25,17 +25,17 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from backend.app.training.evaluation.clinical_thresholds import (
+from app.training.evaluation.clinical_thresholds import (
     MAX_DANGEROUS_RATE,
     MAX_HALLUCINATION_RATE,
     MAX_UNSAFE_CLAIM_RATE,
     MIN_SAFETY_SCORE,
 )
-from backend.app.training.evaluation.dangerous_recommendation_detector import (  # noqa : F401
+from app.training.evaluation.dangerous_recommendation_detector import (  # noqa : F401
     dangerous_recommendation_rate,
     evaluate_responses as evaluate_dangerous_responses,
 )
-from backend.app.training.evaluation.hallucination_detector import (  # noqa : F401
+from app.training.evaluation.hallucination_detector import (  # noqa : F401
     evaluate_responses as evaluate_hallucination_responses,
     hallucination_rate,
     unsafe_claim_rate,
@@ -45,6 +45,7 @@ from backend.app.training.evaluation.hallucination_detector import (  # noqa : F
 # ============================================================
 # HELPERS
 # ============================================================
+
 
 def _clamp(
     value: float,
@@ -61,6 +62,7 @@ def _clamp(
 # ============================================================
 # SAFETY SCORE
 # ============================================================
+
 
 def compute_safety_score(
     hallucination_rate_value: float,
@@ -99,9 +101,7 @@ def compute_safety_score(
     """
 
     weight_dangerous = (
-        MAX_HALLUCINATION_RATE / MAX_DANGEROUS_RATE
-        if MAX_DANGEROUS_RATE > 0
-        else 1.0
+        MAX_HALLUCINATION_RATE / MAX_DANGEROUS_RATE if MAX_DANGEROUS_RATE > 0 else 1.0
     )
 
     weight_unsafe_claim = (
@@ -125,6 +125,7 @@ def compute_safety_score(
 # THRESHOLD VALIDATION
 # ============================================================
 
+
 def safety_thresholds_passed(
     hallucination_rate_value: float,
     dangerous_rate_value: float,
@@ -142,14 +143,10 @@ def safety_thresholds_passed(
 
     return all(
         [
-            hallucination_rate_value
-            <= MAX_HALLUCINATION_RATE,
-            dangerous_rate_value
-            <= MAX_DANGEROUS_RATE,
-            unsafe_claim_rate_value
-            <= MAX_UNSAFE_CLAIM_RATE,
-            safety_score
-            >= MIN_SAFETY_SCORE,
+            hallucination_rate_value <= MAX_HALLUCINATION_RATE,
+            dangerous_rate_value <= MAX_DANGEROUS_RATE,
+            unsafe_claim_rate_value <= MAX_UNSAFE_CLAIM_RATE,
+            safety_score >= MIN_SAFETY_SCORE,
         ]
     )
 
@@ -157,6 +154,7 @@ def safety_thresholds_passed(
 # ============================================================
 # CORE EVALUATION
 # ============================================================
+
 
 def evaluate_safety(
     responses: List[str],
@@ -175,78 +173,46 @@ def evaluate_safety(
         }
     """
 
-    hallucination_metrics = (
-        evaluate_hallucination_responses(
-            responses
-        )
-    )
+    hallucination_metrics = evaluate_hallucination_responses(responses)
 
-    dangerous_metrics = (
-        evaluate_dangerous_responses(
-            responses
-        )
-    )
+    dangerous_metrics = evaluate_dangerous_responses(responses)
 
-    hallucination_rate_value = (
-        hallucination_metrics["hallucination_rate"]
-    )
+    hallucination_rate_value = hallucination_metrics["hallucination_rate"]
 
-    unsafe_claim_rate_value = (
-        hallucination_metrics["unsafe_claim_rate"]
-    )
+    unsafe_claim_rate_value = hallucination_metrics["unsafe_claim_rate"]
 
-    dangerous_rate_value = (
-        dangerous_metrics["dangerous_rate"]
-    )
+    dangerous_rate_value = dangerous_metrics["dangerous_rate"]
 
     safety_score = compute_safety_score(
-        hallucination_rate_value=(
-            hallucination_rate_value
-        ),
-        dangerous_rate_value=(
-            dangerous_rate_value
-        ),
+        hallucination_rate_value=(hallucination_rate_value),
+        dangerous_rate_value=(dangerous_rate_value),
         # FIX SAFETY-2 — était absent, unsafe_claim_rate n'influençait
         # jamais safety_score.
-        unsafe_claim_rate_value=(
-            unsafe_claim_rate_value
-        ),
+        unsafe_claim_rate_value=(unsafe_claim_rate_value),
     )
 
-    thresholds_passed = (
-        safety_thresholds_passed(
-            hallucination_rate_value=(
-                hallucination_rate_value
-            ),
-            dangerous_rate_value=(
-                dangerous_rate_value
-            ),
-            safety_score=safety_score,
-            # FIX SAFETY-2 — était absent, unsafe_claim_rate ne
-            # bloquait jamais la promotion même en cas de dépassement.
-            unsafe_claim_rate_value=(
-                unsafe_claim_rate_value
-            ),
-        )
+    thresholds_passed = safety_thresholds_passed(
+        hallucination_rate_value=(hallucination_rate_value),
+        dangerous_rate_value=(dangerous_rate_value),
+        safety_score=safety_score,
+        # FIX SAFETY-2 — était absent, unsafe_claim_rate ne
+        # bloquait jamais la promotion même en cas de dépassement.
+        unsafe_claim_rate_value=(unsafe_claim_rate_value),
     )
 
     return {
-        "hallucination_rate":
-            hallucination_rate_value,
-        "unsafe_claim_rate":
-            unsafe_claim_rate_value,
-        "dangerous_rate":
-            dangerous_rate_value,
-        "safety_score":
-            safety_score,
-        "thresholds_passed":
-            thresholds_passed,
+        "hallucination_rate": hallucination_rate_value,
+        "unsafe_claim_rate": unsafe_claim_rate_value,
+        "dangerous_rate": dangerous_rate_value,
+        "safety_score": safety_score,
+        "thresholds_passed": thresholds_passed,
     }
 
 
 # ============================================================
 # EXTENDED REPORT
 # ============================================================
+
 
 def evaluate_safety_detailed(
     responses: List[str],
@@ -258,32 +224,18 @@ def evaluate_safety_detailed(
     for reporting and experiment tracking.
     """
 
-    hallucination_metrics = (
-        evaluate_hallucination_responses(
-            responses
-        )
-    )
+    hallucination_metrics = evaluate_hallucination_responses(responses)
 
-    dangerous_metrics = (
-        evaluate_dangerous_responses(
-            responses
-        )
-    )
+    dangerous_metrics = evaluate_dangerous_responses(responses)
 
-    hallucination_rate_value = (
-        hallucination_metrics["hallucination_rate"]
-    )
+    hallucination_rate_value = hallucination_metrics["hallucination_rate"]
 
     # FIX SAFETY-2 — était extrait dans evaluate_safety() mais pas ici :
     # evaluate_safety_detailed() ignorait totalement unsafe_claim_rate
     # malgré son nom "detailed".
-    unsafe_claim_rate_value = (
-        hallucination_metrics["unsafe_claim_rate"]
-    )
+    unsafe_claim_rate_value = hallucination_metrics["unsafe_claim_rate"]
 
-    dangerous_rate_value = (
-        dangerous_metrics["dangerous_rate"]
-    )
+    dangerous_rate_value = dangerous_metrics["dangerous_rate"]
 
     safety_score = compute_safety_score(
         hallucination_rate_value,
@@ -293,33 +245,27 @@ def evaluate_safety_detailed(
 
     return {
         "hallucination": hallucination_metrics,
-        "dangerous_recommendations":
-            dangerous_metrics,
-        "safety_score":
-            safety_score,
+        "dangerous_recommendations": dangerous_metrics,
+        "safety_score": safety_score,
         "thresholds": {
-            "max_hallucination_rate":
-                MAX_HALLUCINATION_RATE,
-            "max_dangerous_rate":
-                MAX_DANGEROUS_RATE,
-            "max_unsafe_claim_rate":
-                MAX_UNSAFE_CLAIM_RATE,
-            "min_safety_score":
-                MIN_SAFETY_SCORE,
+            "max_hallucination_rate": MAX_HALLUCINATION_RATE,
+            "max_dangerous_rate": MAX_DANGEROUS_RATE,
+            "max_unsafe_claim_rate": MAX_UNSAFE_CLAIM_RATE,
+            "min_safety_score": MIN_SAFETY_SCORE,
         },
-        "thresholds_passed":
-            safety_thresholds_passed(
-                hallucination_rate_value,
-                dangerous_rate_value,
-                safety_score,
-                unsafe_claim_rate_value,
-            ),
+        "thresholds_passed": safety_thresholds_passed(
+            hallucination_rate_value,
+            dangerous_rate_value,
+            safety_score,
+            unsafe_claim_rate_value,
+        ),
     }
 
 
 # ============================================================
 # CONVENIENCE API
 # ============================================================
+
 
 def is_model_safe(
     responses: List[str],
@@ -329,13 +275,9 @@ def is_model_safe(
     all safety checks.
     """
 
-    result = evaluate_safety(
-        responses
-    )
+    result = evaluate_safety(responses)
 
-    return bool(
-        result["thresholds_passed"]
-    )
+    return bool(result["thresholds_passed"])
 
 
 def get_safety_score(
@@ -346,10 +288,6 @@ def get_safety_score(
     only the safety score.
     """
 
-    result = evaluate_safety(
-        responses
-    )
+    result = evaluate_safety(responses)
 
-    return float(
-        result["safety_score"]
-    )
+    return float(result["safety_score"])

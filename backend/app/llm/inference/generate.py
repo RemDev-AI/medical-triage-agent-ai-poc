@@ -5,7 +5,9 @@ Inference generation utilities.
 
 Responsibilities:
 - Build chat prompts
-- Run model.generate()
+- Run model.generate() (Transformers) OR dispatch to
+  vLLM AsyncLLMEngine (étape 3), selon
+  runtime_config.use_vllm
 - Decode outputs
 - Clean malformed responses
 - Build inference metadata
@@ -14,18 +16,22 @@ Responsibilities:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import torch
 from transformers import PreTrainedModel
 from transformers import PreTrainedTokenizerBase
 
+from app.deployment.huggingface.hf_space_runtime import (
+    runtime_config,
+)
+
 logger = logging.getLogger(__name__)
 
 
 async def generate_response(
-    model: PreTrainedModel,
-    tokenizer: PreTrainedTokenizerBase,
+    model: Optional[PreTrainedModel],
+    tokenizer: Optional[PreTrainedTokenizerBase],
     system_prompt: str,
     user_prompt: str,
     max_new_tokens: int = 256,
@@ -34,15 +40,30 @@ async def generate_response(
     repetition_penalty: float = 1.1,
 ) -> str:
     """
-    Generate a response using the loaded model.
+    Generate a response.
+
+    Deux chemins d'exécution possibles (correctif
+    étape 3) :
+
+    - runtime_config.use_vllm == True :
+      dispatch vers vLLM AsyncLLMEngine
+      (backend.app.llm.inference.vllm_engine).
+      `model` et `tokenizer` peuvent alors être
+      None : ils ne sont pas requis par ce chemin.
+
+    - runtime_config.use_vllm == False :
+      chemin historique Transformers
+      (model.generate()), model/tokenizer requis.
 
     Parameters
     ----------
     model:
-        Loaded Hugging Face model.
+        Loaded Hugging Face model (chemin
+        Transformers uniquement).
 
     tokenizer:
-        Loaded Hugging Face tokenizer.
+        Loaded Hugging Face tokenizer (chemin
+        Transformers uniquement).
 
     system_prompt:
         System instruction.
@@ -50,17 +71,10 @@ async def generate_response(
     user_prompt:
         User input.
 
-    max_new_tokens:
-        Maximum generated tokens.
-
-    temperature:
-        Sampling temperature.
-
-    top_p:
-        Nucleus sampling value.
-
+    max_new_tokens, temperature, top_p,
     repetition_penalty:
-        Penalty applied to repeated tokens.
+        Paramètres de sampling communs aux deux
+        moteurs.
 
     Returns
     -------
@@ -68,9 +82,29 @@ async def generate_response(
         Generated response.
     """
 
-    logger.info(
-        "Starting inference generation."
-    )
+    if runtime_config.use_vllm:
+
+        logger.info("Dispatching generation to vLLM " "AsyncLLMEngine.")
+
+        from app.llm.inference.vllm_engine import (
+            generate_response_vllm,
+        )
+
+        return await generate_response_vllm(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            repetition_penalty=repetition_penalty,
+        )
+
+    if model is None or tokenizer is None:
+        raise ValueError(
+            "model and tokenizer are required " "when runtime_config.use_vllm is False."
+        )
+
+    logger.info("Starting inference generation " "(Transformers backend).")
 
     prompt = _build_chat_prompt(
         system_prompt=system_prompt,
@@ -83,14 +117,9 @@ async def generate_response(
         truncation=True,
     )
 
-    device = next(
-        model.parameters()
-    ).device
+    device = next(model.parameters()).device
 
-    inputs = {
-        key: value.to(device)
-        for key, value in inputs.items()
-    }
+    inputs = {key: value.to(device) for key, value in inputs.items()}
 
     with torch.inference_mode():
 
@@ -107,7 +136,7 @@ async def generate_response(
 
     generated_tokens = output_ids[
         0,
-        inputs["input_ids"].shape[1]:,
+        inputs["input_ids"].shape[1] :,
     ]
 
     response = tokenizer.decode(
@@ -119,9 +148,7 @@ async def generate_response(
         response=response,
     )
 
-    logger.info(
-        "Inference generation completed."
-    )
+    logger.info("Inference generation completed " "(Transformers backend).")
 
     return response
 

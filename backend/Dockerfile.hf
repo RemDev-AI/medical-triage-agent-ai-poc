@@ -1,6 +1,9 @@
 # ==========================================================
 # medical-triage-agent-ai-poc/backend/Dockerfile.hf
 # Hugging Face Space API Container
+#
+# IMPORTANT : build avec la RACINE du dépôt comme contexte,
+# cf. backend/Dockerfile pour l'explication complète.
 # ==========================================================
 
 FROM python:3.11-slim
@@ -16,7 +19,6 @@ ENV APP_HOME=/app
 
 # Hugging Face / Modal
 ENV HF_HOME=/tmp/huggingface
-ENV MODAL_ENDPOINT_URL=""
 
 WORKDIR ${APP_HOME}
 
@@ -35,18 +37,14 @@ RUN apt-get update && apt-get install -y \
 # ==========================================================
 # PYTHON DEPENDENCIES
 # ==========================================================
-
-COPY requirements.txt .
-
+COPY requirements.txt ./requirements.txt
 RUN pip install --upgrade pip
-
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ==========================================================
 # APPLICATION
 # ==========================================================
-
-COPY . .
+COPY . ./
 
 # ==========================================================
 # HUGGING FACE SPACES
@@ -69,12 +67,5 @@ HEALTHCHECK --interval=30s \
 # ==========================================================
 # STARTUP
 # ==========================================================
-
-CMD [
-    "uvicorn",
-    "app.main:app",
-    "--host",
-    "0.0.0.0",
-    "--port",
-    "7860"
-]
+# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "7860"]

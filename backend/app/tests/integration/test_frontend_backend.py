@@ -14,7 +14,7 @@ These tests do not load any local model.
 
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
+from app.main import app
 
 client = TestClient(app)
 
@@ -33,7 +33,7 @@ def test_frontend_health_check():
     assert payload["status"] == "ok"
 
 
-def test_frontend_triage_submission():
+def test_frontend_triage_submission(auth_headers):
     """
     Simulates a triage request coming from Streamlit UI.
     """
@@ -46,20 +46,21 @@ def test_frontend_triage_submission():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "priority" in data
-    assert "recommendation" in data
+    assert "priority_level" in data
+    assert "recommendations" in data
 
-    assert isinstance(data["priority"], str)
-    assert isinstance(data["recommendation"], str)
+    assert isinstance(data["priority_level"], str)
+    assert isinstance(data["recommendations"], list)
 
 
-def test_frontend_receives_modal_metadata():
+def test_frontend_receives_modal_metadata(auth_headers):
     """
     Verify backend returns inference metadata.
 
@@ -74,6 +75,7 @@ def test_frontend_receives_modal_metadata():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -87,7 +89,7 @@ def test_frontend_receives_modal_metadata():
         ]
 
 
-def test_frontend_response_contract():
+def test_frontend_response_contract(auth_headers):
     """
     Contract test between frontend and backend.
 
@@ -102,6 +104,7 @@ def test_frontend_response_contract():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -109,8 +112,8 @@ def test_frontend_response_contract():
     body = response.json()
 
     required_fields = [
-        "priority",
-        "recommendation",
+        "priority_level",
+        "recommendations",
     ]
 
     for field in required_fields:

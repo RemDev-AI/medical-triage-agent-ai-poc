@@ -53,9 +53,7 @@ class InferenceClient:
         )
 
         if not self.base_url:
-            raise ValueError(
-                "INFERENCE_API_URL is not configured."
-            )
+            raise ValueError("INFERENCE_API_URL is not configured.")
 
     @property
     def headers(self) -> dict[str, str]:
@@ -65,9 +63,7 @@ class InferenceClient:
         }
 
         if self.api_token:
-            headers["Authorization"] = (
-                f"Bearer {self.api_token}"
-            )
+            headers["Authorization"] = f"Bearer {self.api_token}"
 
         return headers
 

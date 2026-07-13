@@ -41,9 +41,7 @@ class LatencyMonitor:
 
         self.max_samples = max_samples
 
-        self.latencies = deque(
-            maxlen=max_samples
-        )
+        self.latencies = deque(maxlen=max_samples)
 
         self.lock = threading.Lock()
 
@@ -53,16 +51,12 @@ class LatencyMonitor:
     ) -> None:
 
         with self.lock:
-            self.latencies.append(
-                latency_ms
-            )
+            self.latencies.append(latency_ms)
 
     def count(self) -> int:
 
         with self.lock:
-            return len(
-                self.latencies
-            )
+            return len(self.latencies)
 
     def reset(self) -> None:
 
@@ -72,9 +66,7 @@ class LatencyMonitor:
     def get_all(self) -> List[float]:
 
         with self.lock:
-            return list(
-                self.latencies
-            )
+            return list(self.latencies)
 
     def _percentile(
         self,
@@ -87,10 +79,7 @@ class LatencyMonitor:
 
         data = sorted(data)
 
-        k = (
-            (len(data) - 1)
-            * percentile
-        )
+        k = (len(data) - 1) * percentile
 
         f = int(k)
 
@@ -100,17 +89,13 @@ class LatencyMonitor:
         )
 
         if f == c:
-            return float(
-                data[int(k)]
-            )
+            return float(data[int(k)])
 
         d0 = data[f] * (c - k)
 
         d1 = data[c] * (k - f)
 
-        return float(
-            d0 + d1
-        )
+        return float(d0 + d1)
 
     def stats(self) -> Dict[str, float]:
         """
@@ -186,10 +171,6 @@ def track_latency() -> Iterator[None]:
 
         end = time.perf_counter()
 
-        latency_ms = (
-            end - start
-        ) * 1000
+        latency_ms = (end - start) * 1000
 
-        latency_monitor.record(
-            latency_ms
-        )
+        latency_monitor.record(latency_ms)

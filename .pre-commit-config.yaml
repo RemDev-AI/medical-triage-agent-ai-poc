@@ -1,0 +1,16 @@
+# medical-triage-agent-ai-poc/.pre-commit-config.yaml
+
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        name: black (backend)
+        files: ^backend/app/
+        args: ["--config", "backend/pyproject.toml"]
+
+      - id: black
+        name: black (frontend)
+        files: ^frontend/streamlit_app/
+        # pas de --config : utilisera les défauts Black (identique à la CI actuelle,
+        # qui ne référence aucun pyproject.toml frontend)

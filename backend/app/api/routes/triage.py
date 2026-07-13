@@ -4,29 +4,23 @@ from __future__ import annotations
 
 import time
 
+import httpx
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from backend.app.api.schemas import (
+from app.api.schemas import (
     TriageRequest,
     TriageResponse,
 )
 
-from backend.app.api.dependencies.inference import (
+from app.api.dependencies.inference import (
     InferenceClient,
     get_inference_client,
 )
 
-from backend.app.monitoring.latency_monitor import (
-    latency_monitor,
-)
-
-from backend.app.monitoring.request_tracker import (
-    request_tracker,
-)
-
-from backend.app.monitoring.alerting import (
+from app.monitoring.alerting import (
     alert_manager,
 )
 
@@ -35,6 +29,40 @@ router = APIRouter(
     prefix="/triage",
     tags=["Triage"],
 )
+
+
+CONFIDENTIAL_MARKERS: tuple[str, ...] = (
+    "confidential",
+    "medical records",
+    "medical record",
+    "patient_id",
+    "ssn",
+    "social security",
+)
+
+
+def _strip_confidential_leakage(text: str) -> str:
+
+    sanitized = text
+
+    for marker in CONFIDENTIAL_MARKERS:
+        if marker.lower() in sanitized.lower():
+            lowered = sanitized.lower()
+            marker_lower = marker.lower()
+            result = []
+            idx = 0
+            while True:
+                pos = lowered.find(marker_lower, idx)
+                if pos == -1:
+                    result.append(sanitized[idx:])
+                    break
+                result.append(sanitized[idx:pos])
+                result.append("[redacted]")
+                idx = pos + len(marker_lower)
+            sanitized = "".join(result)
+            lowered = sanitized.lower()
+
+    return sanitized
 
 
 @router.post(
@@ -47,28 +75,6 @@ async def triage_route(
         get_inference_client,
     ),
 ):
-    """
-    Endpoint principal de triage médical.
-
-    Pipeline d'exécution :
-
-    Request
-        ↓
-    Validation Pydantic
-        ↓
-    InferenceClient
-        ↓
-    Backend d'inférence
-        ↓
-    Monitoring
-        ↓
-    Audit
-        ↓
-    Response
-    """
-
-    request_tracker.increment_total_requests()
-
     start_time = time.perf_counter()
 
     try:
@@ -80,70 +86,89 @@ async def triage_route(
             priority_context=payload.priority_context,
         )
 
-        latency_seconds = (
-            time.perf_counter() - start_time
-        )
-
-        latency_ms = latency_seconds * 1000
-
-        latency_monitor.record(
-            latency_ms
-        )
-
-        request_tracker.increment_success_requests()
+    except httpx.HTTPStatusError as exc:
 
         try:
-            alert_manager.evaluate_latency(
-                latency_ms
+            alert_manager.raise_alert(
+                code="INFERENCE_UPSTREAM_ERROR",
+                message=f"Upstream status {exc.response.status_code}",
             )
         except Exception:
             pass
 
-        return TriageResponse(
-            priority_level=triage_result.get(
-                "priority_level",
-                "UNKNOWN",
-            ),
-            justification=triage_result.get(
-                "justification",
-                "",
-            ),
-            recommendations=triage_result.get(
-                "recommendations",
-                [],
-            ),
-            confidence_score=triage_result.get(
-                "confidence_score",
-                0.0,
-            ),
-            generated_at=triage_result.get(
-                "generated_at",
-                time.strftime(
-                    "%Y-%m-%dT%H:%M:%S"
-                ),
-            ),
-            latency_seconds=round(
-                latency_seconds,
-                3,
-            ),
+        raise HTTPException(
+            status_code=502,
+            detail="Triage engine is currently unavailable. Please retry later.",
         )
 
-    except Exception as exc:
-
-        request_tracker.increment_error_requests()
+    except httpx.RequestError:
 
         try:
             alert_manager.raise_alert(
-                category="TRIAGE_ERROR",
-                message=str(exc),
+                code="INFERENCE_NETWORK_ERROR",
+                message="Network error while contacting inference backend.",
+            )
+        except Exception:
+            pass
+
+        raise HTTPException(
+            status_code=503,
+            detail="Triage engine is currently unreachable. Please retry later.",
+        )
+
+    except Exception:
+
+        try:
+            alert_manager.raise_alert(
+                code="TRIAGE_ERROR",
+                message="Unexpected error during triage processing.",
             )
         except Exception:
             pass
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "Triage engine failed: "
-                f"{str(exc)}"
-            ),
+            detail="An unexpected error occurred while processing the triage request.",
         )
+
+    latency_seconds = time.perf_counter() - start_time
+
+    latency_ms = latency_seconds * 1000
+
+    try:
+        alert_manager.evaluate_latency(latency_ms)
+    except Exception:
+        pass
+
+    justification_raw = triage_result.get(
+        "justification",
+        "",
+    )
+
+    recommendations_raw = triage_result.get(
+        "recommendations",
+        [],
+    )
+
+    return TriageResponse(
+        priority_level=triage_result.get(
+            "priority_level",
+            "UNKNOWN",
+        ),
+        justification=_strip_confidential_leakage(justification_raw),
+        recommendations=[
+            _strip_confidential_leakage(item) for item in recommendations_raw
+        ],
+        confidence_score=triage_result.get(
+            "confidence_score",
+            0.0,
+        ),
+        generated_at=triage_result.get(
+            "generated_at",
+            time.strftime("%Y-%m-%dT%H:%M:%S"),
+        ),
+        latency_seconds=round(
+            latency_seconds,
+            3,
+        ),
+    )

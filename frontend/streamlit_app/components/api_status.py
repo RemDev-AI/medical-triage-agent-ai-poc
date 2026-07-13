@@ -11,10 +11,6 @@ def render_api_status() -> None:
     api_status = check_api_health()
 
     if api_status["status"] == "healthy":
-        st.success(
-            f"Backend connecté : {api_status['message']}"
-        )
+        st.success(f"Backend connecté : {api_status['message']}")
     else:
-        st.error(
-            f"Connexion backend impossible : {api_status['message']}"
-        )
+        st.error(f"Connexion backend impossible : {api_status['message']}")

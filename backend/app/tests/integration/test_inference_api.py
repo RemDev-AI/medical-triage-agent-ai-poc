@@ -18,12 +18,12 @@ No local model loading is performed.
 
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
+from app.main import app
 
 client = TestClient(app)
 
 
-def test_generate_endpoint():
+def test_generate_endpoint(auth_headers):
     """
     Validate /generate endpoint returns valid text.
     """
@@ -33,36 +33,38 @@ def test_generate_endpoint():
             "Patient présente une fièvre persistante "
             "accompagnée de toux depuis 5 jours."
         ),
-        "max_tokens": 100,
+        "max_new_tokens": 100,
     }
 
     response = client.post(
         "/generate",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "text" in data
-    assert isinstance(data["text"], str)
-    assert len(data["text"]) > 0
+    assert "generated_text" in data
+    assert isinstance(data["generated_text"], str)
+    assert len(data["generated_text"]) > 0
 
 
-def test_generate_endpoint_contract():
+def test_generate_endpoint_contract(auth_headers):
     """
     Contract validation for generate endpoint.
     """
 
     payload = {
         "prompt": "Douleur thoracique modérée.",
-        "max_tokens": 50,
+        "max_new_tokens": 50,
     }
 
     response = client.post(
         "/generate",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -70,14 +72,17 @@ def test_generate_endpoint_contract():
     body = response.json()
 
     required_fields = [
-        "text",
+        "generated_text",
+        "model_name",
+        "latency_seconds",
+        "timestamp",
     ]
 
     for field in required_fields:
         assert field in body
 
 
-def test_generate_endpoint_modal_metadata():
+def test_generate_endpoint_modal_metadata(auth_headers):
     """
     Optional Modal metadata validation.
 
@@ -86,12 +91,13 @@ def test_generate_endpoint_modal_metadata():
 
     payload = {
         "prompt": "Patient souffre de céphalées.",
-        "max_tokens": 50,
+        "max_new_tokens": 50,
     }
 
     response = client.post(
         "/generate",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -104,14 +110,13 @@ def test_generate_endpoint_modal_metadata():
             "fallback",
         ]
 
-    if "latency_ms" in data:
-        assert isinstance(
-            data["latency_ms"],
-            (int, float),
-        )
+    assert isinstance(
+        data["latency_seconds"],
+        (int, float),
+    )
 
 
-def test_triage_endpoint_inference():
+def test_triage_endpoint_inference(auth_headers):
     """
     Validate triage endpoint returns clinical response.
     """
@@ -124,20 +129,21 @@ def test_triage_endpoint_inference():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "priority" in data
-    assert "recommendation" in data
+    assert "priority_level" in data
+    assert "recommendations" in data
 
-    assert isinstance(data["priority"], str)
-    assert isinstance(data["recommendation"], str)
+    assert isinstance(data["priority_level"], str)
+    assert isinstance(data["recommendations"], list)
 
 
-def test_triage_priority_values():
+def test_triage_priority_values(auth_headers):
     """
     Validate allowed triage levels.
     """
@@ -150,6 +156,7 @@ def test_triage_priority_values():
     response = client.post(
         "/triage",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -163,48 +170,50 @@ def test_triage_priority_values():
         "urgent",
     }
 
-    assert data["priority"] in allowed_priorities
+    assert data["priority_level"] in allowed_priorities
 
 
-def test_inference_handles_long_prompt():
+def test_inference_handles_long_prompt(auth_headers):
     """
     Long prompts should not crash the API.
     """
 
     payload = {
         "prompt": "fièvre " * 500,
-        "max_tokens": 100,
+        "max_new_tokens": 100,
     }
 
     response = client.post(
         "/generate",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert "text" in data
+    assert "generated_text" in data
 
 
-def test_inference_response_is_not_empty():
+def test_inference_response_is_not_empty(auth_headers):
     """
     Generated text must not be empty.
     """
 
     payload = {
         "prompt": "Quels symptômes nécessitent une urgence médicale ?",
-        "max_tokens": 80,
+        "max_new_tokens": 80,
     }
 
     response = client.post(
         "/generate",
         json=payload,
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert data["text"].strip() != ""
+    assert data["generated_text"].strip() != ""

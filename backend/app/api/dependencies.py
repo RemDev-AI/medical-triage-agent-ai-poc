@@ -4,19 +4,13 @@ from datetime import datetime
 from fastapi import HTTPException
 
 
-SUPPORTED_PRIORITY_LEVELS = {
-    "low",
-    "medium",
-    "high",
-    "critical"
-}
+SUPPORTED_PRIORITY_LEVELS = {"low", "medium", "high", "critical"}
 
 
 def validate_priority(priority: str) -> str:
     if priority.lower() not in SUPPORTED_PRIORITY_LEVELS:
         raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported priority level: {priority}"
+            status_code=400, detail=f"Unsupported priority level: {priority}"
         )
 
     return priority.lower()

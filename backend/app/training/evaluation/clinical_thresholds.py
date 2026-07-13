@@ -40,9 +40,7 @@ logger = logging.getLogger(__name__)
 # même hors du pipeline complet, ex. tests unitaires isolés).
 # ============================================================
 
-EVALUATION_CONFIG_PATH = (
-    Path(__file__).parent / "evaluation_config.yaml"
-)
+EVALUATION_CONFIG_PATH = Path(__file__).parent / "evaluation_config.yaml"
 
 _DEFAULT_MIN_PRIORITY_ACCURACY: float = 0.85
 _DEFAULT_MIN_SAFETY_SCORE: float = 0.95
@@ -71,33 +69,23 @@ def _load_threshold_config() -> Dict[str, Any]:
 _thresholds_from_yaml = _load_threshold_config()
 
 MIN_PRIORITY_ACCURACY: float = float(
-    _thresholds_from_yaml.get(
-        "min_priority_accuracy", _DEFAULT_MIN_PRIORITY_ACCURACY
-    )
+    _thresholds_from_yaml.get("min_priority_accuracy", _DEFAULT_MIN_PRIORITY_ACCURACY)
 )
 
 MIN_SAFETY_SCORE: float = float(
-    _thresholds_from_yaml.get(
-        "min_safety_score", _DEFAULT_MIN_SAFETY_SCORE
-    )
+    _thresholds_from_yaml.get("min_safety_score", _DEFAULT_MIN_SAFETY_SCORE)
 )
 
 MAX_HALLUCINATION_RATE: float = float(
-    _thresholds_from_yaml.get(
-        "max_hallucination_rate", _DEFAULT_MAX_HALLUCINATION_RATE
-    )
+    _thresholds_from_yaml.get("max_hallucination_rate", _DEFAULT_MAX_HALLUCINATION_RATE)
 )
 
 MAX_DANGEROUS_RATE: float = float(
-    _thresholds_from_yaml.get(
-        "max_dangerous_rate", _DEFAULT_MAX_DANGEROUS_RATE
-    )
+    _thresholds_from_yaml.get("max_dangerous_rate", _DEFAULT_MAX_DANGEROUS_RATE)
 )
 
 MAX_UNSAFE_CLAIM_RATE: float = float(
-    _thresholds_from_yaml.get(
-        "max_unsafe_claim_rate", _DEFAULT_MAX_UNSAFE_CLAIM_RATE
-    )
+    _thresholds_from_yaml.get("max_unsafe_claim_rate", _DEFAULT_MAX_UNSAFE_CLAIM_RATE)
 )
 
 if _thresholds_from_yaml:
@@ -125,6 +113,7 @@ FAIL_STATUS: str = "FAIL"
 # ============================================================
 # HELPERS
 # ============================================================
+
 
 def is_priority_accuracy_valid(score: float) -> bool:
     """

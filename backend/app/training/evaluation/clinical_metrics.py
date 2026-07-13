@@ -60,14 +60,9 @@ def priority_accuracy(
     """
 
     if len(predictions) != len(references):
-        raise ValueError(
-            "predictions and references must have same length."
-        )
+        raise ValueError("predictions and references must have same length.")
 
-    correct = sum(
-        pred == ref
-        for pred, ref in zip(predictions, references)
-    )
+    correct = sum(pred == ref for pred, ref in zip(predictions, references))
 
     return _safe_divide(correct, len(references))
 
@@ -96,14 +91,9 @@ def clinical_accuracy(
     """
 
     if len(predictions) != len(references):
-        raise ValueError(
-            "predictions and references must have same length."
-        )
+        raise ValueError("predictions and references must have same length.")
 
-    correct = sum(
-        pred == ref
-        for pred, ref in zip(predictions, references)
-    )
+    correct = sum(pred == ref for pred, ref in zip(predictions, references))
 
     return _safe_divide(correct, len(references))
 
@@ -133,14 +123,9 @@ def recommendation_accuracy(
     """
 
     if len(predictions) != len(references):
-        raise ValueError(
-            "predictions and references must have same length."
-        )
+        raise ValueError("predictions and references must have same length.")
 
-    correct = sum(
-        pred == ref
-        for pred, ref in zip(predictions, references)
-    )
+    correct = sum(pred == ref for pred, ref in zip(predictions, references))
 
     return _safe_divide(correct, len(references))
 

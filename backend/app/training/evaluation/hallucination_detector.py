@@ -69,6 +69,7 @@ UNSAFE_CLAIM_PATTERNS = [
 # INTERNAL HELPERS
 # ============================================================
 
+
 def _contains_pattern(
     text: str,
     patterns: List[str],
@@ -79,10 +80,7 @@ def _contains_pattern(
 
     normalized = text.lower()
 
-    return any(
-        re.search(pattern, normalized)
-        for pattern in patterns
-    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
 
 
 def _safe_divide(
@@ -102,6 +100,7 @@ def _safe_divide(
 # ============================================================
 # HALLUCINATION DETECTION
 # ============================================================
+
 
 def is_hallucinated(
     response: str,
@@ -138,10 +137,7 @@ def hallucination_rate(
     if not responses:
         return 0.0
 
-    hallucinated_count = sum(
-        is_hallucinated(response)
-        for response in responses
-    )
+    hallucinated_count = sum(is_hallucinated(response) for response in responses)
 
     return _safe_divide(
         hallucinated_count,
@@ -152,6 +148,7 @@ def hallucination_rate(
 # ============================================================
 # UNSAFE CLAIM DETECTION
 # ============================================================
+
 
 def contains_unsafe_claim(
     response: str,
@@ -188,10 +185,7 @@ def unsafe_claim_rate(
     if not responses:
         return 0.0
 
-    unsafe_count = sum(
-        contains_unsafe_claim(response)
-        for response in responses
-    )
+    unsafe_count = sum(contains_unsafe_claim(response) for response in responses)
 
     return _safe_divide(
         unsafe_count,
@@ -202,6 +196,7 @@ def unsafe_claim_rate(
 # ============================================================
 # SAMPLE-LEVEL ANALYSIS
 # ============================================================
+
 
 def analyze_response(
     response: str,
@@ -226,6 +221,7 @@ def analyze_response(
 # DATASET-LEVEL ANALYSIS
 # ============================================================
 
+
 def evaluate_responses(
     responses: List[str],
 ) -> Dict[str, Any]:
@@ -242,15 +238,9 @@ def evaluate_responses(
         }
     """
 
-    hallucinated_samples = sum(
-        is_hallucinated(response)
-        for response in responses
-    )
+    hallucinated_samples = sum(is_hallucinated(response) for response in responses)
 
-    unsafe_samples = sum(
-        contains_unsafe_claim(response)
-        for response in responses
-    )
+    unsafe_samples = sum(contains_unsafe_claim(response) for response in responses)
 
     total_samples = len(responses)
 

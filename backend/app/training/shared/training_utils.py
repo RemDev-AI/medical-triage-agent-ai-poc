@@ -76,12 +76,7 @@ class TrainingUtils:
                 log_level.upper(),
                 logging.INFO,
             ),
-            format=(
-                "%(asctime)s | "
-                "%(levelname)s | "
-                "%(name)s | "
-                "%(message)s"
-            ),
+            format=("%(asctime)s | " "%(levelname)s | " "%(name)s | " "%(message)s"),
         )
 
     @staticmethod
@@ -95,10 +90,7 @@ class TrainingUtils:
             wandb run object or None.
         """
 
-        wandb_enabled = (
-            config.get("wandb", {})
-            .get("enabled", False)
-        )
+        wandb_enabled = config.get("wandb", {}).get("enabled", False)
 
         if not wandb_enabled:
             logger.info("W&B disabled")
@@ -158,19 +150,11 @@ class TrainingUtils:
             outputs/sft/20260624_120000/
         """
 
-        timestamp = datetime.utcnow().strftime(
-            "%Y%m%d_%H%M%S"
-        )
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
-        run_id = (
-            f"{timestamp}_{run_name}"
-            if run_name
-            else timestamp
-        )
+        run_id = f"{timestamp}_{run_name}" if run_name else timestamp
 
-        run_directory = (
-            Path(base_directory) / run_id
-        )
+        run_directory = Path(base_directory) / run_id
 
         run_directory.mkdir(
             parents=True,
@@ -221,10 +205,7 @@ class TrainingUtils:
         Save training configuration.
         """
 
-        output_path = (
-            Path(output_directory)
-            / "training_config.json"
-        )
+        output_path = Path(output_directory) / "training_config.json"
 
         TrainingUtils.save_json(
             config,
@@ -243,10 +224,7 @@ class TrainingUtils:
         Save training metrics.
         """
 
-        output_path = (
-            Path(output_directory)
-            / filename
-        )
+        output_path = Path(output_directory) / filename
 
         TrainingUtils.save_json(
             metrics,
@@ -266,15 +244,11 @@ class TrainingUtils:
 
         metadata = {
             "timestamp": datetime.utcnow().isoformat(),
-            "pythonhashseed": os.environ.get(
-                "PYTHONHASHSEED"
-            ),
+            "pythonhashseed": os.environ.get("PYTHONHASHSEED"),
             "torch_version": torch.__version__,
             "cuda_available": torch.cuda.is_available(),
             "cuda_device_count": (
-                torch.cuda.device_count()
-                if torch.cuda.is_available()
-                else 0
+                torch.cuda.device_count() if torch.cuda.is_available() else 0
             ),
             "seed": config.get(
                 "training",
@@ -293,9 +267,7 @@ class TrainingUtils:
         }
 
         if torch.cuda.is_available():
-            metadata["gpu_name"] = (
-                torch.cuda.get_device_name(0)
-            )
+            metadata["gpu_name"] = torch.cuda.get_device_name(0)
 
         return metadata
 
@@ -308,10 +280,7 @@ class TrainingUtils:
         Persist metadata.
         """
 
-        output_path = (
-            Path(output_directory)
-            / "training_metadata.json"
-        )
+        output_path = Path(output_directory) / "training_metadata.json"
 
         TrainingUtils.save_json(
             metadata,
@@ -334,9 +303,7 @@ class TrainingUtils:
         try:
             run.finish()
 
-            logger.info(
-                "W&B run finalized"
-            )
+            logger.info("W&B run finalized")
 
         except Exception as exc:
             logger.exception(
@@ -354,15 +321,11 @@ class TrainingUtils:
         summary = {
             "cuda_available": torch.cuda.is_available(),
             "device_count": (
-                torch.cuda.device_count()
-                if torch.cuda.is_available()
-                else 0
+                torch.cuda.device_count() if torch.cuda.is_available() else 0
             ),
         }
 
         if torch.cuda.is_available():
-            summary["device_name"] = (
-                torch.cuda.get_device_name(0)
-            )
+            summary["device_name"] = torch.cuda.get_device_name(0)
 
         return summary

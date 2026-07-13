@@ -2,7 +2,7 @@
 
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
+from app.main import app
 
 client = TestClient(app)
 
@@ -23,9 +23,7 @@ def test_invalid_jwt_token():
     Invalid JWT should be rejected.
     """
 
-    headers = {
-        "Authorization": "Bearer invalid-token"
-    }
+    headers = {"Authorization": "Bearer invalid-token"}
 
     response = client.get(
         "/audit",
@@ -40,9 +38,7 @@ def test_malformed_authorization_header():
     Malformed authorization header should fail.
     """
 
-    headers = {
-        "Authorization": "InvalidHeader"
-    }
+    headers = {"Authorization": "InvalidHeader"}
 
     response = client.get(
         "/audit",
@@ -57,9 +53,7 @@ def test_access_protected_route_without_role():
     Verify access control is enforced.
     """
 
-    headers = {
-        "Authorization": "Bearer fake-user-token"
-    }
+    headers = {"Authorization": "Bearer fake-user-token"}
 
     response = client.get(
         "/admin",

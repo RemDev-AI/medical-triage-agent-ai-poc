@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Dict
 from typing import List
 
-from backend.app.monitoring.gpu_monitor import (
+from app.monitoring.gpu_monitor import (
     gpu_monitor,
 )
-from backend.app.monitoring.latency_monitor import (
+from app.monitoring.latency_monitor import (
     latency_monitor,
 )
-from backend.app.monitoring.request_tracker import (
+from app.monitoring.request_tracker import (
     request_tracker,
 )
 
@@ -27,16 +27,6 @@ class Alert:
 
 
 class AlertManager:
-    """
-    Gestionnaire centralisé d'alertes.
-
-    Compatible :
-
-    - Hugging Face Spaces
-    - Backend d'inférence
-    - FastAPI
-    - Streamlit Dashboard
-    """
 
     LATENCY_WARNING_MS = 1000
     LATENCY_CRITICAL_MS = 3000
@@ -74,17 +64,14 @@ class AlertManager:
 
     def raise_alert(
         self,
-        category: str,
+        code: str,
         message: str,
         level: str = "ERROR",
     ) -> None:
-        """
-        API utilisée par les routes FastAPI.
-        """
 
         self._create_alert(
             level=level,
-            code=category,
+            code=code,
             message=message,
         )
 
@@ -92,10 +79,6 @@ class AlertManager:
         self,
         latency_ms: float | None = None,
     ) -> None:
-        """
-        Analyse des temps de réponse.
-        Compatible avec les routes FastAPI.
-        """
 
         if latency_ms is None:
 
@@ -111,10 +94,7 @@ class AlertManager:
             self._create_alert(
                 "CRITICAL",
                 "LATENCY_CRITICAL",
-                (
-                    f"Latency is "
-                    f"{latency_ms:.2f} ms"
-                ),
+                (f"Latency is " f"{latency_ms:.2f} ms"),
             )
 
         elif latency_ms >= self.LATENCY_WARNING_MS:
@@ -122,16 +102,10 @@ class AlertManager:
             self._create_alert(
                 "WARNING",
                 "LATENCY_WARNING",
-                (
-                    f"Latency is "
-                    f"{latency_ms:.2f} ms"
-                ),
+                (f"Latency is " f"{latency_ms:.2f} ms"),
             )
 
     def evaluate_errors(self) -> None:
-        """
-        Analyse du taux d'erreur API.
-        """
 
         stats = request_tracker.get_stats()
 
@@ -145,10 +119,7 @@ class AlertManager:
             self._create_alert(
                 "CRITICAL",
                 "ERROR_RATE_CRITICAL",
-                (
-                    f"Error rate is "
-                    f"{error_rate}%"
-                ),
+                (f"Error rate is " f"{error_rate}%"),
             )
 
         elif error_rate >= self.ERROR_RATE_WARNING:
@@ -156,16 +127,10 @@ class AlertManager:
             self._create_alert(
                 "WARNING",
                 "ERROR_RATE_WARNING",
-                (
-                    f"Error rate is "
-                    f"{error_rate}%"
-                ),
+                (f"Error rate is " f"{error_rate}%"),
             )
 
     def evaluate_gpu(self) -> None:
-        """
-        Analyse des métriques GPU.
-        """
 
         metrics = gpu_monitor.get_gpu_stats()
 
@@ -184,63 +149,35 @@ class AlertManager:
             0.0,
         )
 
-        if (
-            gpu_utilization
-            >= self.GPU_UTILIZATION_CRITICAL
-        ):
+        if gpu_utilization >= self.GPU_UTILIZATION_CRITICAL:
             self._create_alert(
                 "CRITICAL",
                 "GPU_UTILIZATION_CRITICAL",
-                (
-                    f"GPU utilization is "
-                    f"{gpu_utilization}%"
-                ),
+                (f"GPU utilization is " f"{gpu_utilization}%"),
             )
 
-        elif (
-            gpu_utilization
-            >= self.GPU_UTILIZATION_WARNING
-        ):
+        elif gpu_utilization >= self.GPU_UTILIZATION_WARNING:
             self._create_alert(
                 "WARNING",
                 "GPU_UTILIZATION_WARNING",
-                (
-                    f"GPU utilization is "
-                    f"{gpu_utilization}%"
-                ),
+                (f"GPU utilization is " f"{gpu_utilization}%"),
             )
 
-        if (
-            vram_utilization
-            >= self.VRAM_UTILIZATION_CRITICAL
-        ):
+        if vram_utilization >= self.VRAM_UTILIZATION_CRITICAL:
             self._create_alert(
                 "CRITICAL",
                 "VRAM_UTILIZATION_CRITICAL",
-                (
-                    f"VRAM utilization is "
-                    f"{vram_utilization}%"
-                ),
+                (f"VRAM utilization is " f"{vram_utilization}%"),
             )
 
-        elif (
-            vram_utilization
-            >= self.VRAM_UTILIZATION_WARNING
-        ):
+        elif vram_utilization >= self.VRAM_UTILIZATION_WARNING:
             self._create_alert(
                 "WARNING",
                 "VRAM_UTILIZATION_WARNING",
-                (
-                    f"VRAM utilization is "
-                    f"{vram_utilization}%"
-                ),
+                (f"VRAM utilization is " f"{vram_utilization}%"),
             )
 
     def evaluate_containers(self) -> None:
-        """
-        Analyse de la charge du backend
-        d'inférence.
-        """
 
         metrics = gpu_monitor.get_gpu_stats()
 
@@ -254,30 +191,18 @@ class AlertManager:
             0,
         )
 
-        if (
-            active_containers
-            >= self.CONTAINER_CRITICAL
-        ):
+        if active_containers >= self.CONTAINER_CRITICAL:
             self._create_alert(
                 "CRITICAL",
                 "CONTAINER_CRITICAL",
-                (
-                    f"Active containers: "
-                    f"{active_containers}"
-                ),
+                (f"Active containers: " f"{active_containers}"),
             )
 
-        elif (
-            active_containers
-            >= self.CONTAINER_WARNING
-        ):
+        elif active_containers >= self.CONTAINER_WARNING:
             self._create_alert(
                 "WARNING",
                 "CONTAINER_WARNING",
-                (
-                    f"Active containers: "
-                    f"{active_containers}"
-                ),
+                (f"Active containers: " f"{active_containers}"),
             )
 
     def evaluate_all(self) -> None:
@@ -303,29 +228,11 @@ class AlertManager:
 
         alerts = self.get_alerts()
 
-        critical = len(
-            [
-                a
-                for a in alerts
-                if a["level"] == "CRITICAL"
-            ]
-        )
+        critical = len([a for a in alerts if a["level"] == "CRITICAL"])
 
-        warning = len(
-            [
-                a
-                for a in alerts
-                if a["level"] == "WARNING"
-            ]
-        )
+        warning = len([a for a in alerts if a["level"] == "WARNING"])
 
-        info = len(
-            [
-                a
-                for a in alerts
-                if a["level"] == "INFO"
-            ]
-        )
+        info = len([a for a in alerts if a["level"] == "INFO"])
 
         return {
             "critical": critical,

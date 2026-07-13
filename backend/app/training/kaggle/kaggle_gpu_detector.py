@@ -288,18 +288,10 @@ def build_gpu_info() -> GPUInfo:
         total_vram_gb=get_total_vram_gb(),
         bf16_recommended=bf16,
         fp16_recommended=not bf16,
-        lora_batch_size=get_recommended_lora_batch_size(
-            gpu_type
-        ),
-        dpo_batch_size=get_recommended_dpo_batch_size(
-            gpu_type
-        ),
-        quantization=get_recommended_quantization(
-            gpu_type
-        ),
-        quantization_4bit_recommended=should_use_4bit_quantization(
-            gpu_type
-        ),
+        lora_batch_size=get_recommended_lora_batch_size(gpu_type),
+        dpo_batch_size=get_recommended_dpo_batch_size(gpu_type),
+        quantization=get_recommended_quantization(gpu_type),
+        quantization_4bit_recommended=should_use_4bit_quantization(gpu_type),
         cuda_available=torch.cuda.is_available(),
     )
 

@@ -47,9 +47,7 @@ def render_patient_form() -> dict:
             placeholder="Décrivez les antécédents...",
         )
 
-        submitted = st.form_submit_button(
-            "Valider formulaire"
-        )
+        submitted = st.form_submit_button("Valider formulaire")
 
     return {
         "submitted": submitted,
