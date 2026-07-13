@@ -1,0 +1,105 @@
+# medical-triage-agent-ai-poc/backend/app/training/sft/sft_config.yaml
+
+training:
+  output_dir: "artifacts/checkpoints/sft"
+
+  num_train_epochs: 3
+
+  per_device_train_batch_size: 1    # ← était 2
+  per_device_eval_batch_size: 1     # ← était 2
+
+  gradient_accumulation_steps: 16   # ← compense (batch effectif = 16, était 2×8=16 ✓)
+
+  learning_rate: 2e-4
+  weight_decay: 0.01
+
+  warmup_ratio: 0.05
+
+  lr_scheduler_type: "cosine"
+
+  max_grad_norm: 1.0
+
+  gradient_checkpointing: true      # ✓ déjà activé
+
+  logging_steps: 10
+  eval_steps: 100
+  save_steps: 100
+
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
+
+  save_total_limit: 3
+  save_safetensors: true
+
+  load_best_model_at_end: true
+
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+
+  early_stopping_patience: 3
+
+  fp16: true                        # ← activer (T4 supporte fp16 natif)
+  bf16: false                       # ← désactiver (T4 incompatible)
+
+  dataloader_num_workers: 0         # ← évite les leaks mémoire sur Colab
+
+  report_to:
+    - "wandb"
+    # - "mlflow"
+
+  resume_from_checkpoint: null
+
+  push_to_hub: true
+
+
+model:
+  base_model: "Qwen/Qwen3-1.7B-Base"
+
+  torch_dtype: "float16"            # ← était "bfloat16"
+
+  trust_remote_code: true
+
+  device_map: "auto"                # ✓ ok
+
+  use_flash_attention: false
+
+  hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
+
+tokenizer:
+  use_fast: true
+
+  padding_side: "right"
+
+  model_max_length: 2048
+
+special_tokens: {}
+
+dataset:
+  hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
+
+  hf_config: "sft"
+
+  train_split: "train"
+  validation_split: "validation"
+  test_split: "test"
+  clinical_eval_split: "clinical_eval"
+
+  max_sequence_length: 512          # ← était 2048, réduire drastiquement
+
+  packing: false
+
+  # Optional local fallback
+  # train_path: "backend/app/datasets/processed/sft/train.jsonl"
+  # validation_path: "backend/app/datasets/processed/sft/validation.jsonl"
+
+tracking:
+  wandb_project: "medical-triage-llm"
+
+  wandb_run_name: "qwen3-1.7b-sft"
+
+  # mlflow_experiment_name: "medical-triage-sft"
+
+system:
+  seed: 42
+
+  logging_level: "INFO"

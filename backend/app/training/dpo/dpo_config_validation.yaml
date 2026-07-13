@@ -1,0 +1,171 @@
+# medical-triage-agent-ai-poc/backend/app/training/dpo/dpo_config_validation.yaml
+
+# CORRECTIONS OOM appliquées :
+#   - OOM-1 : max_length réduit 2048 → 512 (activations ∝ seq²)
+#   - OOM-2 : max_prompt_length réduit 1024 → 256
+#   - OOM-3 : fp16 / bf16 supprimés du YAML (source unique = apply_precision_arguments)
+#             torch_dtype → "auto" (était "float16" hardcodé, conflictuel avec fp16:true)
+#   - OOM-4 : tokenizer.model_max_length aligné sur dpo.max_length (512)
+#   - OOM-5 : PYTORCH_CUDA_ALLOC_CONF documenté ici, à définir avant le run
+#             (voir commentaire ci-dessous)
+#   - OOM-6 (audit) : quantization QLoRA 4 bits activée — training_model_loader.py
+#             charge maintenant policy model ET ref_model en 4 bits (NF4),
+#             ce qui réduit fortement l'empreinte mémoire des deux copies de
+#             poids simultanées requises par DPOTrainer (πθ vs πref).
+#             cf. train_dpo.py pour le chargement explicite du ref_model.
+#
+# ── Avant de lancer le run, exécuter dans Colab ──────────────────────────────
+#   import os
+#   os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+# ─────────────────────────────────────────────────────────────────────────────
+
+runtime:
+  # Même moteur que sft_config_validation.yaml — SFT et DPO doivent
+  # utiliser la même politique mémoire (cf. plan d'audit, étape 2).
+  engine: "transformers"
+
+quantization:
+  # QLoRA 4 bits — s'applique au policy model ET au ref_model (train_dpo.py
+  # doit utiliser training_model_loader pour charger le ref_model afin
+  # d'hériter du même quantization_config ; sinon le ref_model resterait
+  # en FP16 et l'OOM reviendrait par cette voie).
+  enabled: true
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_use_double_quant: true
+  # bnb_4bit_compute_dtype dérivé de model.torch_dtype (source unique de
+  # vérité, cf. sft_config_validation.yaml).
+
+training:
+  output_dir: "artifacts/checkpoints/dpo_validation"
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 16
+  learning_rate: 5e-6
+  warmup_ratio: 0.05
+  lr_scheduler_type: "cosine"
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  logging_steps: 10
+  # FIX DPO-2 — avec max_train_samples=500, batch=1, grad_accum=16 :
+  # ~31 steps réels par epoch. eval_steps/save_steps=50 en "steps" ne
+  # peut STRUCTURELLEMENT jamais être atteint (31 < 50) : aucun
+  # checkpoint-N/ n'est créé, rien n'est synchronisable vers Hugging
+  # Face. "epoch" garantit un checkpoint en fin de run quel que soit
+  # le nombre exact de steps produits (aligné sur le fix appliqué à
+  # sft_config_validation.yaml).
+  eval_steps: 50                     # ignoré tant que *_strategy="epoch" ; conservé pour retour rapide à "steps" si besoin  # noqa: E501
+  save_steps: 50                     # idem
+  evaluation_strategy: "epoch"
+  save_strategy: "epoch"
+  save_total_limit: 3
+  save_safetensors: true
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+  early_stopping_patience: 2
+  # OOM-3 : fp16 / bf16 SUPPRIMÉS — précision détectée automatiquement
+  #         par apply_precision_arguments() selon le GPU détecté au runtime.
+  #         Ne PAS remettre fp16/bf16 ici pour éviter les conflits avec
+  #         torch_dtype et une double activation du mixed-precision.
+  dataloader_num_workers: 0
+  report_to:
+    - "wandb"
+  resume_from_checkpoint: null
+  # NOTE — cette clé n'est lue nulle part dans train_dpo.py (confirmé par
+  # grep : aucune occurrence de push_to_hub dans le code). Mise à `true`
+  # ici, elle donne l'illusion d'un contrôle qui n'existe pas : le
+  # comportement de push est piloté exclusivement par l'argument
+  # publish_to_hf de train() (train_dpo.py). Appelez explicitement
+  # train(publish_to_hf=True) pour publier réellement sur le Hub.
+  push_to_hub: true
+
+dpo:
+  beta: 0.1
+  # OOM-1 : max_length réduit 2048 → 512
+  # Sur T4 14.5 GiB avec double modèle DPO (model + reference),
+  # les activations croissent en O(seq²) → 2048 est fatal.
+  # 512 laisse ~4-5 GiB de marge après les deux copies de poids.
+  #
+  # NOTE (audit, étape 1 appliquée) : avec quantization.enabled=true,
+  # policy + ref_model tiennent désormais en ~2× moins de VRAM qu'en
+  # FP16. Cette marge supplémentaire pourrait permettre de relever
+  # max_length par la suite, mais ce n'est PAS fait ici pour rester sur
+  # un changement à la fois (isoler l'effet de la quantification avant
+  # de retoucher les longueurs de séquence). À réévaluer une fois le
+  # run de validation QLoRA confirmé stable.
+  max_length: 512
+  # OOM-2 : max_prompt_length réduit 1024 → 256
+  # Doit être < max_length. Laisse 256 tokens pour chosen/rejected.
+  max_prompt_length: 256
+  loss_type: "sigmoid"
+  truncation_mode: "keep_end"
+  reference_free: false
+
+model:
+  base_model: "Qwen/Qwen3-1.7B-Base"
+  # OOM-3 : torch_dtype → "auto" (était "float16" hardcodé)
+  # "auto" laisse transformers choisir float16 sur T4 (pas bfloat16)
+  # sans conflit avec les flags fp16/bf16 de TrainingArguments.
+  # Sert aussi de bnb_4bit_compute_dtype (quantization.enabled=true).
+  torch_dtype: "auto"
+  trust_remote_code: true
+  device_map: "auto"
+  use_flash_attention: false
+  # Utilisé par la branche Unsloth (runtime.engine="unsloth") ; ignoré
+  # par la branche transformers.
+  max_seq_length: 512
+  hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
+  # Révision Hub (commit SHA) du modèle/adapter final évalué par
+  # clinical_eval_runner.py. À renseigner APRÈS le run d'entraînement,
+  # une fois le checkpoint final poussé sur le Hub : copier le commit
+  # SHA correspondant depuis l'onglet "Files and versions" du repo,
+  # dossier sft-final/ ou racine (modèle DPO), afin de figer exactement
+  # la version évaluée. Tant que cette clé est absente ou vide,
+  # clinical_eval_runner.py se replie sur "main" (dernier commit de la
+  # branche par défaut, potentiellement instable entre deux runs).
+  hub_revision: ""
+
+tokenizer:
+  use_fast: true
+  padding_side: "right"
+  # OOM-4 : aligné sur dpo.max_length pour éviter des séquences
+  # plus longues que ce que DPOTrainer va tronquer de toute façon.
+  model_max_length: 512
+
+special_tokens: {}
+
+dataset:
+  hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
+  hf_config: "dpo"
+  # Révision Hub (commit SHA) du dataset repo. Repli sur "main" dans
+  # train_dpo.py (load_dataset_source) si absente/vide.
+  hf_revision: ""
+  train_split: "train"
+  validation_split: "validation"
+  test_split: "test"
+  clinical_eval_split: "clinical_eval"
+  # Sous-ensemble de validation rapide (DPO-4)
+  max_train_samples: 500
+  max_val_samples: 100
+
+tracking:
+  wandb_project: "medical-triage-llm"
+  wandb_run_name: "qwen3-1.7b-dpo"
+
+safety:
+  hallucination_keywords:
+    - "guaranteed cure"
+    - "miracle treatment"
+    - "ignore emergency symptoms"
+    - "stop medication immediately"
+  
+  dangerous_keywords:
+    - "avoid hospital"
+    - "ignore chest pain"
+    - "self-medicate antibiotics"
+    - "replace doctor diagnosis"
+
+system:
+  seed: 42
+  logging_level: "INFO"

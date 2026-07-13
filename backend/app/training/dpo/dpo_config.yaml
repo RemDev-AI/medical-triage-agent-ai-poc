@@ -1,0 +1,123 @@
+# medical-triage-agent-ai-poc/backend/app/training/dpo/dpo_config.yaml
+
+training:
+  output_dir: "artifacts/checkpoints/dpo"
+
+  num_train_epochs: 2
+
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+
+  gradient_accumulation_steps: 16
+
+  learning_rate: 5e-6
+
+  warmup_ratio: 0.05
+
+  lr_scheduler_type: "cosine"
+
+  max_grad_norm: 1.0
+
+  gradient_checkpointing: true
+
+  logging_steps: 10
+  eval_steps: 50
+  save_steps: 50
+
+  evaluation_strategy: "steps"
+  save_strategy: "steps"
+
+  save_total_limit: 3
+  save_safetensors: true
+
+  load_best_model_at_end: true
+
+  metric_for_best_model: "eval_loss"
+  greater_is_better: false
+
+  early_stopping_patience: 2
+
+  fp16: true                        # ← activer (T4 supporte fp16 natif)
+  bf16: false                       # ← désactiver (T4 incompatible)
+
+  dataloader_num_workers: 0         # ← était à 2, évite les leaks mémoire sur Colab
+
+  report_to:
+    - "wandb"
+    # - "mlflow"
+
+  resume_from_checkpoint: null
+
+  push_to_hub: true
+
+dpo:
+  beta: 0.1
+
+  max_prompt_length: 1024
+
+  max_length: 2048
+
+  loss_type: "sigmoid"
+
+  reference_free: false
+
+model:
+  base_model: "Qwen/Qwen3-1.7B-Base"
+
+  torch_dtype: "float16"            # ← était "bfloat16"
+
+  trust_remote_code: true
+
+  device_map: "auto"
+
+  use_flash_attention: false
+
+  hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
+
+tokenizer:
+  use_fast: true
+
+  padding_side: "right"
+
+  model_max_length: 2048
+
+special_tokens: {}
+
+dataset:
+  hf_repo: "RemDev-AI/medical-triage-agent-ai-poc-datasets"
+
+  hf_config: "dpo"
+
+  train_split: "train"
+  validation_split: "validation"
+  test_split: "test"
+  clinical_eval_split: "clinical_eval"
+
+  # Optional local fallback
+  # train_path: "backend/app/datasets/processed/dpo/train.jsonl"
+  # validation_path: "backend/app/datasets/processed/dpo/validation.jsonl"
+
+tracking:
+  wandb_project: "medical-triage-llm"
+
+  wandb_run_name: "qwen3-1.7b-dpo"
+
+  # mlflow_experiment_name: "medical-triage-dpo"
+
+safety:
+  hallucination_keywords:
+    - "guaranteed cure"
+    - "miracle treatment"
+    - "ignore emergency symptoms"
+    - "stop medication immediately"
+
+  dangerous_keywords:
+    - "avoid hospital"
+    - "ignore chest pain"
+    - "self-medicate antibiotics"
+    - "replace doctor diagnosis"
+
+system:
+  seed: 42
+
+  logging_level: "INFO"
