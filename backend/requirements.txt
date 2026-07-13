@@ -6,9 +6,9 @@
 # CORE PYTHON
 # ==========================================================
 
-python-dotenv
-pydantic
 pydantic-settings
+pydantic==2.13.4
+python-dotenv==1.2.2
 
 # ==========================================================
 # API
@@ -44,7 +44,7 @@ trl
 # VLLM
 # ==========================================================
 
-vllm
+vllm>=0.22.0
 
 # ==========================================================
 # MODAL GPU INFRASTRUCTURE
@@ -70,7 +70,7 @@ scikit-learn
 # NLP / SPACY
 # ==========================================================
 
-spacy>=3.8.0
+spacy>=3.8.14
 
 # French SpaCy model
 fr_core_news_md @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl
@@ -121,13 +121,14 @@ loguru
 # ==========================================================
 
 python-jose[cryptography]
+cryptography>=48.0.1
 passlib[bcrypt]
 
 # ==========================================================
 # TESTING
 # ==========================================================
 
-pytest
+pytest==9.0.3
 pytest-asyncio
 pytest-cov>=6.0.0
 
@@ -135,7 +136,7 @@ pytest-cov>=6.0.0
 # CODE QUALITY
 # ==========================================================
 
-black==25.1.0
+black==26.5.1
 flake8
 isort
 mypy
@@ -146,3 +147,10 @@ mypy
 
 jupyterlab
 ipykernel
+
+# ==========================================================
+# BUILD TOOLING (pinned to close CVEs pulled in transitively)
+# ==========================================================
+
+wheel>=0.46.2
+jaraco.context>=6.1.0

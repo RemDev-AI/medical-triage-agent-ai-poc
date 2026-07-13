@@ -24,7 +24,6 @@ from app.monitoring.alerting import (
     alert_manager,
 )
 
-
 router = APIRouter(
     prefix="/triage",
     tags=["Triage"],

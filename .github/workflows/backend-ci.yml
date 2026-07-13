@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -41,7 +41,7 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: |
           python -m pip install --upgrade pip
-          pip install ruff black==25.1.0 mypy bandit
+          pip install ruff black==26.5.1 mypy bandit
       - name: Ruff (lint)
         working-directory: ${{ env.WORKDIR }}
         run: ruff check app --output-format=github --extend-exclude "app/training/colab/training_pipeline_colab.ipynb"
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -89,14 +89,14 @@ jobs:
             --junitxml=junit-unit.xml
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage
           path: ${{ env.WORKDIR }}/coverage.xml
 
       - name: Upload JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-unit
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -134,7 +134,7 @@ jobs:
           pytest app/tests/security -v --junitxml=junit-security.xml
 
       - name: Upload security JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-security
@@ -148,7 +148,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -174,7 +174,7 @@ jobs:
           pytest app/tests/integration -v -k "not modal" --junitxml=junit-integration.xml
 
       - name: Upload integration JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-integration
@@ -202,7 +202,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -243,14 +243,14 @@ jobs:
           pytest app/tests/test_coverage.py -v --junitxml=junit-coverage.xml
 
       - name: Upload coverage json
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage-json
           path: ${{ env.WORKDIR }}/coverage.json
 
       - name: Upload coverage JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-coverage
@@ -264,7 +264,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
@@ -293,7 +293,7 @@ jobs:
           pytest app/tests/performance -v --junitxml=junit-performance.xml
 
       - name: Upload performance JUnit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-junit-performance

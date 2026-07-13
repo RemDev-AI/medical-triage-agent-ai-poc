@@ -14,12 +14,10 @@ st.set_page_config(
 
 st.title("🩺 Triage Médical IA")
 
-st.markdown(
-    """
+st.markdown("""
     Remplissez les informations patient afin de générer
     une évaluation clinique IA.
-    """
-)
+    """)
 
 patient_data = render_patient_form()
 

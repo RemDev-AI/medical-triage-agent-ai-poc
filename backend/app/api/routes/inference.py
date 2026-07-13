@@ -23,7 +23,6 @@ from app.monitoring.alerting import (
     alert_manager,
 )
 
-
 # logger = logging.getLogger("audit_logger")
 
 # logging.basicConfig(

@@ -10,8 +10,7 @@ st.set_page_config(
 
 st.title("🏥 POC Agent IA de Triage Médical")
 
-st.markdown(
-    """
+st.markdown("""
     ## Bienvenue
 
     Cette plateforme permet :
@@ -20,8 +19,7 @@ st.markdown(
     - le monitoring des requêtes ;
     - l'audit des réponses IA ;
     - le suivi opérationnel backend.
-    """
-)
+    """)
 
 col1, col2, col3 = st.columns(3)
 

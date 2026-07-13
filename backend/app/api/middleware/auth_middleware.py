@@ -7,7 +7,6 @@ from starlette.routing import Match
 
 from app.core.security import verify_access_token
 
-
 EXCLUDED_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health"}
 
 

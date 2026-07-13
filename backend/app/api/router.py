@@ -12,7 +12,6 @@ from app.api.routes.audit import router as audit_router
 
 from app.api.routes.monitoring import router as monitoring_router
 
-
 api_router = APIRouter()
 
 

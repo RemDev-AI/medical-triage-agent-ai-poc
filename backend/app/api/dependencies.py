@@ -3,7 +3,6 @@
 from datetime import datetime
 from fastapi import HTTPException
 
-
 SUPPORTED_PRIORITY_LEVELS = {"low", "medium", "high", "critical"}
 
 

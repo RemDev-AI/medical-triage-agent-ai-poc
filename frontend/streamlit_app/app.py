@@ -23,8 +23,7 @@ render_navbar()
 
 st.title("🏥 POC Agent IA de Triage Médical")
 
-st.markdown(
-    """
+st.markdown("""
     Bienvenue dans l'interface médicale du système de triage IA.
 
     Cette plateforme permet :
@@ -32,8 +31,7 @@ st.markdown(
     - l’évaluation du niveau d’urgence ;
     - l’interaction avec le moteur IA médical ;
     - le monitoring des services backend.
-    """
-)
+    """)
 
 st.divider()
 
@@ -41,11 +39,9 @@ render_api_status()
 
 st.divider()
 
-st.info(
-    """
+st.info("""
     ⚠️ Ce système est un prototype éducatif de triage médical.
     Il ne remplace pas un avis médical professionnel.
-    """
-)
+    """)
 
 render_footer()

@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 MINIMUM_COVERAGE = 40.0
 
 

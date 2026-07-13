@@ -14,7 +14,7 @@
 # Cf. docker-compose.yml (context: ., dockerfile: backend/Dockerfile)
 # ==========================================================
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # ==========================================================
 # ENVIRONMENT

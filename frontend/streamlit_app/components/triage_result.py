@@ -20,18 +20,14 @@ def render_triage_result(result: dict) -> None:
     else:
         st.success("🟢 Priorité faible")
 
-    st.markdown(
-        f"""
+    st.markdown(f"""
         ### Justification clinique
 
         {result.get("justification")}
-        """
-    )
+        """)
 
-    st.markdown(
-        f"""
+    st.markdown(f"""
         ### Recommandations
 
         {result.get("recommendations")}
-        """
-    )
+        """)

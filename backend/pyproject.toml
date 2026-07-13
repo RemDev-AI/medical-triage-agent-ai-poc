@@ -30,7 +30,7 @@ dependencies = [
 
     "peft",
     "trl",
-    "vllm",
+    "vllm>=0.22.0",
 
     # "modal",
     "httpx",
@@ -51,16 +51,17 @@ dependencies = [
     "loguru",
 
     "python-jose[cryptography]",
+    "cryptography>=48.0.1",
     "passlib[bcrypt]"
 ]
 
 [project.optional-dependencies]
 
 dev = [
-    "pytest",
+    "pytest==9.0.3",
     "pytest-asyncio",
     "pytest-cov>=6.0.0",
-    "black==25.1.0",
+    "black==26.5.1",
     "flake8",
     "isort",
     "mypy",
@@ -107,7 +108,7 @@ extend-exclude = ["app/training/colab/training_pipeline_colab.ipynb"]
 [build-system]
 requires = [
     "setuptools>=68",
-    "wheel"
+    "wheel>=0.46.2"
 ]
 
 build-backend = "setuptools.build_meta"
