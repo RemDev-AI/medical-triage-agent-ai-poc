@@ -9,7 +9,7 @@ HF Space UI
       ↓
 HF Space API
       ↓
-Modal Endpoint
+Notebook Colab Endpoint
       ↓
 Qwen3-LoRA
 

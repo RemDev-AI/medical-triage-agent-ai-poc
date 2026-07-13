@@ -7,16 +7,19 @@ Features:
 - Hugging Face tokenizer loading
 - automatic pad token configuration
 - inference-ready setup
+
+Note: transformers est importé en lazy (à l'intérieur de la fonction)
+et non en tête de module, afin que ce module reste importable en CI
+même quand transformers n'est pas installé (cf. requirements-ci.txt).
 """
 
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from transformers import (
-    AutoTokenizer,
-    PreTrainedTokenizerBase,
-)
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +31,7 @@ DEFAULT_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
 def load_tokenizer(
     model_name: str = DEFAULT_MODEL_NAME,
     revision: str = "main",
-) -> PreTrainedTokenizerBase:
+) -> "PreTrainedTokenizerBase":
     """
     Load tokenizer from Hugging Face.
 
@@ -42,6 +45,8 @@ def load_tokenizer(
     Returns:
         Loaded tokenizer.
     """
+
+    from transformers import AutoTokenizer
 
     logger.info(
         "Loading tokenizer: %s",

@@ -10,6 +10,14 @@ Features:
 - bf16 support
 - automatic CUDA mapping
 - Hugging Face Hub adapter loading
+
+Note: torch, transformers et peft sont importés en lazy (à l'intérieur
+des fonctions/méthodes) et non en tête de module. Ces packages sont
+volontairement absents de requirements-ci.txt (l'inférence réelle
+tourne sur HF Spaces, elle est mockée en CI) ; les importer au niveau
+module ferait échouer l'import de ce module entier sur les runners
+GitHub Actions (ModuleNotFoundError / transformers manquant), ce qui
+casse par ricochet les tests qui font @patch("...model_loader...").
 """
 
 from __future__ import annotations
@@ -17,15 +25,12 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import torch
-from peft import PeftModel
-from transformers import AutoModelForCausalLM
+from app.llm.loaders.quantization_loader import build_quantization_config
 
-from backend.app.llm.loaders.quantization_loader import (
-    build_quantization_config,
-)
+if TYPE_CHECKING:
+    from transformers import AutoModelForCausalLM
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +66,19 @@ class ModelLoader:
 
     def load_model(
         self,
-    ) -> AutoModelForCausalLM:
+    ) -> "AutoModelForCausalLM":
         """
         Load base model and optionally inject LoRA adapter.
         """
 
         if self.load_in_4bit and self.load_in_8bit:
             raise ValueError("Cannot enable both 4-bit and 8-bit quantization.")
+
+        # Lazy imports: torch / transformers / peft ne sont chargés qu'au
+        # moment réel du chargement du modèle, pas à l'import du module.
+        import torch
+        from peft import PeftModel
+        from transformers import AutoModelForCausalLM
 
         logger.info("Starting model loading...")
 
@@ -157,6 +168,8 @@ class ModelLoader:
         Print GPU memory statistics.
         """
 
+        import torch
+
         if not torch.cuda.is_available():
             logger.warning("CUDA unavailable.")
             return
@@ -198,7 +211,7 @@ class ModelLoader:
 # import et un appel simples (utilisé notamment par les tests
 # unitaires) :
 #
-#     from backend.app.llm.loaders.model_loader import load_model
+#     from app.llm.loaders.model_loader import load_model
 #     model = load_model()
 #
 # Tous les paramètres reprennent les valeurs par défaut de
@@ -218,7 +231,7 @@ def load_model(
     merge_adapter: bool = False,
     revision: str = "main",
     adapter_revision: Optional[str] = None,
-) -> AutoModelForCausalLM:
+) -> "AutoModelForCausalLM":
     """
     Charge et retourne le modèle d'inférence (base + adaptateur
     optionnel), via une interface fonctionnelle simple.

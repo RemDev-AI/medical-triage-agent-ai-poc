@@ -8,21 +8,24 @@ Support:
 - 8-bit quantization
 - bfloat16
 - CUDA optimization
+
+Note: torch et transformers sont importés en lazy (à l'intérieur des
+fonctions) et non en tête de module. Ces packages sont volontairement
+absents de requirements-ci.txt (cf. commentaire dans ce fichier) pour
+éviter le "No space left on device" sur les runners GitHub Actions ;
+l'inférence réelle est mockée en CI. Ne pas remonter ces imports au
+niveau module, sous peine de faire échouer l'import du module entier
+en CI (ModuleNotFoundError: No module named 'torch').
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import torch
-from transformers import BitsAndBytesConfig
+if TYPE_CHECKING:
+    import torch
+    from transformers import BitsAndBytesConfig
 
-
-_ALLOWED_DTYPES = {
-    "float16": torch.float16,
-    "bfloat16": torch.bfloat16,
-    "float32": torch.float32,
-}
 
 _ALLOWED_QUANT_TYPES = {
     "nf4",
@@ -30,17 +33,33 @@ _ALLOWED_QUANT_TYPES = {
 }
 
 
+def _get_allowed_dtypes() -> dict:
+    """
+    Build the string -> torch.dtype mapping (lazy, needs torch).
+    """
+
+    import torch
+
+    return {
+        "float16": torch.float16,
+        "bfloat16": torch.bfloat16,
+        "float32": torch.float32,
+    }
+
+
 def _get_torch_dtype(
     compute_dtype: str,
-) -> torch.dtype:
+) -> "torch.dtype":
     """
     Convert string dtype into torch dtype.
     """
 
-    if compute_dtype not in _ALLOWED_DTYPES:
+    allowed_dtypes = _get_allowed_dtypes()
+
+    if compute_dtype not in allowed_dtypes:
         raise ValueError(f"Unsupported compute dtype: {compute_dtype}")
 
-    return _ALLOWED_DTYPES[compute_dtype]
+    return allowed_dtypes[compute_dtype]
 
 
 def build_quantization_config(
@@ -49,7 +68,7 @@ def build_quantization_config(
     bnb_4bit_quant_type: str = "nf4",
     use_double_quant: bool = True,
     compute_dtype: str = "bfloat16",
-) -> Optional[BitsAndBytesConfig]:
+) -> "Optional[BitsAndBytesConfig]":
     """
     Build bitsandbytes quantization config.
 
@@ -86,6 +105,10 @@ def build_quantization_config(
 
     torch_dtype = _get_torch_dtype(compute_dtype)
 
+    # Lazy import: transformers n'est chargé qu'au moment réel de la
+    # construction de la config, pas à l'import du module.
+    from transformers import BitsAndBytesConfig
+
     return BitsAndBytesConfig(
         load_in_4bit=load_in_4bit,
         load_in_8bit=load_in_8bit,
@@ -103,7 +126,7 @@ def build_quantization_config(
 # Conservé séparément (plutôt qu'un renommage) pour ne pas casser
 # l'import existant dans model_loader.py :
 #
-#     from backend.app.llm.loaders.quantization_loader import (
+#     from app.llm.loaders.quantization_loader import (
 #         build_quantization_config,
 #     )
 

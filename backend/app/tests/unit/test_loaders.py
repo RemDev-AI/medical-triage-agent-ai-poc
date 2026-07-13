@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest  # noqa : F401
+import pytest  # noqa: F401
 
 
 @patch("app.llm.loaders.model_loader.AutoModelForCausalLM")
@@ -14,7 +14,7 @@ def test_model_loader_success(mock_model):
     fake_model = MagicMock()
     mock_model.from_pretrained.return_value = fake_model
 
-    from backend.app.llm.loaders.model_loader import load_model
+    from app.llm.loaders.model_loader import load_model
 
     model = load_model()
 
@@ -30,7 +30,7 @@ def test_tokenizer_loader_success(mock_tokenizer):
     fake_tokenizer = MagicMock()
     mock_tokenizer.from_pretrained.return_value = fake_tokenizer
 
-    from backend.app.llm.loaders.tokenizer_loader import load_tokenizer
+    from app.llm.loaders.tokenizer_loader import load_tokenizer
 
     tokenizer = load_tokenizer()
 
@@ -64,8 +64,6 @@ def test_quantization_loader_import():
     Quantization loader should be importable.
     """
 
-    from backend.app.llm.loaders.quantization_loader import (
-        get_quantization_config,
-    )
+    from app.llm.loaders.quantization_loader import get_quantization_config
 
     assert callable(get_quantization_config)
