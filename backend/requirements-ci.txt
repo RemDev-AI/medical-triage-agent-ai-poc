@@ -118,7 +118,7 @@ pytest-cov>=6.0.0
 #  mais gardé ici si test_coverage.py ou autres tests en dépendent)
 # ==========================================================
 
-black==25.1.0
+black==26.5.1
 flake8
 isort
 mypy
