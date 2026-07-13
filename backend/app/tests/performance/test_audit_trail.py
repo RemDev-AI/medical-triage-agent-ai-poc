@@ -19,14 +19,14 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
-from backend.app.api.dependencies.inference import (
+from app.main import app
+from app.api.dependencies.inference import (
     get_inference_client,
 )
-from backend.app.core.security import (
+from app.core.security import (
     create_access_token,
 )
-from backend.app.monitoring import audit_store
+from app.monitoring import audit_store
 
 
 class _FakeInferenceClient:

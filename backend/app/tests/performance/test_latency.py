@@ -25,14 +25,14 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
-from backend.app.api.dependencies.inference import (
+from app.main import app
+from app.api.dependencies.inference import (
     get_inference_client,
 )
-from backend.app.core.security import (
+from app.core.security import (
     create_access_token,
 )
-from backend.app.monitoring.latency_monitor import (
+from app.monitoring.latency_monitor import (
     latency_monitor,
 )
 

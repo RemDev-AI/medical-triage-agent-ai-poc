@@ -21,20 +21,20 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.main import app
-from backend.app.api.dependencies.inference import (
+from app.main import app
+from app.api.dependencies.inference import (
     get_inference_client,
 )
-from backend.app.core.security import (
+from app.core.security import (
     create_access_token,
 )
-from backend.app.monitoring.gpu_monitor import (
+from app.monitoring.gpu_monitor import (
     gpu_monitor,
 )
-from backend.app.monitoring.request_tracker import (
+from app.monitoring.request_tracker import (
     request_tracker,
 )
-from backend.app.monitoring.alerting import (
+from app.monitoring.alerting import (
     alert_manager,
 )
 
