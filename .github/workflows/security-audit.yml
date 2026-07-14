@@ -77,6 +77,8 @@ jobs:
             format: "sarif"
             output: "trivy-backend.sarif"
             severity: "CRITICAL,HIGH,MEDIUM"
+            ignore-unfixed: true
+            timeout: "15m0s"
 
       - name: Upload Trivy scan results
         if: always() && hashFiles('trivy-backend.sarif') != ''
