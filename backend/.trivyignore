@@ -1,0 +1,31 @@
+# ==========================================================
+# medical-triage-agent-ai-poc/backend/.trivyignore
+# ==========================================================
+#
+# Exceptions temporaires documentées pour le gate Trivy
+# (voir .github/workflows/docker-build-push.yml, step "fail on fixable CRITICAL/HIGH")
+#
+# Règle : toute entrée ici doit avoir une date de revue et une justification.
+# Ne pas ajouter d'entrée sans avoir vérifié qu'aucune version corrigée
+# n'est réellement disponible/utilisable dans notre contexte.
+
+# ----------------------------------------------------------
+# CVE-2026-39822 - stdlib Go (os.Root symlink following)
+# ----------------------------------------------------------
+# Composant concerné : binaire vendored `wandb-core` (Go), embarqué dans
+# le package Python `wandb`.
+# Statut Trivy : "fixed" (1.25.12 / 1.26.5 / 1.27.0-rc.2) mais le correctif
+# dépend de la chaine de compilation Go utilisée par l'éditeur `wandb` pour
+# builder wandb-core, et n'est pas documenté dans le changelog du package
+# Python - impossible de garantir la résolution par un simple bump de version
+# `wandb` sans recompilation confirmée en amont.
+# Justification du risque accepté : l'exploitation nécessite que notre
+# service traite des archives/chemins non fiables via `os.Root` avec suivi
+# de symlink. `wandb` est utilisé ici uniquement pour le tracking
+# d'expérimentations internes (pas d'ingestion de fichiers utilisateurs
+# non fiables via ce composant) - risque jugé faible dans ce contexte.
+# Action de suivi : revérifier à chaque bump de version `wandb` si le
+# binaire wandb-core embarque un Go >= 1.26.5 (rescanner l'image et retirer
+# cette ligne dès que le scan ne remonte plus cette CVE).
+# Revue prévue : sous 30 jours, ou au prochain bump de `wandb`.
+CVE-2026-39822

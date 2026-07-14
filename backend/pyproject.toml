@@ -46,7 +46,7 @@ dependencies = [
     "presidio-analyzer",
     "presidio-anonymizer",
 
-    "wandb",
+    "wandb>=0.27.0",
 
     "loguru",
 

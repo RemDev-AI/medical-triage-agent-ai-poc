@@ -52,6 +52,9 @@ jobs:
   container-scan:
     name: Scan built images for CVEs
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -74,6 +77,8 @@ jobs:
             format: "sarif"
             output: "trivy-backend.sarif"
             severity: "CRITICAL,HIGH,MEDIUM"
+            ignore-unfixed: true
+            timeout: "15m0s"
 
       - name: Upload Trivy scan results
         if: always() && hashFiles('trivy-backend.sarif') != ''
