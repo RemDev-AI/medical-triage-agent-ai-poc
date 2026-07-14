@@ -22,7 +22,6 @@ from app.monitoring.audit_store import (
     record_entry,
 )
 
-
 logger = logging.getLogger("audit_logger")
 
 logging.basicConfig(

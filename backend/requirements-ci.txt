@@ -21,8 +21,8 @@
 # CORE PYTHON
 # ==========================================================
 
-python-dotenv
-pydantic
+pydantic==2.13.4
+python-dotenv==1.2.2
 pydantic-settings
 
 # ==========================================================
@@ -102,13 +102,14 @@ loguru
 # ==========================================================
 
 python-jose[cryptography]
+cryptography>=48.0.1
 passlib[bcrypt]
 
 # ==========================================================
 # TESTING
 # ==========================================================
 
-pytest
+pytest==9.0.3
 pytest-asyncio
 pytest-cov>=6.0.0
 
@@ -121,4 +122,4 @@ pytest-cov>=6.0.0
 black==26.5.1
 flake8
 isort
-mypy
+mypy==1.15.0

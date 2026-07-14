@@ -10,7 +10,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-
 SYSTEM_PROMPT = """
 Tu es un assistant IA spécialisé en triage médical.
 

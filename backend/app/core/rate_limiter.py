@@ -7,7 +7,6 @@ from fastapi import HTTPException, Request
 
 from app.core.config import settings
 
-
 REQUEST_HISTORY = defaultdict(list)
 
 

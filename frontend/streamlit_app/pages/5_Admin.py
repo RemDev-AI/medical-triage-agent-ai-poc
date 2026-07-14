@@ -10,11 +10,9 @@ st.set_page_config(
 
 st.title("⚙️ Administration")
 
-st.warning(
-    """
+st.warning("""
     Zone réservée aux administrateurs système.
-    """
-)
+    """)
 
 st.subheader("Configuration")
 

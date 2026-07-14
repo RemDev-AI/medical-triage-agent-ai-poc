@@ -17,7 +17,6 @@ from typing import Dict, Optional
 
 from peft import LoraConfig, TaskType
 
-
 QWEN_LORA_TARGET_MODULES = (
     "q_proj",
     "k_proj",

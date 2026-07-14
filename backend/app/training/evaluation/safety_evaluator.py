@@ -41,7 +41,6 @@ from app.training.evaluation.hallucination_detector import (  # noqa : F401
     unsafe_claim_rate,
 )
 
-
 # ============================================================
 # HELPERS
 # ============================================================

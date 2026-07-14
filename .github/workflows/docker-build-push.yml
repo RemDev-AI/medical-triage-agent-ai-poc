@@ -48,6 +48,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write   # requis pour l'upload SARIF vers l'onglet Security
     steps:
       - uses: actions/checkout@v4
 
@@ -82,13 +83,36 @@ jobs:
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
-      - name: Run Trivy vulnerability scan
+      # Étape 1 : scan informatif complet (ne bloque jamais le pipeline)
+      # -> résultats visibles dans l'onglet "Security > Code scanning"
+      - name: Trivy scan (report, non-blocking)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/medical-triage-backend:latest"
+          format: "sarif"
+          output: "trivy-backend.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+          skip-version-check: true
+
+      - name: Upload Trivy results to Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-backend.sarif"
+          category: trivy-backend
+
+      # Étape 2 : gate réel, mais uniquement sur les CVE corrigibles
+      # -> ignore-unfixed retire tout le bruit des paquets OS sans patch amont
+      - name: Trivy scan (fail on fixable CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/medical-triage-backend:latest"
           format: "table"
           severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
           exit-code: "1"
+          skip-version-check: true
 
   build-frontend:
     name: Build & push frontend image
@@ -97,6 +121,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -131,10 +156,29 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Run Trivy vulnerability scan
+      - name: Trivy scan (report, non-blocking)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/medical-triage-frontend:latest"
+          format: "sarif"
+          output: "trivy-frontend.sarif"
+          severity: "CRITICAL,HIGH"
+          exit-code: "0"
+          skip-version-check: true
+
+      - name: Upload Trivy results to Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-frontend.sarif"
+          category: trivy-frontend
+
+      - name: Trivy scan (fail on fixable CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/medical-triage-frontend:latest"
           format: "table"
           severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
           exit-code: "1"
+          skip-version-check: true
