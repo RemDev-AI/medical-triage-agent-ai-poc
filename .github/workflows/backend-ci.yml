@@ -82,6 +82,7 @@ jobs:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/unit -v \
             --cov=app --cov-report=xml --cov-report=term-missing \
@@ -128,6 +129,7 @@ jobs:
           ENVIRONMENT: test
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/security -v --junitxml=junit-security.xml
 
@@ -167,6 +169,7 @@ jobs:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/integration -v -k "not modal" --junitxml=junit-integration.xml
 
@@ -226,6 +229,7 @@ jobs:
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/unit app/tests/security app/tests/integration app/tests/performance \
             -k "not modal" \
@@ -285,6 +289,7 @@ jobs:
           USE_VLLM: "false"
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/performance -v --junitxml=junit-performance.xml
 
