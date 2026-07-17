@@ -4,7 +4,10 @@ import pytest
 
 from app.core.security import create_access_token
 from app.main import app
-from app.api.dependencies.inference import get_inference_client
+from app.api.dependencies.inference import (
+    get_triage_engine,
+    get_generation_context,
+)
 
 
 @pytest.fixture
@@ -18,42 +21,60 @@ def auth_headers() -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-class FakeInferenceClient:
+class FakeTriageEngine:
     """
-    Double de test pour InferenceClient.
+    Double de test pour TriageEngine.
 
-    Signatures alignées sur backend/app/api/dependencies/inference.py :
-    - generate(prompt, max_new_tokens, temperature, top_p) -> dict avec
-      "generated_text" (consommé par GenerateResponse.generated_text)
-    - triage(symptoms, medical_history, age, priority_context) -> dict
-      avec les clés attendues par la logique de la route triage
+    Signature alignée sur backend/app/llm/inference/triage_engine.py :
+    run_triage(patient_age, symptoms, medical_history, vital_signs)
+    -> dict avec la clé "triage" (consommée par routes/triage.py),
+    au même format que TriageEngine.run_triage() réel :
+    {"triage": {...}, "metadata": {...}, "raw_response": ...}.
     """
 
-    async def generate(self, prompt, max_new_tokens, temperature, top_p):
+    async def run_triage(self, **kwargs):
         return {
-            "generated_text": "Simulated generated text for testing purposes.",
-            "model_name": "Qwen3-Medical-Triage-Fake",
-            "timestamp": "2026-07-12T00:00:00",
+            "triage": {
+                "priority": "FAIBLE",
+                "justification": "Simulated triage result for testing purposes.",
+                "recommendations": "Rest and monitor symptoms.",
+                "confidence_score": 0.9,
+            },
+            "metadata": {
+                "latency_seconds": 0.01,
+                "model_name": "Qwen3-Medical-Triage-Fake",
+            },
+            "raw_response": "PRIORITÉ:\nFAIBLE\n",
         }
 
-    async def triage(self, symptoms, medical_history, age, priority_context):
-        return {
-            "priority_level": "low",
-            "justification": "Simulated triage result for testing purposes.",
-            "recommendations": ["Rest and monitor symptoms."],
-            "confidence_score": 0.9,
-            "generated_at": "2026-07-12T00:00:00",
-        }
+
+async def _fake_generate_response(**kwargs):
+    """
+    Double de test pour generate_response(). Contrairement à
+    TriageEngine, generate_response n'est pas injecté via Depends
+    dans routes/inference.py : on le patche donc directement au
+    niveau du module qui l'importe.
+    """
+    return "Simulated generated text for testing purposes."
 
 
 @pytest.fixture(autouse=True)
-def override_inference_client():
+def override_inference_dependencies(monkeypatch):
     """
-    Remplace la dépendance InferenceClient par un double de test pour
-    tous les tests de ce dossier (autouse=True), afin d'éviter tout
-    appel réseau réel vers INFERENCE_API_URL pendant les tests
+    Remplace TriageEngine et generate_response par des doubles de
+    test pour tous les tests de ce dossier (autouse=True), afin
+    d'éviter tout chargement réel de modèle pendant les tests
     d'intégration.
     """
-    app.dependency_overrides[get_inference_client] = lambda: FakeInferenceClient()
+    app.dependency_overrides[get_triage_engine] = lambda: FakeTriageEngine()
+    app.dependency_overrides[get_generation_context] = lambda: (None, None)
+
+    monkeypatch.setattr(
+        "app.api.routes.inference.generate_response",
+        _fake_generate_response,
+    )
+
     yield
-    app.dependency_overrides.pop(get_inference_client, None)
+
+    app.dependency_overrides.pop(get_triage_engine, None)
+    app.dependency_overrides.pop(get_generation_context, None)

@@ -8,8 +8,9 @@ des charges) :
 
 Couvre :
 - validation stricte des entrées (schémas Pydantic)
-- comportement en cas de panne du backend
-  d'inférence (timeout, exception)
+- comportement en cas de panne du moteur
+  d'inférence local (exception dans TriageEngine /
+  generate_response)
 - non-régression sur le double comptage
   request_tracker (correctif étape 3)
 - absence de crash sur gpu_monitor.increment_request
@@ -23,7 +24,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.api.dependencies.inference import (
-    get_inference_client,
+    get_triage_engine,
+    get_generation_context,
 )
 from app.core.security import (
     create_access_token,
@@ -39,36 +41,40 @@ from app.monitoring.alerting import (
 )
 
 
-class _FailingInferenceClient:
+class _FailingTriageEngine:
     """
-    Simule une panne du backend d'inférence
-    (timeout, service indisponible, etc.).
+    Simule une panne du moteur d'inférence local
+    (exception levée pendant l'inférence).
     """
 
-    async def generate(self, **kwargs):
-        raise TimeoutError("Simulated inference backend timeout")
-
-    async def triage(self, **kwargs):
+    async def run_triage(self, **kwargs):
         raise ConnectionError("Simulated inference backend " "unavailable")
 
 
-class _WorkingInferenceClient:
+class _WorkingTriageEngine:
 
-    async def generate(self, **kwargs):
+    async def run_triage(self, **kwargs):
         return {
-            "generated_text": "ok",
-            "model_name": "test-model",
-            "timestamp": "2026-07-08T00:00:00",
+            "triage": {
+                "priority": "FAIBLE",
+                "justification": "ok",
+                "recommendations": "ok",
+                "confidence_score": 0.9,
+            },
+            "metadata": {
+                "latency_seconds": 0.01,
+                "model_name": "test-model",
+            },
+            "raw_response": "ok",
         }
 
-    async def triage(self, **kwargs):
-        return {
-            "priority_level": "FAIBLE",
-            "justification": "ok",
-            "recommendations": ["ok"],
-            "confidence_score": 0.9,
-            "generated_at": "2026-07-08T00:00:00",
-        }
+
+async def _failing_generate_response(**kwargs):
+    raise TimeoutError("Simulated inference backend timeout")
+
+
+async def _working_generate_response(**kwargs):
+    return "ok"
 
 
 @pytest.fixture()
@@ -80,9 +86,15 @@ def auth_headers():
 
 
 @pytest.fixture()
-def client_with_failure():
+def client_with_failure(monkeypatch):
 
-    app.dependency_overrides[get_inference_client] = lambda: _FailingInferenceClient()
+    app.dependency_overrides[get_triage_engine] = lambda: _FailingTriageEngine()
+    app.dependency_overrides[get_generation_context] = lambda: (None, None)
+
+    monkeypatch.setattr(
+        "app.api.routes.inference.generate_response",
+        _failing_generate_response,
+    )
 
     with TestClient(app) as test_client:
         yield test_client
@@ -91,9 +103,15 @@ def client_with_failure():
 
 
 @pytest.fixture()
-def client_healthy():
+def client_healthy(monkeypatch):
 
-    app.dependency_overrides[get_inference_client] = lambda: _WorkingInferenceClient()
+    app.dependency_overrides[get_triage_engine] = lambda: _WorkingTriageEngine()
+    app.dependency_overrides[get_generation_context] = lambda: (None, None)
+
+    monkeypatch.setattr(
+        "app.api.routes.inference.generate_response",
+        _working_generate_response,
+    )
 
     with TestClient(app) as test_client:
         yield test_client
@@ -164,7 +182,7 @@ def test_requests_without_token_are_rejected(
 
 
 # ----------------------------------------------------
-# Pannes du backend d'inférence
+# Pannes du moteur d'inférence local
 # ----------------------------------------------------
 
 

@@ -1,22 +1,84 @@
 # medical-triage-agent-ai-poc/frontend/Dockerfile.hf
 
+# =========================================================
+# FRONTEND DOCKERFILE — HUGGING FACE SPACE (UI)
+# POC AGENT IA TRIAGE MÉDICAL
+#
+# Variante de frontend/Dockerfile adaptée au port imposé par
+# Hugging Face Spaces (7860 au lieu de 8501 en local).
+# =========================================================
+
+# ---------------------------------------------------------
+# IMAGE PYTHON
+# ---------------------------------------------------------
 FROM python:3.12-slim
 
+# ---------------------------------------------------------
+# VARIABLES D'ENVIRONNEMENT
+# ---------------------------------------------------------
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+ENV STREAMLIT_SERVER_PORT=7860
+ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
+# ---------------------------------------------------------
+# DOSSIER APPLICATION
+# ---------------------------------------------------------
 WORKDIR /app
 
+# ---------------------------------------------------------
+# INSTALLATION DÉPENDANCES SYSTÈME
+#
+# curl : requis par le HEALTHCHECK ci-dessous
+# build-essential : nécessaire si requirements.txt inclut des
+#                   paquets sans roue précompilée pour cette
+#                   plateforme (compilation depuis les sources)
+# git : nécessaire si une dépendance est installée depuis un
+#       dépôt git (ex. "package @ git+https://...")
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# INSTALLATION DÉPENDANCES PYTHON
+# ---------------------------------------------------------
 COPY requirements.txt .
 
-RUN pip install --upgrade pip
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-RUN pip install \
-    --no-cache-dir \
-    -r requirements.txt
-
+# ---------------------------------------------------------
+# COPIE DU PROJET FRONTEND
+# ---------------------------------------------------------
 COPY . .
 
+# ---------------------------------------------------------
+# UTILISATEUR NON-ROOT
+#
+# Hugging Face Spaces exécute les conteneurs Docker avec un
+# utilisateur non-root par convention/recommandation (UID 1000).
+# Absent de Dockerfile.hf original ; ajouté ici par précaution
+# pour éviter tout avertissement/blocage de permissions au
+# build ou au runtime sur le Space.
+# ---------------------------------------------------------
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# ---------------------------------------------------------
+# PORT STREAMLIT (imposé par Hugging Face Spaces)
+# ---------------------------------------------------------
 EXPOSE 7860
 
+# ---------------------------------------------------------
+# HEALTHCHECK
+# ---------------------------------------------------------
+HEALTHCHECK CMD curl --fail http://localhost:7860/_stcore/health || exit 1
+
+# ---------------------------------------------------------
+# LANCEMENT STREAMLIT
+# ---------------------------------------------------------
 CMD ["streamlit", "run", "streamlit_app/app.py", "--server.port=7860", "--server.address=0.0.0.0"]

@@ -1,146 +1,115 @@
 # medical-triage-agent-ai-poc/backend/app/api/dependencies/inference.py
 
+"""
+Dépendances FastAPI pour l'inférence locale.
+
+Remplace l'ancien InferenceClient (appel HTTP externe) par un accès
+direct au moteur d'inférence local, chargé paresseusement (lazy,
+thread-safe) au premier appel réel — même principe que
+app.llm.inference.vllm_engine.get_vllm_engine().
+
+Pourquoi paresseux et non chargé dans app.main::lifespan :
+le chargement du modèle Transformers (téléchargement d'adaptateur +
+poids) est coûteux et nécessite potentiellement un GPU. Le charger au
+démarrage bloquerait aussi bien les health checks que les tests
+(TestClient(app) exécute le lifespan à chaque test). En le rendant
+paresseux, les tests peuvent simplement surcharger
+get_triage_engine / get_generation_context via
+app.dependency_overrides, exactement comme avec l'ancien
+InferenceClient, sans jamais déclencher de chargement réel.
+"""
+
 from __future__ import annotations
 
-import os
-from typing import Any
+import threading
+from typing import Optional, Tuple
 
-import httpx
+from transformers import PreTrainedModel
+from transformers import PreTrainedTokenizerBase
+
+from app.llm.inference.triage_engine import TriageEngine
+from app.deployment.huggingface.hf_space_runtime import runtime_config
+
+_engine_lock = threading.Lock()
+_triage_engine_instance: Optional[TriageEngine] = None
 
 
-class InferenceClient:
+def _build_triage_engine() -> TriageEngine:
     """
-    Client HTTP vers le backend d'inférence.
+    Construit (une seule fois) l'instance de TriageEngine.
 
-    Responsabilités :
-    - envoyer les requêtes d'inférence
-    - gérer les timeouts
-    - centraliser l'authentification
-    - uniformiser les appels HTTP
-
-    Architecture cible :
-
-    Google Colab
-        ↓
-    Fine-Tuning LoRA / PEFT
-        ↓
-    Hugging Face Hub
-        ↓
-    RemDev-AI/medical-triage-agent-ai-poc-models
-        ↓
-    RemDev-AI/medical-triage-agent-ai-poc-api
-        ↓
-    InferenceClient
+    - runtime_config.use_vllm == True : model/tokenizer restent None,
+      la génération est déléguée à vllm_engine (lui-même paresseux).
+    - runtime_config.use_vllm == False : charge le modèle Transformers
+      + l'adaptateur LoRA (même résolution que vllm_engine, policy
+      post-DPO) une seule fois, réutilisé pour tous les appels
+      suivants.
     """
 
-    def __init__(self) -> None:
+    global _triage_engine_instance
 
-        self.base_url = os.getenv(
-            "INFERENCE_API_URL",
-            "",
-        ).rstrip("/")
+    if _triage_engine_instance is not None:
+        return _triage_engine_instance
 
-        self.api_token = os.getenv(
-            "HF_API_TOKEN",
-            "",
-        )
+    with _engine_lock:
 
-        self.timeout = float(
-            os.getenv(
-                "INFERENCE_TIMEOUT_SECONDS",
-                "120",
-            )
-        )
+        if _triage_engine_instance is not None:
+            return _triage_engine_instance
 
-        if not self.base_url:
-            raise ValueError("INFERENCE_API_URL is not configured.")
+        model = None
+        tokenizer = None
 
-    @property
-    def headers(self) -> dict[str, str]:
+        if not runtime_config.use_vllm:
 
-        headers = {
-            "Content-Type": "application/json",
-        }
+            from transformers import AutoTokenizer
 
-        if self.api_token:
-            headers["Authorization"] = f"Bearer {self.api_token}"
-
-        return headers
-
-    async def _post(
-        self,
-        endpoint: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Exécute une requête POST vers le backend
-        d'inférence.
-        """
-
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-        ) as client:
-
-            response = await client.post(
-                f"{self.base_url}/{endpoint.lstrip('/')}",
-                json=payload,
-                headers=self.headers,
+            from app.llm.loaders.model_loader import load_model
+            from app.llm.inference.vllm_engine import (
+                _BASE_MODEL_NAME,
+                _ensure_adapter_downloaded,
             )
 
-            response.raise_for_status()
+            adapter_local_path = _ensure_adapter_downloaded()
 
-            return response.json()
+            model = load_model(
+                base_model_name=_BASE_MODEL_NAME,
+                adapter_path=adapter_local_path,
+                load_in_4bit=runtime_config.load_in_4bit,
+                load_in_8bit=runtime_config.load_in_8bit,
+            )
 
-    async def generate(
-        self,
-        prompt: str,
-        max_new_tokens: int,
-        temperature: float,
-        top_p: float,
-    ) -> dict[str, Any]:
-        """
-        Génération générique.
-        """
+            tokenizer = AutoTokenizer.from_pretrained(adapter_local_path)
 
-        payload = {
-            "prompt": prompt,
-            "max_new_tokens": max_new_tokens,
-            "temperature": temperature,
-            "top_p": top_p,
-        }
-
-        return await self._post(
-            endpoint="generate",
-            payload=payload,
+        _triage_engine_instance = TriageEngine(
+            model=model,
+            tokenizer=tokenizer,
         )
 
-    async def triage(
-        self,
-        symptoms: str,
-        medical_history: str | None,
-        age: int | None,
-        priority_context: str | None,
-    ) -> dict[str, Any]:
-        """
-        Endpoint spécialisé triage.
-        """
-
-        payload = {
-            "symptoms": symptoms,
-            "medical_history": medical_history,
-            "age": age,
-            "priority_context": priority_context,
-        }
-
-        return await self._post(
-            endpoint="triage",
-            payload=payload,
-        )
+        return _triage_engine_instance
 
 
-def get_inference_client() -> InferenceClient:
+def get_triage_engine() -> TriageEngine:
     """
-    Factory FastAPI dependency.
+    Factory FastAPI dependency, utilisée par routes/triage.py.
+
+    En tests, surcharger via :
+        app.dependency_overrides[get_triage_engine] = lambda: FakeEngine()
+    pour éviter tout chargement réel.
     """
 
-    return InferenceClient()
+    return _build_triage_engine()
+
+
+def get_generation_context() -> (
+    Tuple[Optional[PreTrainedModel], Optional[PreTrainedTokenizerBase]]
+):
+    """
+    Factory FastAPI dependency, utilisée par routes/inference.py.
+
+    Retourne le couple (model, tokenizer) du TriageEngine partagé.
+    Les deux valent None lorsque runtime_config.use_vllm est True.
+    """
+
+    engine = _build_triage_engine()
+
+    return engine.model, engine.tokenizer

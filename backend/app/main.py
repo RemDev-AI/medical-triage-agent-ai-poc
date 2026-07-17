@@ -5,6 +5,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends
+from fastapi.openapi.utils import get_openapi
+from fastapi.security import HTTPBearer
 
 from app.api.router import api_router
 
@@ -76,6 +78,14 @@ async def lifespan(app: FastAPI):
 
     print("=" * 60)
 
+    # NOTE (migration InferenceClient -> inférence locale) :
+    # le chargement du modèle/adaptateur n'a volontairement PAS lieu
+    # ici. Il est différé (lazy singleton) jusqu'au premier appel réel
+    # de get_triage_engine() / get_generation_context()
+    # (cf. app/api/dependencies/inference.py), pour ne jamais impacter
+    # le démarrage de l'API (health checks, /docs) ni l'exécution des
+    # tests — même principe que vllm_engine.get_vllm_engine().
+
     yield
 
     # (aucune action de shutdown requise pour le moment ;
@@ -107,6 +117,62 @@ app.add_middleware(AuditLoggingMiddleware)
 app.add_middleware(JWTAuthMiddleware)
 
 
+# ---------------------------------------------------------
+# OpenAPI / Swagger : bouton "Authorize"
+#
+# HTTPBearer() ci-dessous ne fait AUCUNE vérification (le
+# middleware JWTAuthMiddleware s'en charge toujours, en amont
+# de chaque requête). Son unique rôle est de déclarer un schéma
+# de sécurité "bearerAuth" dans le schéma OpenAPI généré, afin
+# que Swagger UI affiche un bouton "Authorize" permettant de
+# coller un JWT (obtenu via POST /auth/token) et de l'envoyer
+# automatiquement sur chaque requête via
+# "Authorization: Bearer <jwt>".
+#
+# On l'ajoute comme dépendance "fantôme" sur api_router (elle
+# ne bloque jamais la requête elle-même) uniquement pour que
+# FastAPI l'inclue dans le schéma OpenAPI de ces routes.
+# ---------------------------------------------------------
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description="Medical Triage AI API",
+        routes=app.routes,
+    )
+
+    openapi_schema.setdefault("components", {}).setdefault("securitySchemes", {})[
+        "bearerAuth"
+    ] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+    }
+
+    # Applique le schéma "bearerAuth" à toutes les opérations, sauf
+    # celles qui n'en ont pas besoin (health, root, auth/token lui-même).
+    public_paths = {"/", "/health", "/auth/token"}
+
+    for path, methods in openapi_schema.get("paths", {}).items():
+        if path in public_paths:
+            continue
+        for operation in methods.values():
+            operation.setdefault("security", [{"bearerAuth": []}])
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
+
 # =========================================================
 # ROUTERS
 #
@@ -120,7 +186,7 @@ app.add_middleware(JWTAuthMiddleware)
 
 app.include_router(
     api_router,
-    dependencies=[Depends(rate_limit)],
+    dependencies=[Depends(rate_limit), Depends(bearer_scheme)],
 )
 
 

@@ -44,7 +44,7 @@ def get_runtime_config() -> HFSpaceRuntimeConfig:
         == "true",
         model_repository=os.getenv(
             "HF_MODEL_REPOSITORY",
-            "medical-triage-agent-ai-poc-models",
+            "RemDev-AI/medical-triage-agent-ai-poc-models",
         ),
         device=os.getenv(
             "DEVICE",

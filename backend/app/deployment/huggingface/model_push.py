@@ -46,9 +46,9 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # =========================================================
 
-HF_TOKEN = os.getenv("HF_TOKEN")
+HF_TOKEN = os.getenv("HF_TOKEN_06")
 
-HF_MODEL_REPO = "medical-triage-agent-ai-poc-models"
+HF_MODEL_REPO = "RemDev-AI/medical-triage-agent-ai-poc-models"
 
 BASE_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
 

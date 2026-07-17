@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import time
-import logging  # noqa : F401
+from typing import Optional, Tuple
 
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+
+from transformers import PreTrainedModel
+from transformers import PreTrainedTokenizerBase
 
 from app.api.schemas import (
     GenerateRequest,
@@ -15,21 +18,14 @@ from app.api.schemas import (
 )
 
 from app.api.dependencies.inference import (
-    InferenceClient,
-    get_inference_client,
+    get_generation_context,
 )
+
+from app.llm.inference.generate import generate_response
 
 from app.monitoring.alerting import (
     alert_manager,
 )
-
-# logger = logging.getLogger("audit_logger")
-
-# logging.basicConfig(
-#     level=logging.INFO,
-#     format="%(message)s",
-# )
-
 
 router = APIRouter(
     prefix="/generate",
@@ -37,22 +33,43 @@ router = APIRouter(
 )
 
 
+# Nom de modèle exposé dans GenerateResponse.model_name. Auparavant
+# renvoyé par le backend HTTP distant (InferenceClient) ; en
+# inférence locale on le fixe explicitement.
+GENERATE_MODEL_NAME = "Qwen3-Medical-Triage"
+
+# GenerateRequest n'expose qu'un "prompt" libre (endpoint générique,
+# non spécialisé triage), alors que generate_response() attend un
+# system_prompt et un user_prompt distincts. Hypothèse de migration :
+# system prompt neutre par défaut. A ajuster si un prompt système
+# spécifique est attendu pour cet endpoint générique.
+DEFAULT_SYSTEM_PROMPT = "You are a helpful, safe assistant."
+
+
 @router.post(
-    "/",
+    "",
     response_model=GenerateResponse,
 )
 async def generate_route(
     payload: GenerateRequest,
-    inference_client: InferenceClient = Depends(
-        get_inference_client,
+    generation_context: Tuple[
+        Optional[PreTrainedModel],
+        Optional[PreTrainedTokenizerBase],
+    ] = Depends(
+        get_generation_context,
     ),
 ):
+    model, tokenizer = generation_context
+
     start_time = time.perf_counter()
 
     try:
 
-        inference_response = await inference_client.generate(
-            prompt=payload.prompt,
+        generated_text = await generate_response(
+            model=model,
+            tokenizer=tokenizer,
+            system_prompt=DEFAULT_SYSTEM_PROMPT,
+            user_prompt=payload.prompt,
             max_new_tokens=payload.max_new_tokens,
             temperature=payload.temperature,
             top_p=payload.top_p,
@@ -67,29 +84,14 @@ async def generate_route(
         except Exception:
             pass
 
-        generated_text = inference_response.get(
-            "generated_text",
-            "",
-        )
-
-        model_name = inference_response.get(
-            "model_name",
-            "Qwen3-Medical-Triage",
-        )
-
-        timestamp = inference_response.get(
-            "timestamp",
-            time.strftime("%Y-%m-%dT%H:%M:%S"),
-        )
-
         return GenerateResponse(
             generated_text=generated_text,
-            model_name=model_name,
+            model_name=GENERATE_MODEL_NAME,
             latency_seconds=round(
                 latency_seconds,
                 3,
             ),
-            timestamp=timestamp,
+            timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
         )
 
     except Exception as exc:
@@ -101,8 +103,6 @@ async def generate_route(
             )
         except Exception:
             pass
-        # except Exception as alert_exc:
-        #     logger.warning(f"Failed to raise alert: {alert_exc}")
 
         raise HTTPException(
             status_code=500,

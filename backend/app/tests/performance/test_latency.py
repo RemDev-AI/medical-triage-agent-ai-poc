@@ -7,13 +7,11 @@ charges) :
     "Mesurer la latence et le temps de réponse en
     conditions réalistes."
 
-L'InferenceClient (appel HTTP externe vers le
-backend d'inférence) est mocké afin de tester le
-comportement de l'API elle-même (validation,
-monitoring, audit) indépendamment de la
-disponibilité d'un GPU ou d'un Space Hugging Face
-réel, conformément à l'environnement CI
-(ubuntu-latest, sans GPU).
+TriageEngine / generate_response (moteur d'inférence local) sont
+mockés afin de tester le comportement de l'API elle-même
+(validation, monitoring, audit) indépendamment de la disponibilité
+d'un GPU réel, conformément à l'environnement CI (ubuntu-latest,
+sans GPU).
 """
 
 from __future__ import annotations
@@ -27,7 +25,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.api.dependencies.inference import (
-    get_inference_client,
+    get_triage_engine,
+    get_generation_context,
 )
 from app.core.security import (
     create_access_token,
@@ -37,36 +36,45 @@ from app.monitoring.latency_monitor import (
 )
 
 
-class _FakeInferenceClient:
+class _FakeTriageEngine:
     """
-    Double de test pour InferenceClient, simulant
-    une latence d'inférence réaliste (ordre de
-    grandeur d'un appel vLLM sur un petit modèle).
+    Double de test pour TriageEngine, simulant une latence
+    d'inférence réaliste (ordre de grandeur d'un appel vLLM sur un
+    petit modèle).
     """
 
-    async def generate(self, **kwargs):
+    async def run_triage(self, **kwargs):
         await asyncio.sleep(0.02)
         return {
-            "generated_text": "réponse simulée",
-            "model_name": "qwen3-1.7b-dpo-test",
-            "timestamp": "2026-07-08T00:00:00",
+            "triage": {
+                "priority": "MODÉRÉ",
+                "justification": "justification simulée",
+                "recommendations": "repos\nhydratation",
+                "confidence_score": 0.9,
+            },
+            "metadata": {
+                "latency_seconds": 0.02,
+                "model_name": "qwen3-1.7b-dpo-test",
+            },
+            "raw_response": "PRIORITÉ:\nMODÉRÉ\n",
         }
 
-    async def triage(self, **kwargs):
-        await asyncio.sleep(0.02)
-        return {
-            "priority_level": "MODÉRÉ",
-            "justification": "justification simulée",
-            "recommendations": ["repos", "hydratation"],
-            "confidence_score": 0.9,
-            "generated_at": "2026-07-08T00:00:00",
-        }
+
+async def _fake_generate_response(**kwargs):
+    await asyncio.sleep(0.02)
+    return "réponse simulée"
 
 
 @pytest.fixture()
-def client():
+def client(monkeypatch):
 
-    app.dependency_overrides[get_inference_client] = lambda: _FakeInferenceClient()
+    app.dependency_overrides[get_triage_engine] = lambda: _FakeTriageEngine()
+    app.dependency_overrides[get_generation_context] = lambda: (None, None)
+
+    monkeypatch.setattr(
+        "app.api.routes.inference.generate_response",
+        _fake_generate_response,
+    )
 
     latency_monitor.reset()
 

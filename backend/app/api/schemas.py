@@ -29,14 +29,18 @@ class GenerateResponse(BaseModel):
 class TriageRequest(BaseModel):
     patient_id: Optional[str] = None
 
-    # Texte libre décrivant les symptômes (aligné avec InferenceClient.triage
-    # qui attend `symptoms: str`). Corrige le bug: était List[str],
-    # ce qui rejetait en 422 tout payload envoyant une chaîne (cf.
-    # test_prompt_injection_attempt).
+    # Texte libre décrivant les symptômes. Corrige le bug: était
+    # List[str], ce qui rejetait en 422 tout payload envoyant une
+    # chaîne (cf. test_prompt_injection_attempt). Depuis la migration
+    # vers l'inférence locale, routes/triage.py convertit ce champ en
+    # `[symptoms]` avant l'appel à TriageEngine.run_triage(), qui
+    # attend `symptoms: List[str]`.
     symptoms: str = Field(..., min_length=1, max_length=2000)
 
-    # Texte libre également, aligné avec InferenceClient.triage qui attend
-    # `medical_history: str | None` (et non une liste).
+    # Texte libre également. Depuis la migration vers l'inférence
+    # locale, routes/triage.py convertit ce champ en
+    # `[medical_history]` avant l'appel à TriageEngine.run_triage(),
+    # qui attend `medical_history: Optional[List[str]]`.
     medical_history: Optional[str] = Field(default=None, max_length=2000)
 
     age: Optional[int] = Field(default=None, ge=0, le=120)
