@@ -78,7 +78,9 @@ def _build_triage_engine() -> TriageEngine:
                 load_in_8bit=runtime_config.load_in_8bit,
             )
 
-            tokenizer = AutoTokenizer.from_pretrained(adapter_local_path)
+            tokenizer = AutoTokenizer.from_pretrained(
+                adapter_local_path
+            )  # nosec B615 -- chemin local déjà téléchargé par _ensure_adapter_downloaded() (pas un appel réseau direct vers le Hub) ; le fichier snapshot_download() en amont porte la même remarque sur l'épinglage de revision.
 
         _triage_engine_instance = TriageEngine(
             model=model,

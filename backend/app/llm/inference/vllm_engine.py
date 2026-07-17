@@ -105,7 +105,9 @@ _ADAPTER_ALLOW_PATTERNS = [
 # Dockerfile.hf ; on isole l'adaptateur dans un sous-dossier
 # dédié pour rester explicite sur ce qui est téléchargé ici.
 _ADAPTER_LOCAL_CACHE_DIR = Path(
-    os.getenv("ADAPTER_LOCAL_CACHE_DIR", "/tmp/medical-triage-adapter")
+    os.getenv(
+        "ADAPTER_LOCAL_CACHE_DIR", "/tmp/medical-triage-adapter"
+    )  # nosec B108 -- POC pédagogique, déployé dans un conteneur Hugging Face Space éphémère et isolé par run (pas de multi-tenant, pas de secrets sensibles à cet emplacement) ; le chemin est de toute façon surchageable via ADAPTER_LOCAL_CACHE_DIR en prod.
 )
 
 # Variables d'environnement qui, si présentes, signalent que le
@@ -172,7 +174,7 @@ def _ensure_adapter_downloaded() -> str:
         repo_id=repo_id,
         allow_patterns=_ADAPTER_ALLOW_PATTERNS,
         local_dir=str(_ADAPTER_LOCAL_CACHE_DIR),
-    )
+    )  # nosec B615 -- repo_id contrôlé par nous (RemDev-AI/medical-triage-agent-ai-poc-models, cf. HF_MODEL_REPOSITORY), pas d'entrée utilisateur ; épinglage de revision à ajouter avant tout passage en production (TODO: fixer ADAPTER_REVISION sur un commit SHA).
 
     adapter_local_path = Path(local_snapshot_dir) / _ADAPTER_SUBFOLDER
 
