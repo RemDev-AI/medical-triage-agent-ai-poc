@@ -13,8 +13,13 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from transformers import PreTrainedModel
-from transformers import PreTrainedTokenizerBase
+# from transformers import PreTrainedModel
+# from transformers import PreTrainedTokenizerBase
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedModel
+    from transformers import PreTrainedTokenizerBase
 
 from app.llm.inference.generate import (
     build_generation_metadata,

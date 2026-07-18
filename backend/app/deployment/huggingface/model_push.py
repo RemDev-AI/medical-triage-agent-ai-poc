@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import Optional  # noqa : F401
 
 from huggingface_hub import HfApi, create_repo, upload_folder  # noqa : F401
-from transformers import AutoTokenizer
+
+# from transformers import AutoTokenizer
 
 # =========================================================
 # LOGGING
@@ -46,9 +47,9 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # =========================================================
 
-HF_TOKEN = os.getenv("HF_TOKEN")
+HF_TOKEN = os.getenv("HF_TOKEN_06")
 
-HF_MODEL_REPO = "medical-triage-agent-ai-poc-models"
+HF_MODEL_REPO = "RemDev-AI/medical-triage-agent-ai-poc-models"
 
 BASE_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
 
@@ -110,6 +111,8 @@ def push_tokenizer() -> None:
     """
     Push du tokenizer.
     """
+
+    from transformers import AutoTokenizer  # lazy import
 
     logger.info("Chargement tokenizer...")
 

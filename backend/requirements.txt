@@ -1,6 +1,33 @@
 # ==========================================================
 # medical-triage-agent-ai-poc/backend/requirements.txt
+# OPTION B — Serving avec vLLM CPU natif (x86)
+# Pour comparaison avec requirements.txt (option A, transformers CPU)
 # ==========================================================
+
+# IMPORTANT : cette installation vLLM CPU utilise l'index de
+# roues dédié (download.pytorch.org/whl/cpu) pour éviter de
+# tirer la variante GPU/CUDA par défaut. Version PINÉE
+# (reproductible), à la différence des images
+# vllm-ci-test-repo (réservées au benchmarking interne vLLM,
+# taguées par commit flottant — inadaptées à un déploiement).
+#
+# Prérequis matériel NON garantis sur un tier HF Space
+# "CPU basic" partagé (cf. Dockerfile.hf.vllm-cpu pour la
+# commande de diagnostic AVX512/AVX2 à exécuter avant
+# d'adopter cette option en production) :
+#   - AVX512 recommandé (AVX2 accepté depuis vLLM >= 0.17.0,
+#     performances réduites)
+#   - gcc/g++ >= 12.3.0 (fourni par Dockerfile)
+#
+# Si le CPU alloué ne supporte ni AVX512 ni AVX2, vLLM CPU
+# backend ne s'installera/fonctionnera pas correctement :
+# se rabattre sur l'option A (requirements.txt, model_loader.py).
+# ==========================================================
+
+# Index PyTorch CPU : nécessaire pour que torch ET vllm
+# récupèrent leurs variantes CPU (pas les paquets nvidia-cuda-*).
+--extra-index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://wheels.vllm.ai/0.25.1/cpu
 
 # ==========================================================
 # CORE PYTHON
@@ -18,70 +45,51 @@ fastapi
 uvicorn[standard]
 
 # ==========================================================
-# AI / LLM
+# AI / LLM (inférence via vLLM CPU backend natif)
 # ==========================================================
+#
+# Version pinée et stable (>= 0.17.0 requis pour les roues
+# CPU pré-compilées AVX2/AVX512 ; ajuster au besoin selon la
+# dernière version stable disponible au moment du déploiement
+# — vérifier https://docs.vllm.ai/en/latest/getting_started/installation/cpu/
+# pour la version recommandée courante).
+
+# vllm==0.17.0
+vllm==0.25.1
 
 torch
 transformers
-accelerate
-datasets
 sentencepiece
 safetensors
-# unsloth
-bitsandbytes
-evaluate
 huggingface_hub
-torchao
-
-# ==========================================================
-# PEFT / LORA
-# ==========================================================
-
-peft
-trl
-
-# ==========================================================
-# VLLM
-# ==========================================================
-
-vllm>=0.22.0
-
-# ==========================================================
-# MODAL GPU INFRASTRUCTURE
-# ==========================================================
-
-# modal
-
-# ==========================================================
-# TOKENIZERS
-# ==========================================================
-
 tokenizers
+
+# Adaptateur LoRA post-DPO (support natif vLLM --enable-lora,
+# cf. vllm_engine.py — peft n'est PAS requis pour ce chemin,
+# vLLM charge l'adaptateur directement via LoRARequest sans
+# passer par la librairie peft/transformers PeftModel)
 
 # ==========================================================
 # DATA PROCESSING
 # ==========================================================
 
 numpy
+
+# Conservés par précaution — à retirer si confirmé non utilisés
+# dans app/ (cf. grep suggéré précédemment)
 pandas
 scikit-learn
 
 # ==========================================================
-# NLP / SPACY
+# NLP / SPACY (anonymisation RGPD)
 # ==========================================================
 
 spacy>=3.8.14
 
-# French SpaCy model
 fr_core_news_md @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_md-3.8.0/fr_core_news_md-3.8.0-py3-none-any.whl
-
-# English SpaCy model
 en_core_web_md @ https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl
 
-# Language detection
 langdetect
-
-faker>=25.0.0
 
 # ==========================================================
 # PRESIDIO RGPD
@@ -91,17 +99,10 @@ presidio-analyzer
 presidio-anonymizer
 
 # ==========================================================
-# MONITORING / MLOPS
-# ==========================================================
-
-# mlflow
-wandb>=0.27.0
-
-# ==========================================================
 # OBSERVABILITY
 # ==========================================================
 
-prometheus-client
+# prometheus-client
 
 # ==========================================================
 # HTTP / CLIENTS
@@ -125,31 +126,7 @@ cryptography>=48.0.1
 passlib[bcrypt]
 
 # ==========================================================
-# TESTING
-# ==========================================================
-
-pytest==9.0.3
-pytest-asyncio
-pytest-cov>=6.0.0
-
-# ==========================================================
-# CODE QUALITY
-# ==========================================================
-
-black==26.5.1
-flake8
-isort
-mypy
-
-# ==========================================================
-# JUPYTER
-# ==========================================================
-
-jupyterlab
-ipykernel
-
-# ==========================================================
-# BUILD TOOLING (pinned to close CVEs pulled in transitively)
+# BUILD TOOLING
 # ==========================================================
 
 wheel>=0.46.2

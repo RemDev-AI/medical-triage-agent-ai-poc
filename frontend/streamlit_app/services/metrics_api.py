@@ -8,6 +8,7 @@ from streamlit_app.config.settings import (
     API_BASE_URL,
     REQUEST_TIMEOUT,
 )
+from streamlit_app.services.auth_client import get_auth_headers
 
 MONITORING_ENDPOINT = f"{API_BASE_URL}/monitoring/overview"
 
@@ -22,6 +23,7 @@ def get_metrics() -> dict:
 
         response = requests.get(
             MONITORING_ENDPOINT,
+            headers=get_auth_headers(),
             timeout=REQUEST_TIMEOUT,
         )
 

@@ -17,6 +17,21 @@ class HFSpaceUIConfig:
 
     request_timeout: int
 
+    # ---------------------------------------------------
+    # Authentification JWT (POST /auth/token)
+    #
+    # api_access_key : secret partagé, distinct de SECRET_KEY
+    # côté backend, requis pour obtenir un JWT. Doit être défini
+    # dans les Secrets du Space UI, avec la MÊME valeur que dans
+    # les Secrets du Space API (cf. backend/app/core/config.py).
+    #
+    # client_id : identifiant logique de ce frontend auprès de
+    # l'API (claim "sub" du JWT, utile pour l'audit logging).
+    # ---------------------------------------------------
+    api_access_key: str
+
+    client_id: str
+
 
 def get_ui_config() -> HFSpaceUIConfig:
 
@@ -39,6 +54,14 @@ def get_ui_config() -> HFSpaceUIConfig:
                 "REQUEST_TIMEOUT",
                 "120",
             )
+        ),
+        api_access_key=os.getenv(
+            "API_ACCESS_KEY",
+            "",
+        ),
+        client_id=os.getenv(
+            "STREAMLIT_CLIENT_ID",
+            "streamlit-ui",
         ),
     )
 

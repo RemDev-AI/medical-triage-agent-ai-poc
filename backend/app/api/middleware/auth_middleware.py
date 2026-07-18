@@ -7,20 +7,37 @@ from starlette.routing import Match
 
 from app.core.security import verify_access_token
 
-EXCLUDED_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health"}
+# Chemins publics : docs, healthcheck, racine, et désormais /auth/token
+# (impossible d'obtenir un jeton si /auth/token est lui-même protégé
+# par le même jeton).
+EXCLUDED_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/auth/token"}
 
 
-def _route_exists(request: Request) -> bool:
+def _route_match(request: Request):
     """
-    Returns True if the incoming request matches a registered route
-    (regardless of HTTP method), so that unknown paths can fall through
-    to FastAPI's routing layer and return a proper 404 instead of a 401.
+    Inspecte les routes enregistrées et retourne :
+      - "full"    : un handler existe pour ce chemin ET cette méthode HTTP
+      - "partial" : le chemin existe mais pas pour cette méthode
+                    (=> 405 attendu, pas 401)
+      - "none"    : le chemin n'existe pas du tout (=> 404 attendu)
+
+    Avant, seul Match.NONE était distingué : un chemin existant mais
+    appelé avec la mauvaise méthode (Match.PARTIAL) tombait dans le
+    même cas que Match.FULL et se voyait donc à tort exiger un JWT
+    avant même que FastAPI ne puisse répondre 405.
     """
+    best = Match.NONE
+
     for route in request.app.router.routes:
         match, _ = route.matches(request.scope)
-        if match != Match.NONE:
-            return True
-    return False
+
+        if match == Match.FULL:
+            return "full"
+
+        if match == Match.PARTIAL and best != Match.FULL:
+            best = Match.PARTIAL
+
+    return "partial" if best == Match.PARTIAL else "none"
 
 
 class JWTAuthMiddleware(BaseHTTPMiddleware):
@@ -30,9 +47,12 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
         if request.url.path in EXCLUDED_PATHS:
             return await call_next(request)
 
-        # Let FastAPI's router handle unknown routes -> proper 404,
-        # instead of masking them behind a 401 from this middleware.
-        if not _route_exists(request):
+        route_match = _route_match(request)
+
+        # Chemin inconnu (404) ou méthode non supportée sur un chemin
+        # connu (405) : on laisse FastAPI gérer la réponse plutôt que
+        # de masquer l'erreur derrière un 401 trompeur.
+        if route_match in ("none", "partial"):
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization")

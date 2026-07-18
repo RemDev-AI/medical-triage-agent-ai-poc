@@ -80,9 +80,9 @@ jobs:
           ENVIRONMENT: test
           HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/unit -v \
             --cov=app --cov-report=xml --cov-report=term-missing \
@@ -127,9 +127,9 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         env:
           ENVIRONMENT: test
-          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/security -v --junitxml=junit-security.xml
 
@@ -167,9 +167,9 @@ jobs:
           ENVIRONMENT: test
           HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/integration -v -k "not modal" --junitxml=junit-integration.xml
 
@@ -219,17 +219,17 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         env:
           ENVIRONMENT: test
-          # Le moteur vLLM n'est pas sollicité par les
-          # tests de performance (InferenceClient est
-          # mocké) : USE_VLLM est désactivé pour garantir
-          # l'exécution sur les runners CI standard (sans
-          # GPU).
+          # Le moteur vLLM n'est pas sollicité par les tests de
+          # performance (TriageEngine / generate_response sont
+          # mockés au niveau des dépendances FastAPI) : USE_VLLM
+          # est désactivé pour garantir l'exécution sur les
+          # runners CI standard (sans GPU).
           USE_VLLM: "false"
           HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
           WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/unit app/tests/security app/tests/integration app/tests/performance \
             -k "not modal" \
@@ -281,14 +281,15 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         env:
           ENVIRONMENT: test
-          # Le moteur vLLM n'est pas sollicité par ces
-          # tests (InferenceClient est mocké) : USE_VLLM
-          # est désactivé pour garantir l'exécution sur
-          # les runners CI standard (sans GPU).
+          # Le moteur vLLM n'est pas sollicité par ces tests
+          # (TriageEngine / generate_response sont mockés au
+          # niveau des dépendances FastAPI) : USE_VLLM est
+          # désactivé pour garantir l'exécution sur les
+          # runners CI standard (sans GPU).
           USE_VLLM: "false"
-          INFERENCE_API_URL: ${{ secrets.INFERENCE_API_URL || 'https://fake-inference.test' }}
           HF_API_TOKEN: ${{ secrets.HF_TOKEN_06 }}
           SECRET_KEY: ${{ secrets.SECRET_KEY || 'ci-test-secret-key-do-not-use-in-prod' }}
+          API_ACCESS_KEY: ${{ secrets.API_ACCESS_KEY || 'ci-test-api-access-key-do-not-use-in-prod' }}
         run: |
           pytest app/tests/performance -v --junitxml=junit-performance.xml
 

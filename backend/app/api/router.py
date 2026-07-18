@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter
 
+from app.api.routes.auth import router as auth_router
+
 from app.api.routes.health import router as health_router
 
 from app.api.routes.inference import router as inference_router
@@ -13,6 +15,13 @@ from app.api.routes.audit import router as audit_router
 from app.api.routes.monitoring import router as monitoring_router
 
 api_router = APIRouter()
+
+
+# ------------------------------------------------------------------
+# Auth Route (émission des JWT)
+# ------------------------------------------------------------------
+
+api_router.include_router(auth_router)
 
 
 # ------------------------------------------------------------------
