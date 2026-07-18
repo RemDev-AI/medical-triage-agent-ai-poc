@@ -49,7 +49,7 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful, safe assistant."
 
 
 @router.post(
-    "",
+    "/",
     response_model=GenerateResponse,
 )
 async def generate_route(

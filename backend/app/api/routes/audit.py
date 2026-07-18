@@ -18,7 +18,7 @@ router = APIRouter(prefix="/audit", tags=["Audit"])
 
 
 @router.get(
-    "",
+    "/",
     response_model=AuditResponse,
 )
 async def audit_logs(

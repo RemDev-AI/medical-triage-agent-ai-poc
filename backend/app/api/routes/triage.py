@@ -134,7 +134,7 @@ def _split_recommendations(raw: str) -> list[str]:
 
 
 @router.post(
-    "",
+    "/",
     response_model=TriageResponse,
 )
 async def triage_route(
