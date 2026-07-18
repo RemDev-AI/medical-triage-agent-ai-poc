@@ -23,16 +23,6 @@ updates:
     schedule:
       interval: "weekly"
     labels: ["dependencies", "docker"]
-    ignore:
-      # Bloque les montées de version majeure de l'image de base
-      # python (ex: 3.12-slim -> 3.14-slim). Ces montées cassent le
-      # build backend car spacy/thinc/blis (dépendances ML) ne
-      # compilent pas encore sous les nouvelles versions de CPython
-      # (wheels absentes, échec de compilation Cython de blis avec
-      # Python 3.14). Les mises à jour mineures/patch de l'image
-      # 3.12-slim restent autorisées.
-      - dependency-name: "python"
-        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/frontend"
