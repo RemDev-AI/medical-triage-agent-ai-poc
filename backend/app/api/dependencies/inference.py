@@ -24,8 +24,13 @@ from __future__ import annotations
 import threading
 from typing import Optional, Tuple
 
-from transformers import PreTrainedModel
-from transformers import PreTrainedTokenizerBase
+# from transformers import PreTrainedModel
+# from transformers import PreTrainedTokenizerBase
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedModel
+    from transformers import PreTrainedTokenizerBase
 
 from app.llm.inference.triage_engine import TriageEngine
 from app.deployment.huggingface.hf_space_runtime import runtime_config

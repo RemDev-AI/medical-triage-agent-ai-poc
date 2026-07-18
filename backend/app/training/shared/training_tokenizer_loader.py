@@ -22,7 +22,11 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
+# from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,8 @@ class TrainingTokenizerLoader:
                 "aucun AutoTokenizer.from_pretrained() supplémentaire."
             )
             return self._preloaded_tokenizer
+
+        from transformers import AutoTokenizer  # lazy import
 
         model_name = self.config["model"]["base_model"]
 

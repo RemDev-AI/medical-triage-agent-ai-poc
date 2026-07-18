@@ -18,9 +18,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-import torch
-from transformers import PreTrainedModel
-from transformers import PreTrainedTokenizerBase
+# import torch
+# from transformers import PreTrainedModel
+# from transformers import PreTrainedTokenizerBase
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedModel
+    from transformers import PreTrainedTokenizerBase
 
 from app.deployment.huggingface.hf_space_runtime import (
     runtime_config,
@@ -105,6 +110,8 @@ async def generate_response(
         )
 
     logger.info("Starting inference generation " "(Transformers backend).")
+
+    import torch  # lazy import — uniquement nécessaire sur ce chemin (non-vLLM)
 
     prompt = _build_chat_prompt(
         system_prompt=system_prompt,

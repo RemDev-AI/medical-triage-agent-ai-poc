@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import Optional  # noqa : F401
 
 from huggingface_hub import HfApi, create_repo, upload_folder  # noqa : F401
-from transformers import AutoTokenizer
+
+# from transformers import AutoTokenizer
 
 # =========================================================
 # LOGGING
@@ -110,6 +111,8 @@ def push_tokenizer() -> None:
     """
     Push du tokenizer.
     """
+
+    from transformers import AutoTokenizer  # lazy import
 
     logger.info("Chargement tokenizer...")
 

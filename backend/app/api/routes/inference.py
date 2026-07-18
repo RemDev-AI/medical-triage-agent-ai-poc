@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import time
-from typing import Optional, Tuple
 
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 
-from transformers import PreTrainedModel
-from transformers import PreTrainedTokenizerBase
+# from typing import Optional, Tuple
+# from typing import Any
+# from transformers import PreTrainedModel
+# from transformers import PreTrainedTokenizerBase
+from typing import Any, Optional, Tuple
 
 from app.api.schemas import (
     GenerateRequest,
@@ -53,11 +55,9 @@ DEFAULT_SYSTEM_PROMPT = "You are a helpful, safe assistant."
 async def generate_route(
     payload: GenerateRequest,
     generation_context: Tuple[
-        Optional[PreTrainedModel],
-        Optional[PreTrainedTokenizerBase],
-    ] = Depends(
-        get_generation_context,
-    ),
+        Optional[Any],
+        Optional[Any],
+    ] = Depends(get_generation_context),
 ):
     model, tokenizer = generation_context
 
