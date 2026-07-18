@@ -55,7 +55,7 @@ uvicorn[standard]
 # pour la version recommandée courante).
 
 # vllm==0.17.0
-vllm==0.25.1
+vllm==0.25.1+cpu
 
 torch
 transformers
