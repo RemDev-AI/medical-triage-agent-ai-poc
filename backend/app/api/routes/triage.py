@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import unicodedata
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -37,6 +38,52 @@ CONFIDENTIAL_MARKERS: tuple[str, ...] = (
     "ssn",
     "social security",
 )
+
+
+_PRIORITY_MAPPING: dict[str, str] = {
+    "faible": "low",
+    "low": "low",
+    "modere": "medium",
+    "moyen": "medium",
+    "medium": "medium",
+    "eleve": "high",
+    "high": "high",
+    "urgent": "urgent",
+    "critique": "urgent",
+}
+
+
+def _normalize_priority(raw_value: str) -> str:
+    """
+    TriageEngine.parse_response() renvoie "priority" en français
+    (ex: "FAIBLE", "ÉLEVÉ"), alors que TriageResponse.priority_level
+    doit appartenir au domaine anglais {low, medium, high, urgent}
+    attendu par les contrats d'API.
+
+    On normalise la casse et les accents avant de mapper vers la
+    valeur canonique. Si la valeur est vide ou inconnue, on retombe
+    sur "medium" par prudence et on lève une alerte pour tracer les
+    sorties inattendues du modèle plutôt que de les ignorer
+    silencieusement.
+    """
+
+    if not raw_value:
+        return "medium"
+
+    normalized = unicodedata.normalize("NFKD", raw_value.strip().lower())
+    normalized = "".join(c for c in normalized if not unicodedata.combining(c))
+
+    if normalized not in _PRIORITY_MAPPING:
+        try:
+            alert_manager.raise_alert(
+                code="TRIAGE_UNKNOWN_PRIORITY",
+                message=f"Unknown priority value returned by triage engine: {raw_value!r}",
+            )
+        except Exception:
+            pass
+        return "medium"
+
+    return _PRIORITY_MAPPING[normalized]
 
 
 def _strip_confidential_leakage(text: str) -> str:
@@ -158,9 +205,11 @@ async def triage_route(
     )
 
     return TriageResponse(
-        priority_level=triage_data.get(
-            "priority",
-            "UNKNOWN",
+        priority_level=_normalize_priority(
+            triage_data.get(
+                "priority",
+                "UNKNOWN",
+            ),
         ),
         justification=_strip_confidential_leakage(justification_raw),
         recommendations=[
