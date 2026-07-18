@@ -49,39 +49,9 @@ jobs:
         working-directory: frontend
         run: pip-audit -r requirements.txt --desc || true
 
-  container-scan:
-    name: Scan built images for CVEs
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build backend image (local, no push)
-        uses: docker/build-push-action@v7
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: false
-          tags: local/medical-triage-backend:audit
-          load: true
-
-      - name: Trivy scan (backend)
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-            image-ref: "local/medical-triage-backend:audit"
-            format: "sarif"
-            output: "trivy-backend.sarif"
-            severity: "CRITICAL,HIGH,MEDIUM"
-            ignore-unfixed: true
-            timeout: "15m0s"
-
-      - name: Upload Trivy scan results
-        if: always() && hashFiles('trivy-backend.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v4  # note: v3 sera dépréciée en déc. 2026
-        with:
-          sarif_file: trivy-backend.sarif
+# Scan des images Docker (backend + frontend) : voir
+# docker-build-push.yml, jobs build-backend / build-frontend
+# (Trivy sur image locale, catégories "trivy-backend" /
+# "trivy-frontend" dans l'onglet Security > Code scanning).
+# Job container-scan retiré ici : redondant, docker-build-push.yml
+# couvre déjà backend ET frontend (celui-ci ne couvrait que le backend).
