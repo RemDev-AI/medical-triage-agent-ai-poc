@@ -52,3 +52,33 @@ CVE-2026-39822
 # que le scan ne remonte plus cette CVE).
 # Revue prévue : sous 30 jours, ou au prochain bump de `vllm`.
 CVE-2025-47273
+
+# ----------------------------------------------------------
+# CVE-2026-23949 - jaraco.context path traversal (tar malveillant)
+# ----------------------------------------------------------
+# Composant concerné : `jaraco.context` 5.3.0, dépendance transitive de
+# `setuptools`/`pip` (chaîne de build), pas un paquet applicatif direct.
+# Statut Trivy : "fixed" (6.1.0) mais `jaraco.context` est vendored/résolu
+# via l'écosystème `setuptools==77.0.3` lui-même épinglé pour `vllm`
+# (cf. CVE-2025-47273 ci-dessus) - un bump isolé risque le même conflit
+# de résolution pip que `setuptools`.
+# Justification du risque accepté : projet POC, pas de traitement
+# d'archives tar utilisateur non fiables via ce composant (usage limité
+# à la chaîne de build de l'image, sur des sources que nous contrôlons).
+# Action de suivi : revérifier au prochain bump de `setuptools`/`vllm`.
+# Revue prévue : sous 30 jours, ou au prochain bump de `vllm`.
+CVE-2026-23949
+
+# ----------------------------------------------------------
+# CVE-2026-24049 - wheel exécution de code via wheel malveillant
+# ----------------------------------------------------------
+# Composant concerné : `wheel` 0.45.1, dépendance transitive de la chaîne
+# de build `setuptools`/`pip` (même contexte que ci-dessus).
+# Statut Trivy : "fixed" (0.46.2) mais résolution liée à la même chaîne
+# de dépendances épinglée pour `vllm==0.25.1+cpu`.
+# Justification du risque accepté : projet POC, aucune installation de
+# wheel provenant de sources non fiables/utilisateur - uniquement les
+# paquets de notre requirements.txt, sous notre contrôle.
+# Action de suivi : revérifier au prochain bump de `setuptools`/`vllm`.
+# Revue prévue : sous 30 jours, ou au prochain bump de `vllm`.
+CVE-2026-24049

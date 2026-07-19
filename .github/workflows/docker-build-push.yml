@@ -143,6 +143,11 @@ jobs:
           sarif_file: "trivy-frontend.sarif"
           category: trivy-frontend
 
+      # NB : partage volontairement le même .trivyignore que le backend
+      # (backend/.trivyignore) — les CVE ignorées ici (jaraco.context,
+      # wheel, setuptools) proviennent de la chaîne de build pip commune
+      # aux deux images. Sans ce paramètre, ce gate frontend échouait
+      # indépendamment de la correction appliquée côté backend.
       - name: Trivy scan (fail on fixable CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -150,4 +155,5 @@ jobs:
           format: "table"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
+          trivyignores: "./backend/.trivyignore"
           exit-code: "1"

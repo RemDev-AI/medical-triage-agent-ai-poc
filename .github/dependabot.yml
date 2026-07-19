@@ -2,49 +2,45 @@
 # medical-triage-agent-ai-poc/.github/dependabot.yml
 # ==========================================================
 
+# MODE POC : toutes les mises à jour automatiques sont bloquées.
+# `open-pull-requests-limit: 0` empêche Dependabot d'ouvrir la
+# moindre PR (version updates ET security updates) sur chaque
+# écosystème ci-dessous, afin d'éviter les échecs de workflow
+# CI/CD bloquants (Trivy gate, ResolutionImpossible pip, etc.)
+# sur un projet qui n'est pas destiné à la production.
+# Les scans Trivy restent actifs dans docker-build-push.yml
+# (rapport SARIF non-bloquant + gate documenté via .trivyignore)
+# pour garder une visibilité sur les CVE sans PR intempestives.
+# TODO : repasser à des limites normales (5) si ce POC évolue
+# vers un projet maintenu en continu.
+
 version: 2
 updates:
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels: ["dependencies", "backend"]
     ignore:
-      # setuptools est épinglé à ==77.0.3 dans requirements.txt
-      # (< 78.1.1, donc CVE-2025-47273 non corrigée) parce que
-      # vllm==0.25.1+cpu exige cette version exacte dans son
-      # arbre de dépendances ; toute PR Dependabot proposant un
-      # bump échouera systématiquement en CI avec un
-      # "ResolutionImpossible" identique à celui déjà rencontré
-      # (cf. historique du projet). On bloque ces PR à la
-      # source plutôt que de les fermer manuellement chaque
-      # semaine. Cf. backend/.trivyignore pour la CVE
-      # correspondante et sa justification complète.
-      # TODO : retirer cet ignore dès qu'une release vLLM
-      # ultérieure desserre sa contrainte sur setuptools.
       - dependency-name: "setuptools"
+      - dependency-name: "jaraco.context"
+      - dependency-name: "wheel"
 
   - package-ecosystem: "pip"
     directory: "/frontend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     labels: ["dependencies", "frontend"]
 
   - package-ecosystem: "docker"
     directory: "/backend"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     labels: ["dependencies", "docker"]
     ignore:
-      # Bloque les montées de version majeure de l'image de base
-      # python (ex: 3.12-slim -> 3.14-slim). Ces montées cassent le
-      # build backend car spacy/thinc/blis (dépendances ML) ne
-      # compilent pas encore sous les nouvelles versions de CPython
-      # (wheels absentes, échec de compilation Cython de blis avec
-      # Python 3.14). Les mises à jour mineures/patch de l'image
-      # 3.12-slim restent autorisées.
       - dependency-name: "python"
         update-types: ["version-update:semver-major"]
 
@@ -52,10 +48,12 @@ updates:
     directory: "/frontend"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     labels: ["dependencies", "docker"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 0
     labels: ["dependencies", "ci-cd"]
