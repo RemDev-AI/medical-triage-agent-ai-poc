@@ -10,6 +10,20 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     labels: ["dependencies", "backend"]
+    ignore:
+      # setuptools est épinglé à ==77.0.3 dans requirements.txt
+      # (< 78.1.1, donc CVE-2025-47273 non corrigée) parce que
+      # vllm==0.25.1+cpu exige cette version exacte dans son
+      # arbre de dépendances ; toute PR Dependabot proposant un
+      # bump échouera systématiquement en CI avec un
+      # "ResolutionImpossible" identique à celui déjà rencontré
+      # (cf. historique du projet). On bloque ces PR à la
+      # source plutôt que de les fermer manuellement chaque
+      # semaine. Cf. backend/.trivyignore pour la CVE
+      # correspondante et sa justification complète.
+      # TODO : retirer cet ignore dès qu'une release vLLM
+      # ultérieure desserre sa contrainte sur setuptools.
+      - dependency-name: "setuptools"
 
   - package-ecosystem: "pip"
     directory: "/frontend"

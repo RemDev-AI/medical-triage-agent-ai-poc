@@ -77,12 +77,24 @@ class JWTAuthMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Invalid authentication scheme"},
             )
 
+        from fastapi import HTTPException
+
         try:
             verify_access_token(token)
-        except Exception:
+
+        except HTTPException as exc:
             return JSONResponse(
-                status_code=401,
-                content={"detail": "Invalid or expired JWT token"},
+                status_code=exc.status_code,
+                content={"detail": exc.detail},
+                headers=exc.headers,
             )
+
+        #         try:
+        #             verify_access_token(token)
+        #         except Exception:
+        #             return JSONResponse(
+        #                 status_code=401,
+        #                 content={"detail": "Invalid or expired JWT token"},
+        #             )
 
         return await call_next(request)

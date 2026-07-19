@@ -274,6 +274,53 @@ def get_vllm_engine():
         if _engine_instance is not None:
             return _engine_instance
 
+        import torch
+
+        is_cpu_backend = not torch.cuda.is_available()
+
+        if is_cpu_backend:
+            # NOTE : une tentative précédente forçait ici
+            # os.environ["VLLM_TARGET_DEVICE"] = "cpu" avant l'import
+            # de vllm. Cela s'est révélé inefficace et a été retiré :
+            # VLLM_TARGET_DEVICE est un réglage de COMPILATION du
+            # wheel (cf. vllm/setup.py), pas une variable lue au
+            # runtime. La détection de plateforme
+            # (vllm/platforms/__init__.py, cpu_platform_plugin())
+            # décide de current_platform en inspectant la CHAÎNE DE
+            # VERSION du paquet vllm réellement installé : elle doit
+            # contenir "cpu" (ex: "0.25.1+cpu"), suffixe présent
+            # uniquement sur les wheels compilés pour CPU (cf.
+            # requirements.txt : "vllm==0.25.1+cpu", pas juste
+            # "vllm==0.25.1"). Sans ce suffixe, current_platform ne
+            # résout aucune plateforme et create_engine_config() lève
+            # "RuntimeError: Device string must not be empty" (bug
+            # observé en prod, root-caused à ce niveau).
+            #
+            # Garde-fou : on vérifie ici que le wheel installé porte
+            # bien ce suffixe, pour échouer avec un message clair
+            # plutôt que de laisser vLLM lever une erreur pydantic
+            # confuse plus loin si requirements.txt venait à être
+            # mal résolu à nouveau (ex: ambiguïté entre plusieurs
+            # --extra-index-url).
+            from importlib.metadata import version as _pkg_version
+
+            installed_vllm_version = _pkg_version("vllm")
+
+            if "cpu" not in installed_vllm_version.lower():
+                raise RuntimeError(
+                    "Backend CPU attendu, mais le wheel vLLM installé "
+                    f"('{installed_vllm_version}') ne porte pas le "
+                    "suffixe '+cpu' : ce n'est pas un wheel CPU-natif. "
+                    "vLLM ne pourra pas résoudre sa plateforme "
+                    "(current_platform) et échouera avec 'Device "
+                    "string must not be empty'. Vérifiez "
+                    "requirements.txt : la ligne doit être "
+                    "'vllm==<version>+cpu' (pas seulement "
+                    "'vllm==<version>'), et que pip installe bien "
+                    "depuis wheels.vllm.ai/<version>/cpu plutôt que "
+                    "depuis PyPI."
+                )
+
         try:
             from vllm import AsyncEngineArgs
             from vllm import AsyncLLMEngine
@@ -289,10 +336,6 @@ def get_vllm_engine():
 
         _assert_inference_backend_available()
 
-        import torch
-
-        is_cpu_backend = not torch.cuda.is_available()
-
         engine_kwargs = dict(
             model=_BASE_MODEL_NAME,
             enable_lora=True,
@@ -305,12 +348,19 @@ def get_vllm_engine():
         )
 
         if is_cpu_backend:
-            # gpu_memory_utilization n'a pas de sens sur le backend
-            # CPU (pas de VRAM à réserver) : le dimensionnement du
-            # KV cache est piloté par la variable d'environnement
+            # AsyncEngineArgs n'expose plus de paramètre "device" en
+            # vLLM 0.25.1 (cf. traceback de prod : "AsyncEngineArgs.
+            # __init__() got an unexpected keyword argument 'device'").
+            # Rien à transmettre ici via engine_kwargs : la sélection
+            # de plateforme CPU est assurée par le wheel installé
+            # lui-même (suffixe de version "+cpu", vérifié plus haut),
+            # pas par un kwarg ici. Le dimensionnement du KV cache
+            # reste piloté par
             # VLLM_CPU_KVCACHE_SPACE (cf. Dockerfile), pas par un
-            # paramètre d'AsyncEngineArgs.
-            engine_kwargs["device"] = "cpu"
+            # paramètre d'AsyncEngineArgs — de même pour
+            # gpu_memory_utilization, qui n'a pas de sens sur CPU et
+            # n'est donc pas renseigné dans cette branche.
+            pass
         else:
             engine_kwargs["gpu_memory_utilization"] = 0.85
 
