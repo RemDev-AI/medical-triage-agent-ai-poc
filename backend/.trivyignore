@@ -1,7 +1,7 @@
 # ==========================================================
 # medical-triage-agent-ai-poc/backend/.trivyignore
 # ==========================================================
-#
+
 # Exceptions temporaires documentées pour le gate Trivy
 # (voir .github/workflows/docker-build-push.yml, step "fail on fixable CRITICAL/HIGH")
 #
@@ -29,3 +29,26 @@
 # cette ligne dès que le scan ne remonte plus cette CVE).
 # Revue prévue : sous 30 jours, ou au prochain bump de `wandb`.
 CVE-2026-39822
+
+# ----------------------------------------------------------
+# CVE-2025-47273 - setuptools PackageIndex path traversal
+# ----------------------------------------------------------
+# Composant concerné : `setuptools`, épinglé à ==77.0.3 dans
+# requirements.txt.
+# Statut Trivy : "fixed" (78.1.1) mais la contrainte de dépendance de
+# `vllm==0.25.1+cpu` impose explicitement `setuptools==77.0.3` ; toute
+# version >= 78.1.1 provoque un "ResolutionImpossible" au build pip
+# (conflit direct entre les deux contraintes, confirmé en CI/build).
+# Justification du risque accepté : la faille exploite
+# `PackageIndex.download()` avec une URL contrôlée par un attaquant lors
+# d'une installation de paquets. Ce chemin de code n'est exercé que
+# pendant `pip install -r requirements.txt` au build de l'image, sur des
+# noms de paquets et index que nous contrôlons nous-mêmes (pas
+# d'ingestion d'URL utilisateur non fiable via ce composant, ni au build
+# ni au runtime de l'API) - risque jugé faible dans ce contexte.
+# Action de suivi : revérifier à chaque bump de version `vllm` si la
+# contrainte sur `setuptools` a été desserrée en amont (rescanner l'image
+# et retirer cette ligne, puis remonter le pin dans requirements.txt, dès
+# que le scan ne remonte plus cette CVE).
+# Revue prévue : sous 30 jours, ou au prochain bump de `vllm`.
+CVE-2025-47273

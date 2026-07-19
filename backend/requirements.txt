@@ -48,14 +48,26 @@ uvicorn[standard]
 # AI / LLM (inférence via vLLM CPU backend natif)
 # ==========================================================
 #
-# Version pinée et stable (>= 0.17.0 requis pour les roues
-# CPU pré-compilées AVX2/AVX512 ; ajuster au besoin selon la
-# dernière version stable disponible au moment du déploiement
-# — vérifier https://docs.vllm.ai/en/latest/getting_started/installation/cpu/
-# pour la version recommandée courante).
+# Version pinée et stable, AVEC son suffixe local "+cpu" — ce
+# suffixe n'est PAS cosmétique : c'est lui que vLLM inspecte au
+# runtime (vllm/platforms/__init__.py, cpu_platform_plugin()) pour
+# résoudre current_platform en CpuPlatform. Ce suffixe n'existe
+# que sur les wheels réellement compilés avec VLLM_TARGET_DEVICE=cpu
+# (cf. vllm/setup.py : `if VLLM_TARGET_DEVICE == "cpu": version +=
+# "+cpu"`). Sans lui — ex: si pip installe silencieusement le
+# wheel standard "0.25.1" depuis PyPI au lieu du wheel CPU-natif de
+# wheels.vllm.ai/0.25.1/cpu, ce qui peut arriver avec deux index en
+# présence sans version explicitement suffixée — current_platform
+# ne résout AUCUNE plateforme (ni CUDA ni CPU) et
+# create_engine_config() lève "RuntimeError: Device string must
+# not be empty" au démarrage du moteur (observé en prod).
+# Ajuster ce suffixe au besoin selon la dernière version stable
+# disponible au moment du déploiement — vérifier
+# https://docs.vllm.ai/en/latest/getting_started/installation/cpu/
+# pour la version recommandée courante et son suffixe exact.
 
 # vllm==0.17.0
-vllm==0.25.1
+vllm==0.25.1+cpu
 
 torch
 transformers
@@ -129,6 +141,18 @@ passlib[bcrypt]
 # BUILD TOOLING
 # ==========================================================
 
-setuptools>=78.1.1
+# IMPORTANT : setuptools est ici épinglé sur EXACTEMENT ce
+# qu'exige vllm==0.25.1+cpu dans son arbre de dépendances
+# (pip a rejeté toute autre version avec "ResolutionImpossible" :
+# "vllm 0.25.1+cpu depends on setuptools==77.0.3"). Le pin
+# précédent (>=78.1.1, motivé par une CVE côté setuptools)
+# n'est PAS compatible avec cette contrainte de vllm et fait
+# échouer le build entier ("Cannot install -r requirements.txt
+# ... conflicting dependencies", observé en CI/build HF Space).
+# TODO : dès qu'une release vLLM ultérieure desserre sa propre
+# contrainte sur setuptools, réévaluer un pin plus récent ici
+# pour la CVE. En attendant, ce pin exact est nécessaire pour
+# que `pip install -r requirements.txt` aboutisse.
+setuptools==77.0.3
 wheel>=0.46.2
 jaraco.context>=6.1.0

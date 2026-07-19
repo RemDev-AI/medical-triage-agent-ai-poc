@@ -86,6 +86,13 @@ jobs:
 
       # Étape 2 : gate réel, mais uniquement sur les CVE corrigibles
       # -> ignore-unfixed retire tout le bruit des paquets OS sans patch amont
+      # -> trivyignores exempte en plus CVE-2025-47273 (setuptools
+      #    < 78.1.1), volontairement non corrigée car vllm==0.25.1+cpu
+      #    impose setuptools==77.0.3 dans requirements.txt (tout bump
+      #    casse le build avec un "ResolutionImpossible" — cf.
+      #    backend/.trivyignore pour la justification complète et le
+      #    TODO de retrait dès qu'une release vLLM ultérieure
+      #    desserre cette contrainte).
       - name: Trivy scan (fail on fixable CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@v0.36.0
         with:

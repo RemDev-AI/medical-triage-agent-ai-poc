@@ -87,6 +87,19 @@ COPY . ./
 ENV PORT=7860
 
 # --- Réglages vLLM CPU backend ---
+
+# CORRECTIF (mise à jour) : contrairement à une hypothèse
+# précédente, VLLM_TARGET_DEVICE n'est PAS lue par vLLM au runtime
+# — c'est un réglage de COMPILATION du wheel (cf. vllm/setup.py).
+# La conserver ici est inoffensif et reste cohérent avec la doc
+# officielle vLLM CPU, mais elle ne suffit PAS à faire résoudre
+# current_platform en CpuPlatform : cette résolution dépend
+# uniquement de la présence du suffixe "+cpu" dans la chaîne de
+# version du wheel vLLM réellement installé (cf. requirements.txt :
+# "vllm==0.25.1+cpu"). Le vrai correctif à l'erreur "RuntimeError:
+# Device string must not be empty" observée en prod est là, pas ici.
+ENV VLLM_TARGET_DEVICE=cpu
+
 # Réserve de la mémoire pour le KV cache (en Go). À ajuster
 # selon la RAM réellement disponible sur le tier du Space
 # (16 Go annoncés ; laisser de la marge pour l'OS/FastAPI/
