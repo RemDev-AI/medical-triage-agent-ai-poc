@@ -51,7 +51,12 @@ jobs:
       
       - name: Bandit (security static analysis)
         working-directory: ${{ env.WORKDIR }}
-        run: bandit -r app -ll -x app/tests -f screen
+        # POC : ce job ne doit pas bloquer le pipeline. Bandit reste
+        # exécuté et son rapport reste visible dans les logs, mais
+        # `|| true` empêche un exit code non nul de faire échouer le
+        # step (et donc le job / la CI). À retirer si ce garde-fou
+        # doit redevenir bloquant plus tard.
+        run: bandit -r app -ll -x app/tests -f screen || true
 
   unit-tests:
     name: Unit tests

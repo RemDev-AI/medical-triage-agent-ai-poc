@@ -125,6 +125,14 @@ _MERGED_MODEL_NAME = os.getenv(
     "RemDev-AI/medical-triage-agent-ai-poc-merged",
 )
 
+# Révision (commit SHA ou tag) du repo ci-dessus à charger.
+# Par défaut "main" pour ne pas casser le POC si aucune valeur n'est
+# fournie, mais fortement recommandé de surcharger cette variable
+# avec un SHA de commit figé une fois le modèle publié, pour éviter
+# qu'un futur push sur le repo HF ne change silencieusement le
+# modèle/tokenizer servi (cf. Bandit B615 / CWE-494).
+_MERGED_MODEL_REVISION = os.getenv("MERGED_MODEL_REVISION", "main")
+
 # Variables d'environnement qui, si présentes, signalent que le
 # backend CPU natif de vLLM a été explicitement configuré (cf.
 # Dockerfile "OPTION B" : ENV VLLM_CPU_KVCACHE_SPACE=4,
@@ -236,6 +244,7 @@ def get_vllm_tokenizer():
 
         _tokenizer_instance = AutoTokenizer.from_pretrained(
             _MERGED_MODEL_NAME,
+            revision=_MERGED_MODEL_REVISION,
             trust_remote_code=True,
         )
 
@@ -333,6 +342,8 @@ def get_vllm_engine():
 
         engine_kwargs = dict(
             model=_MERGED_MODEL_NAME,
+            revision=_MERGED_MODEL_REVISION,
+            tokenizer_revision=_MERGED_MODEL_REVISION,
             dtype="bfloat16",
             max_model_len=(
                 runtime_config.max_input_tokens + runtime_config.max_output_tokens
