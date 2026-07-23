@@ -122,4 +122,4 @@ pytest-cov>=6.0.0
 black==26.5.1
 flake8
 isort
-mypy==1.15.0
+mypy==2.3.0
