@@ -83,6 +83,41 @@ class TrainingModelLoader:
             device_map=self.config["model"].get("device_map", "auto"),
         )
 
+        # CORRECTIF (2026-07-23) — CAUSE RACINE confirmée par
+        # diagnose_lm_head_merge.py sur le modèle publié
+        # RemDev-AI/medical-triage-agent-ai-poc-merged : le lm_head du
+        # modèle "fusionné" servi en production s'est révélé
+        # quasi-identique (écart moyen ~2e-6) à celui du modèle de base
+        # Qwen3-1.7B-Base jamais fine-tuné, malgré modules_to_save=
+        # ["lm_head"] dans la config LoRA. Cause : Qwen3-1.7B-Base a
+        # tie_word_embeddings=True (lm_head partage son tenseur avec
+        # embed_tokens). Sans untie explicite AVANT get_peft_model(),
+        # PEFT ne peut pas traiter lm_head comme un module
+        # modules_to_save réellement indépendant — l'entraînement peut
+        # sembler se dérouler normalement (aucune erreur), mais
+        # adapter_model.safetensors ne contient alors AUCUNE clé
+        # modules_to_save pour lm_head (confirmé : 0 sur 393 clés dans
+        # le checkpoint actuel, la seule clé "lm_head" présente étant
+        # base_model.model.lm_head.weight, un alias non entraîné).
+        # Voir https://github.com/huggingface/peft/issues/2777.
+        #
+        # tie_word_embeddings=False force transformers à cloner
+        # embed_tokens en un lm_head.weight physiquement distinct dès le
+        # chargement, AVANT tout wrapping PEFT — condition nécessaire
+        # pour que modules_to_save=["lm_head"] fonctionne comme prévu et
+        # sauvegarde un poids fine-tuné réel, exploitable par
+        # merge_lora_adapter.py.
+        #
+        # CONTREPARTIE ASSUMÉE (mémoire) : embed_tokens et lm_head
+        # deviennent deux tenseurs distincts au lieu d'un seul partagé —
+        # pour ce modèle (vocab_size=151936, hidden_size=2048), cela
+        # ajoute environ 1.2 Go en float32 (moitié moins en fp16/bf16).
+        # Sur T4/Colab, déjà sujet à OOM d'après les correctifs
+        # OOM-1..OOM-6 présents dans train_dpo.py, ce surcoût mémoire
+        # doit être surveillé au prochain run (cf. audit dtype déjà en
+        # place, torch.cuda.memory_summary()).
+        load_kwargs["tie_word_embeddings"] = False
+
         resolved_dtype = self._resolve_torch_dtype()
 
         # FIX BF16/FP16 MISMATCH — torch_dtype DOIT être transmis même
@@ -177,14 +212,48 @@ class TrainingModelLoader:
             self._resolve_torch_dtype()
         )  # réutilise la logique custom validée # noqa: E501
 
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=model_name,
-            revision=self.config["model"].get("base_model_revision") or "main",
-            max_seq_length=max_seq_length,
-            # dtype=None,  # Unsloth choisit automatiquement bf16/fp16 selon le GPU  # noqa: E501
-            dtype=resolved_dtype,  # source unique de vérité, plus de dtype=None # noqa: E501
-            load_in_4bit=load_in_4bit,
-        )
+        # CORRECTIF (2026-07-23) — même cause racine que
+        # _prepare_with_transformers() ci-dessus (voir le commentaire
+        # détaillé sur load_kwargs["tie_word_embeddings"] = False) :
+        # sans untie explicite, modules_to_save=["lm_head"] ne produira
+        # jamais de poids fine-tuné réellement distinct, que ce soit via
+        # cette branche Unsloth ou la branche transformers native.
+        #
+        # FastLanguageModel.from_pretrained() n'est pas garanti
+        # d'accepter ce kwarg (dépend de la version d'unsloth) — on
+        # tente, et on ÉCHOUE BRUYAMMENT plutôt que de continuer
+        # silencieusement avec des embeddings tied si ce n'est pas
+        # supporté : un run d'entraînement complet (plusieurs heures sur
+        # Colab) pour reproduire le même bug serait bien plus coûteux
+        # qu'un échec immédiat et explicite ici.
+        try:
+            model, tokenizer = FastLanguageModel.from_pretrained(
+                model_name=model_name,
+                revision=self.config["model"].get("base_model_revision") or "main",
+                max_seq_length=max_seq_length,
+                dtype=resolved_dtype,  # source unique de vérité, plus de dtype=None # noqa: E501
+                load_in_4bit=load_in_4bit,
+                tie_word_embeddings=False,
+            )
+        except TypeError as exc:
+            raise RuntimeError(
+                "FastLanguageModel.from_pretrained() ne supporte pas le "
+                "paramètre tie_word_embeddings dans la version d'unsloth "
+                "installée. Ce paramètre est NÉCESSAIRE pour que "
+                "modules_to_save=['lm_head'] fonctionne correctement sur "
+                "un modèle base tie_word_embeddings=True (cf. "
+                "https://github.com/huggingface/peft/issues/2777) — "
+                "sans lui, le lm_head fine-tuné ne sera jamais sauvegardé "
+                "(bug déjà observé et confirmé sur le checkpoint "
+                "checkpoint-dpo-32). Mettre à jour unsloth, ou repasser "
+                "temporairement runtime.engine='transformers' (qui gère "
+                "ce untie nativement via AutoModelForCausalLM), ou untie "
+                "manuellement le modèle après chargement (model."
+                "lm_head.weight = torch.nn.Parameter(model.lm_head."
+                "weight.clone()) puis "
+                "model.config.tie_word_embeddings = False) avant "
+                "get_peft_model."
+            ) from exc
 
         # Le tokenizer chargé par Unsloth est stocké pour être récupéré
         # par training_tokenizer_loader.py si besoin (cohérence des

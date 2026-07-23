@@ -50,6 +50,14 @@ class AuditLoggingMiddleware(BaseHTTPMiddleware):
 
         request_id = str(uuid.uuid4())
 
+        # Exposé via request.state pour que les routes en aval
+        # (ex: triage.py) puissent corréler leurs propres entrées de
+        # traçabilité (ex: log clinique détaillé) avec cette entrée
+        # HTTP générique, via le même request_id. Sans ça, aucun
+        # recoupement n'est possible entre les deux journaux lors
+        # d'un audit.
+        request.state.request_id = request_id
+
         start_time = time.perf_counter()
 
         endpoint = request.url.path

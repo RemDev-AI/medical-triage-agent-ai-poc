@@ -23,6 +23,7 @@ un formulaire OAuth2PasswordRequestForm classique.
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
+import secrets
 
 from app.core.config import settings
 from app.core.security import Token, create_token_response
@@ -35,26 +36,70 @@ class TokenRequest(BaseModel):
         ..., min_length=1, description="Identifiant du client demandant un jeton"
     )
     access_key: str = Field(
-        ..., min_length=1, description="Clé d'accès partagée (API_ACCESS_KEY)"
+        ...,
+        min_length=1,
+        description=(
+            "Clé d'accès partagée. Utiliser API_ACCESS_KEY pour un "
+            "jeton scope='triage' (soumission de triages), ou "
+            "AUDIT_ACCESS_KEY pour un jeton scope='audit' (lecture "
+            "de GET /audit/ et GET /audit/clinical)."
+        ),
     )
+
+
+def _resolve_scope_for_access_key(access_key: str) -> str:
+    """
+    Détermine le scope à attribuer au JWT émis, en fonction de QUEL
+    secret configuré correspond à la clé présentée.
+
+    Volontairement PAS un champ "scope" fourni par le client dans
+    TokenRequest : le scope doit découler d'un secret que seul un
+    porteur autorisé connaît, jamais d'une simple déclaration côté
+    client (qui pourrait sinon s'auto-attribuer scope="audit" avec
+    la même clé standard API_ACCESS_KEY).
+
+    Comparaisons en temps constant (secrets.compare_digest) plutôt
+    que "==" : ces secrets protègent, in fine, l'accès à des données
+    patient (via scope="audit") — une comparaison naïve est
+    vulnérable à une attaque par mesure de temps, même si le risque
+    reste théorique pour un POC.
+    """
+
+    if secrets.compare_digest(access_key, settings.API_ACCESS_KEY):
+        return "triage"
+
+    if settings.AUDIT_ACCESS_KEY and secrets.compare_digest(
+        access_key, settings.AUDIT_ACCESS_KEY
+    ):
+        return "audit"
+
+    return ""
 
 
 @router.post("/token", response_model=Token, summary="Obtenir un jeton JWT d'accès")
 async def issue_token(payload: TokenRequest) -> Token:
     """
     Emet un JWT signé (HS256) permettant d'appeler les endpoints
-    protégés (ex. POST /triage) via 'Authorization: Bearer <jwt>'.
+    protégés via 'Authorization: Bearer <jwt>'.
 
-    Nécessite de fournir la clé d'accès configurée côté serveur
-    (variable d'environnement API_ACCESS_KEY), afin que la génération
-    de jetons ne soit pas ouverte à n'importe qui connaissant
-    simplement l'URL du Space.
+    Le scope du jeton émis (donc les endpoints accessibles) dépend
+    de la clé d'accès fournie :
+    - API_ACCESS_KEY  -> scope="triage"  (ex: POST /triage/)
+    - AUDIT_ACCESS_KEY -> scope="audit" (ex: GET /audit/,
+      GET /audit/clinical — données patient, à réserver au
+      personnel autorisé)
+
+    Nécessite de fournir l'une de ces clés configurées côté serveur,
+    afin que la génération de jetons ne soit pas ouverte à n'importe
+    qui connaissant simplement l'URL du Space.
     """
 
-    if payload.access_key != settings.API_ACCESS_KEY:
+    scope = _resolve_scope_for_access_key(payload.access_key)
+
+    if not scope:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid access key",
         )
 
-    return create_token_response(subject=payload.client_id)
+    return create_token_response(subject=payload.client_id, scope=scope)

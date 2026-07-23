@@ -4,7 +4,7 @@
 
 ✍️ **Auteur :** *[Raymond Francius]*    
 📚 **Rôle :** *[Apprenant - Promotion Sept-2025]* — **Engineer AI** — **Openclassrooms**   
-🗓️ **Date de mise à jour :** *[15-07-2026]*  
+🗓️ **Date de mise à jour :** *[21-07-2026]*  
 
 ---
 
@@ -31,27 +31,26 @@ frontend/  → Interface Streamlit
 
 ---
 
-*HF INFERENCE API URL :*
+| ![](images/Architecture_POC_Agent_Triage_Médical.png) |
+
+---
+
+*API URL Swagger :*
 ```bash
-https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space
+[https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space/docs](https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space/docs)
 ```
 
-*HF UI URL :*
+*HF MODELS URL :* 
 ```bash
-https://remdev-ai-medical-triage-agent-ai-poc-ui.hf.space
+[https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main/checkpoints](https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main/checkpoints)
 ```
 
-*HF MODELS URL :*
+*HF DATASETS URL :* 
 ```bash
-https://remdev-ai-medical-triage-agent-ai-poc-models.hf.space
+[https://huggingface.co/datasets/RemDev-AI/medical-triage-agent-ai-poc-datasets](https://huggingface.co/datasets/RemDev-AI/medical-triage-agent-ai-poc-datasets)
 ```
 
-*HF DATASETS URL :*
+*Notebook Colab - GPU T4 - Training Pipeline :*
 ```bash
-https://remdev-ai-medical-triage-agent-ai-poc-datasets.hf.space
-```
-
-*Google Notebook Colab GPU :*
-```bash
-https://github.com/RemDev-AI/medical-triage-agent-ai-poc/blob/main/backend/app/training/colab/training_pipeline_colab.ipynb
+[https://github.com/RemDev-AI/medical-triage-agent-ai-poc/blob/main/backend/app/training/colab/training_pipeline_colab.ipynb](https://github.com/RemDev-AI/medical-triage-agent-ai-poc/blob/main/backend/app/training/colab/training_pipeline_colab.ipynb)
 ```

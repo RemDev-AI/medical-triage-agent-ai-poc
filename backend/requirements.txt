@@ -24,10 +24,21 @@
 # se rabattre sur l'option A (requirements.txt, model_loader.py).
 # ==========================================================
 
-# Index PyTorch CPU : nécessaire pour que torch ET vllm
-# récupèrent leurs variantes CPU (pas les paquets nvidia-cuda-*).
+# Index PyTorch CPU : nécessaire pour que torch récupère sa
+# variante CPU (pas les paquets nvidia-cuda-*). NB : contrairement
+# à une version précédente de ce fichier, on N'UTILISE PAS
+# "https://wheels.vllm.ai/0.25.1/cpu" comme --extra-index-url :
+# ce chemin n'existe pas pour les releases taguées (seuls
+# wheels.vllm.ai/nightly/cpu et wheels.vllm.ai/<commit_hash>/cpu
+# sont documentés). De plus, pip (contrairement à uv) fusionne
+# --extra-index-url avec l'index par défaut PyPI et ne garantit
+# PAS de prioriser la variante CPU — c'est très probablement la
+# cause du wheel vLLM "vanilla" installé silencieusement en prod,
+# d'où l'AttributeError 'init_cpu_memory_env' observée au runtime.
+# Le wheel vLLM CPU est donc épinglé ci-dessous par URL directe
+# (méthode officiellement documentée pour les releases taguées),
+# ce qui élimine toute ambiguïté de résolution.
 --extra-index-url https://download.pytorch.org/whl/cpu
---extra-index-url https://wheels.vllm.ai/0.25.1/cpu
 
 # ==========================================================
 # CORE PYTHON
@@ -67,9 +78,35 @@ uvicorn[standard]
 # pour la version recommandée courante et son suffixe exact.
 
 # vllm==0.17.0
-vllm==0.25.1+cpu
+#
+# IMPORTANT : on n'utilise PAS "vllm==0.25.1+cpu" tel quel ici,
+# car pip a besoin d'un index qui expose EXACTEMENT cette chaîne
+# de version, et rien ne garantit qu'il ne préfère pas silencieusement
+# une variante "vanilla" trouvée sur PyPI. On épingle donc l'URL
+# directe du wheel manylinux CPU publié sur les releases GitHub de
+# vLLM (méthode documentée officiellement pour les releases taguées,
+# cf. https://docs.vllm.ai/en/latest/getting_started/installation/cpu/) :
+# tag cp38-abi3 = compatible toutes versions Python >= 3.8 (dont 3.12,
+# cf. image python:3.12-slim du Dockerfile) via l'ABI stable.
+# Si vous changez de version vLLM, remplacer l'URL entière ci-dessous
+# par celle correspondante trouvée dans les assets de la release
+# GitHub (https://github.com/vllm-project/vllm/releases/tag/v0.25.1).
+https://github.com/vllm-project/vllm/releases/download/v0.25.1/vllm-0.25.1+cpu-cp38-abi3-manylinux_2_34_x86_64.whl
 
-torch
+# NB : "torch" seul (sans indication de variante) est exposé à la
+# même ambiguïté de résolution pip que celle qui a cassé vllm plus
+# haut : PyPI propose une roue "torch" standard (avec dépendances
+# nvidia-cuda-*), et rien ne garantit que pip préfère la variante
+# CPU de --extra-index-url. En pratique le wheel vllm CPU épinglé
+# ci-dessus force généralement une version de torch compatible via
+# ses propres dépendances, mais pour lever toute ambiguïté :
+# ATTENTION : version alignée sur l'exigence exacte de
+# vllm==0.25.1+cpu (confirmée par le message d'erreur pip
+# "vllm 0.25.1+cpu depends on torch==2.11.0+cpu" obtenu lors
+# d'un précédent build en échec — ne pas repin une autre
+# version sans revérifier ce message si vous changez de
+# version de vllm.
+torch==2.11.0+cpu
 transformers
 sentencepiece
 safetensors

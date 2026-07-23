@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import time
 import unicodedata
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Request
 
 from app.api.schemas import (
     TriageRequest,
@@ -22,6 +24,9 @@ from app.llm.inference.triage_engine import TriageEngine
 
 from app.monitoring.alerting import (
     alert_manager,
+)
+from app.monitoring.audit_store import (
+    record_clinical_entry,
 )
 
 router = APIRouter(
@@ -68,7 +73,13 @@ def _normalize_priority(raw_value: str) -> str:
     """
 
     if not raw_value:
-        return "medium"
+        # SÉCURITÉ CLINIQUE (2026-07-21, cf. cahier des charges CHSA) :
+        # une valeur de priorité absente/vide ne doit jamais retomber
+        # sur "medium" — valeur médiane silencieuse qui peut masquer
+        # un cas critique. On escalade vers "urgent", cohérent avec
+        # TriageEngine.normalize_priority qui applique le même
+        # principe de précaution côté moteur (repli vers CRITIQUE).
+        return "urgent"
 
     normalized = unicodedata.normalize("NFKD", raw_value.strip().lower())
     normalized = "".join(c for c in normalized if not unicodedata.combining(c))
@@ -81,7 +92,9 @@ def _normalize_priority(raw_value: str) -> str:
             )
         except Exception:
             pass
-        return "medium"
+        # Idem : repli vers "urgent", jamais "medium", en cas de
+        # valeur de priorité non reconnue.
+        return "urgent"
 
     return _PRIORITY_MAPPING[normalized]
 
@@ -139,11 +152,21 @@ def _split_recommendations(raw: str) -> list[str]:
 )
 async def triage_route(
     payload: TriageRequest,
+    request: Request,
     triage_engine: TriageEngine = Depends(
         get_triage_engine,
     ),
 ):
     start_time = time.perf_counter()
+
+    # Corrélation avec le journal HTTP générique (cf.
+    # AuditLoggingMiddleware, qui expose désormais ce request_id via
+    # request.state). Repli sur "unknown" si jamais ce middleware
+    # n'était pas monté dans un contexte donné (ex: certains tests
+    # unitaires qui appellent la route sans passer par la stack
+    # middleware complète), pour ne jamais faire échouer le triage à
+    # cause de la traçabilité.
+    request_id = getattr(request.state, "request_id", "unknown")
 
     try:
 
@@ -178,6 +201,25 @@ async def triage_route(
         except Exception:
             pass
 
+        # Log clinique même en cas d'échec : un audit doit pouvoir
+        # voir qu'un patient a soumis une requête qui n'a JAMAIS
+        # obtenu de triage, pas seulement les requêtes réussies.
+        record_clinical_entry(
+            {
+                "request_id": request_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "patient_id": payload.patient_id,
+                "age": payload.age,
+                "symptoms": payload.symptoms,
+                "medical_history": payload.medical_history,
+                "priority_context": payload.priority_context,
+                "error": True,
+                "priority_level": None,
+                "confidence_score": None,
+                "requires_human_review": True,
+            }
+        )
+
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while processing the triage request.",
@@ -204,13 +246,45 @@ async def triage_route(
         "",
     )
 
-    return TriageResponse(
-        priority_level=_normalize_priority(
-            triage_data.get(
-                "priority",
-                "UNKNOWN",
-            ),
+    normalized_priority_level = _normalize_priority(
+        triage_data.get(
+            "priority",
+            "UNKNOWN",
         ),
+    )
+
+    raw_priority = triage_data.get("priority", "UNKNOWN")
+
+    # requires_human_review vient normalement de TriageEngine
+    # (cf. parse_response), mais on applique un défaut prudent à
+    # True si le champ est absent (ex: ancienne version du moteur
+    # qui ne le renvoie pas encore) plutôt qu'un défaut à False, qui
+    # masquerait silencieusement le besoin de revue.
+    requires_human_review = triage_data.get(
+        "requires_human_review",
+        True,
+    )
+
+    # Garde-fou supplémentaire, indépendant du moteur : si le
+    # mapping FR -> EN de la priorité a lui-même dû recourir à son
+    # propre fallback ("urgent" par défaut, cf. _normalize_priority
+    # ci-dessus), la revue humaine est requise ici aussi, même si le
+    # moteur avait — à tort ou à raison — jugé sa propre extraction
+    # suffisamment fiable.
+    if raw_priority:
+        _normalized_check = unicodedata.normalize(
+            "NFKD", str(raw_priority).strip().lower()
+        )
+        _normalized_check = "".join(
+            c for c in _normalized_check if not unicodedata.combining(c)
+        )
+        if _normalized_check not in _PRIORITY_MAPPING:
+            requires_human_review = True
+    else:
+        requires_human_review = True
+
+    triage_response = TriageResponse(
+        priority_level=normalized_priority_level,
         justification=_strip_confidential_leakage(justification_raw),
         recommendations=[
             _strip_confidential_leakage(item)
@@ -220,9 +294,45 @@ async def triage_route(
             "confidence_score",
             0.0,
         ),
+        requires_human_review=requires_human_review,
         generated_at=time.strftime("%Y-%m-%dT%H:%M:%S"),
         latency_seconds=round(
             latency_seconds,
             3,
         ),
     )
+
+    # Log clinique complet, corrélé au request_id du journal HTTP
+    # générique (cf. AuditLoggingMiddleware). Contient volontairement
+    # la sortie BRUTE du modèle (raw_response) en plus des champs
+    # parsés : en cas de désaccord clinique lors d'un audit, il faut
+    # pouvoir vérifier si l'erreur vient du modèle ou du parsing.
+    #
+    # NOTE : ce journal contient des données patient. Cf. limites
+    # d'usage documentées dans audit_store.py (stockage local, non
+    # répliqué) — à coordonner avec la politique RGPD existante
+    # (app/anonymization/audit_logger.py) avant tout déploiement
+    # au-delà du POC.
+    record_clinical_entry(
+        {
+            "request_id": request_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "patient_id": payload.patient_id,
+            "age": payload.age,
+            "symptoms": payload.symptoms,
+            "medical_history": payload.medical_history,
+            "priority_context": payload.priority_context,
+            "model_name": getattr(triage_engine, "model_name", "unknown"),
+            "raw_priority": raw_priority,
+            "priority_level": normalized_priority_level,
+            "justification": triage_response.justification,
+            "recommendations": triage_response.recommendations,
+            "confidence_score": triage_response.confidence_score,
+            "requires_human_review": triage_response.requires_human_review,
+            "raw_response": result.get("raw_response"),
+            "latency_seconds": triage_response.latency_seconds,
+            "error": False,
+        }
+    )
+
+    return triage_response
