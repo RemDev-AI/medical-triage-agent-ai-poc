@@ -109,7 +109,7 @@ passlib[bcrypt]
 # TESTING
 # ==========================================================
 
-pytest==9.0.3
+pytest==9.1.1
 pytest-asyncio
 pytest-cov>=6.0.0
 
