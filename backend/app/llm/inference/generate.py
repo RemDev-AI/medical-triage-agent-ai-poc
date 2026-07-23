@@ -113,7 +113,8 @@ async def generate_response(
 
     import torch  # lazy import — uniquement nécessaire sur ce chemin (non-vLLM)
 
-    prompt = _build_chat_prompt(
+    prompt = build_chat_prompt_with_tokenizer(
+        tokenizer=tokenizer,
         system_prompt=system_prompt,
         user_prompt=user_prompt,
     )
@@ -166,6 +167,20 @@ def _build_chat_prompt(
 ) -> str:
     """
     Build Qwen-compatible chat prompt.
+
+    ATTENTION (2026-07-22) : ceci est un gabarit ChatML FAIT MAIN,
+    utilisé uniquement en dernier recours (cf.
+    build_chat_prompt_with_tokenizer ci-dessous) si le tokenizer réel
+    du modèle n'expose aucun chat_template. Un modèle publié avec son
+    propre chat_template.jinja (comme _MERGED_MODEL_NAME) peut avoir
+    été fine-tuné sur un format sensiblement différent (rôles,
+    marqueurs spéciaux, sections système/outils) — imposer ce
+    gabarit générique à un tel modèle désynchronise le prompt du
+    format d'entraînement réel, et peut faire "glisser" la génération
+    vers des patterns appris hors-sujet une fois la réponse attendue
+    épuisée (observé en prod : dérive vers un faux dialogue
+    ".debugLineAssistant"/".debugLineUser" évoquant une requête SQL
+    sur l'historique patient, non filtrée par clean_response).
     """
 
     return (
@@ -177,6 +192,68 @@ def _build_chat_prompt(
         f"<|im_end|>\n"
         f"<|im_start|>assistant\n"
     )
+
+
+def build_chat_prompt_with_tokenizer(
+    tokenizer: Any,
+    system_prompt: str,
+    user_prompt: str,
+) -> str:
+    """
+    Construit le prompt via le VRAI chat_template du tokenizer
+    (tokenizer.apply_chat_template), plutôt que le gabarit ChatML
+    fait main de _build_chat_prompt.
+
+    Introduit suite à un bug observé en prod : le gabarit fait main
+    ne correspondait pas au chat_template.jinja réellement publié
+    avec le modèle fusionné (4.12 Ko — donc pas un simple ChatML),
+    ce qui pouvait faire dériver la génération vers des patterns de
+    formatage hors-sujet appris à l'entraînement (marqueurs de type
+    outil/debug), une fois la réponse attendue terminée.
+
+    Repli explicite (avec warning loggé, jamais silencieux) sur
+    _build_chat_prompt si :
+    - tokenizer est None (ex: appelant qui n'a pas encore de
+      tokenizer chargé) ;
+    - le tokenizer n'expose aucun chat_template ;
+    - apply_chat_template lève une exception pour toute autre
+      raison (template malformé, etc.).
+    """
+
+    if tokenizer is None or getattr(tokenizer, "chat_template", None) is None:
+        logger.warning(
+            "Aucun chat_template disponible sur le tokenizer : repli "
+            "sur le gabarit ChatML fait main (_build_chat_prompt). Le "
+            "format de prompt peut ne pas correspondre exactement à "
+            "celui utilisé lors du fine-tuning du modèle."
+        )
+        return _build_chat_prompt(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+    try:
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+    except Exception:
+        logger.exception(
+            "apply_chat_template a échoué — repli sur le gabarit "
+            "ChatML fait main (_build_chat_prompt). A investiguer : "
+            "ceci ne devrait normalement pas arriver si le "
+            "chat_template.jinja publié avec le modèle est valide."
+        )
+        return _build_chat_prompt(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+        )
 
 
 def clean_response(

@@ -12,21 +12,45 @@ cahier des charges :
 
 Approche retenue : intégration en process via
 AsyncLLMEngine (pas de serveur HTTP vLLM séparé).
-L'adaptateur LoRA chargé est la POLICY FINALE post-DPO
-(fichiers à la racine de
-checkpoints/dpo/checkpoint-dpo-32/), pas le sous-dossier
-"ref/" qui correspond au modèle de référence figé utilisé
-uniquement pour le calcul de la divergence KL pendant
-l'entraînement DPO — jamais un artefact de production.
 
-Le téléchargement de l'adaptateur est filtré (allow_patterns)
-pour ne récupérer que les fichiers utiles à l'inférence
-(adapter_config.json, adapter_model.safetensors, tokenizer*),
-et exclut explicitement les états d'entraînement
-(optimizer.pt, scheduler.pt, scaler.pt, rng_state.pth,
-training_args.bin, trainer_state.json) qui représentent
-l'essentiel du volume de chaque checkpoint (~3+ Go) et sont
-inutiles à l'inférence.
+CORRECTIF (2026-07-20) — MERGE OFFLINE AU LIEU DE LoRA DYNAMIQUE
+------------------------------------------------------------------
+Ce module chargeait auparavant le modèle de base
+(Qwen/Qwen3-1.7B-Base) puis l'adaptateur LoRA final post-DPO
+(checkpoints/dpo/checkpoint-dpo-32) dynamiquement via
+`enable_lora=True` + `LoRARequest`.
+
+Cette approche a été abandonnée car incompatible avec vLLM :
+l'adapter_config.json de ce checkpoint contient
+`"modules_to_save": ["lm_head"]` (lm_head entièrement fine-tuné,
+hors LoRA — probablement dû à des tokens spéciaux ajoutés avant
+le SFT/DPO). Or vLLM ne supporte pas ce mécanisme PEFT lors du
+chargement dynamique d'un adapter :
+
+    RuntimeError: Worker failed with error
+    'vLLM only supports modules_to_save being None.'
+
+Cette erreur ne se déclenchait pas au démarrage (le moteur
+s'initialisait normalement avec le seul modèle de base), mais au
+tout premier appel de génération, provoquant un `EngineDeadError`
+qui tuait définitivement l'EngineCore (toutes les requêtes
+suivantes échouaient, y compris sur des routes non concernées).
+
+Le correctif consiste à fusionner l'adaptateur (LoRA + lm_head)
+dans le modèle de base UNE FOIS, hors ligne
+(cf. scripts/merge_lora_adapter.py), et à publier le résultat sur
+un repo Hugging Face dédié (_MERGED_MODEL_NAME ci-dessous). Ce
+module sert désormais directement ce modèle fusionné, sans aucune
+dépendance à PEFT/LoRA au runtime :
+
+- Plus de `enable_lora`, plus de `LoRARequest`, plus de
+  téléchargement/filtrage d'adapter au démarrage du serveur.
+- Le modèle fusionné se comporte comme un modèle "normal" pour
+  vLLM : plus aucun risque lié à modules_to_save.
+- Contrepartie assumée : impossible de hot-swap plusieurs
+  adaptateurs sur ce serveur. Non pertinent ici (un seul
+  adaptateur, la policy finale post-DPO, jamais plusieurs
+  variantes servies en parallèle sur ce POC).
 
 IMPORTANT — BACKENDS SUPPORTÉS (GPU CUDA et CPU) :
 Ce module supporte deux backends vLLM :
@@ -56,7 +80,6 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from pathlib import Path
 from typing import Optional
 
 from app.deployment.huggingface.hf_space_runtime import (
@@ -64,51 +87,51 @@ from app.deployment.huggingface.hf_space_runtime import (
 )
 from app.llm.inference.generate import (
     clean_response,
-    _build_chat_prompt,
+    build_chat_prompt_with_tokenizer,
 )
 
 logger = logging.getLogger(__name__)
 
 _engine_lock = threading.Lock()
 _engine_instance = None
-_LORA_ADAPTER_NAME = "medical-triage-lora"
 
-# Modèle de base utilisé pour le fine-tuning
-# (cf. backend/app/training/sft/sft_config_validation.yaml,
-# clé model.base_model). Il s'agit d'un modèle public
-# Hugging Face, distinct du dépôt de résultats
-# RemDev-AI/medical-triage-agent-ai-poc-models (qui ne
-# contient QUE des adaptateurs LoRA, jamais les poids
-# complets du modèle de base).
-_BASE_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
+# Tokenizer chargé séparément du moteur vLLM. AsyncLLMEngine charge
+# bien SA PROPRE copie interne du tokenizer pour la tokenisation, mais
+# ne l'expose pas publiquement pour construire un prompt via
+# apply_chat_template — d'où ce singleton dédié, léger (le tokenizer
+# seul, sans les poids du modèle), chargé une fois via
+# transformers.AutoTokenizer pour accéder au vrai chat_template.jinja
+# publié avec _MERGED_MODEL_NAME. Introduit suite à un bug de dérive
+# de génération causé par un gabarit ChatML fait main désynchronisé
+# du format d'entraînement réel (cf. generate.py,
+# build_chat_prompt_with_tokenizer).
+_tokenizer_lock = threading.Lock()
+_tokenizer_instance = None
 
-# Sous-dossier du Hub contenant l'adaptateur LoRA final
-# (policy post-DPO). NE PAS pointer vers "ref/" : voir
-# docstring du module.
-_ADAPTER_SUBFOLDER = "checkpoints/dpo/checkpoint-dpo-32"
-
-# Fichiers strictement nécessaires à l'inférence pour cet
-# adaptateur. Exclut volontairement optimizer.pt,
-# scheduler.pt, scaler.pt, rng_state.pth, training_args.bin,
-# trainer_state.json (états d'entraînement, ~3+ Go/checkpoint,
-# jamais utiles au serving).
-_ADAPTER_ALLOW_PATTERNS = [
-    f"{_ADAPTER_SUBFOLDER}/adapter_config.json",
-    f"{_ADAPTER_SUBFOLDER}/adapter_model.safetensors",
-    f"{_ADAPTER_SUBFOLDER}/tokenizer.json",
-    f"{_ADAPTER_SUBFOLDER}/tokenizer_config.json",
-    f"{_ADAPTER_SUBFOLDER}/chat_template.jinja",
-]
-
-# Répertoire local de cache pour l'adaptateur téléchargé.
-# HF_HOME est déjà positionné sur /tmp/huggingface dans
-# Dockerfile.hf ; on isole l'adaptateur dans un sous-dossier
-# dédié pour rester explicite sur ce qui est téléchargé ici.
-_ADAPTER_LOCAL_CACHE_DIR = Path(
-    os.getenv(
-        "ADAPTER_LOCAL_CACHE_DIR", "/tmp/medical-triage-adapter"
-    )  # nosec B108 -- POC pédagogique, déployé dans un conteneur Hugging Face Space éphémère et isolé par run (pas de multi-tenant, pas de secrets sensibles à cet emplacement) ; le chemin est de toute façon surchageable via ADAPTER_LOCAL_CACHE_DIR en prod.
+# Modèle fusionné (base + adaptateur LoRA final post-DPO +
+# modules_to_save["lm_head"]), produit une seule fois hors ligne
+# par scripts/merge_lora_adapter.py et publié sur ce repo dédié.
+#
+# NE PLUS pointer vers le modèle de base nu (Qwen/Qwen3-1.7B-Base) :
+# ce module ne charge plus aucun adaptateur au runtime, servir la
+# base seule reviendrait à servir un modèle non fine-tuné.
+#
+# Remplacer par le repo réel une fois le merge effectué et poussé,
+# ex: "RemDev-AI/medical-triage-agent-ai-poc-merged". Surchargeable
+# via la variable d'environnement dédiée pour permettre de changer
+# de version fusionnée sans modifier le code.
+_MERGED_MODEL_NAME = os.getenv(
+    "MERGED_MODEL_REPOSITORY",
+    "RemDev-AI/medical-triage-agent-ai-poc-merged",
 )
+
+# Révision (commit SHA ou tag) du repo ci-dessus à charger.
+# Par défaut "main" pour ne pas casser le POC si aucune valeur n'est
+# fournie, mais fortement recommandé de surcharger cette variable
+# avec un SHA de commit figé une fois le modèle publié, pour éviter
+# qu'un futur push sur le repo HF ne change silencieusement le
+# modèle/tokenizer servi (cf. Bandit B615 / CWE-494).
+_MERGED_MODEL_REVISION = os.getenv("MERGED_MODEL_REVISION", "main")
 
 # Variables d'environnement qui, si présentes, signalent que le
 # backend CPU natif de vLLM a été explicitement configuré (cf.
@@ -122,72 +145,6 @@ _VLLM_CPU_BACKEND_ENV_MARKERS = (
     "VLLM_CPU_KVCACHE_SPACE",
     "VLLM_CPU_OMP_THREADS_BIND",
 )
-
-
-def _resolve_adapter_repository() -> str:
-    """
-    Retourne le repo_id Hugging Face (avec namespace) contenant
-    l'adaptateur LoRA final.
-
-    Le sous-dossier (checkpoints/dpo/checkpoint-dpo-32) est géré
-    séparément via _ADAPTER_SUBFOLDER / _ADAPTER_ALLOW_PATTERNS,
-    car un repo_id Hugging Face ne peut pas inclure de sous-chemin
-    collé (ex: "org/repo/sous-dossier" n'est PAS un repo_id valide).
-
-    runtime_config.model_repository doit inclure le namespace
-    complet, ex: "RemDev-AI/medical-triage-agent-ai-poc-models"
-    (cf. .env : HF_MODEL_REPOSITORY).
-    """
-
-    repo_id = runtime_config.model_repository
-
-    if "/" not in repo_id:
-        raise ValueError(
-            "HF_MODEL_REPOSITORY doit inclure le namespace complet "
-            f"(ex: 'RemDev-AI/medical-triage-agent-ai-poc-models'), "
-            f"valeur actuelle sans namespace : '{repo_id}'."
-        )
-
-    return repo_id
-
-
-def _ensure_adapter_downloaded() -> str:
-    """
-    Télécharge (si nécessaire) uniquement les fichiers d'inférence
-    de l'adaptateur LoRA final, et retourne le chemin local du
-    dossier contenant l'adaptateur (compatible LoRARequest, qui
-    attend un chemin filesystem, pas un repo_id + sous-dossier).
-    """
-
-    from huggingface_hub import snapshot_download
-
-    repo_id = _resolve_adapter_repository()
-
-    logger.info(
-        "Downloading inference-only adapter files from %s/%s "
-        "(training state files excluded)",
-        repo_id,
-        _ADAPTER_SUBFOLDER,
-    )
-
-    local_snapshot_dir = snapshot_download(
-        repo_id=repo_id,
-        allow_patterns=_ADAPTER_ALLOW_PATTERNS,
-        local_dir=str(_ADAPTER_LOCAL_CACHE_DIR),
-    )  # nosec B615 -- repo_id contrôlé par nous (RemDev-AI/medical-triage-agent-ai-poc-models, cf. HF_MODEL_REPOSITORY), pas d'entrée utilisateur ; épinglage de revision à ajouter avant tout passage en production (TODO: fixer ADAPTER_REVISION sur un commit SHA).
-
-    adapter_local_path = Path(local_snapshot_dir) / _ADAPTER_SUBFOLDER
-
-    if not (adapter_local_path / "adapter_model.safetensors").exists():
-        raise FileNotFoundError(
-            "adapter_model.safetensors introuvable après téléchargement "
-            f"filtré dans {adapter_local_path}. Vérifiez "
-            "_ADAPTER_SUBFOLDER et _ADAPTER_ALLOW_PATTERNS."
-        )
-
-    logger.info("Adapter ready at %s", adapter_local_path)
-
-    return str(adapter_local_path)
 
 
 def _is_vllm_cpu_backend_configured() -> bool:
@@ -218,7 +175,6 @@ def _assert_inference_backend_available() -> None:
     plus tard dans vLLM.
 
     (Anciennement `_assert_gpu_available`, qui exigeait
-
     inconditionnellement un GPU CUDA — trop strict pour ce POC,
     qui utilise volontairement les roues CPU natives de vLLM
     (cf. requirements.txt "OPTION B", Dockerfile) sur le tier
@@ -252,6 +208,51 @@ def _assert_inference_backend_available() -> None:
     )
 
 
+def get_vllm_tokenizer():
+    """
+    Retourne l'instance singleton du tokenizer associé à
+    _MERGED_MODEL_NAME, en la créant si nécessaire (lazy init,
+    thread-safe — même pattern que get_vllm_engine()).
+
+    Utilisé pour construire les prompts via le vrai chat_template du
+    modèle (cf. generate.build_chat_prompt_with_tokenizer), plutôt
+    que via un gabarit ChatML fait main potentiellement désynchronisé
+    du format d'entraînement réel.
+
+    Chargement volontairement séparé de get_vllm_engine() : le
+    tokenizer seul est nécessaire dès la construction du prompt,
+    avant même d'appeler engine.generate(), et ne doit pas dépendre
+    du chargement complet (lourd) du moteur vLLM.
+    """
+
+    global _tokenizer_instance
+
+    if _tokenizer_instance is not None:
+        return _tokenizer_instance
+
+    with _tokenizer_lock:
+
+        if _tokenizer_instance is not None:
+            return _tokenizer_instance
+
+        from transformers import AutoTokenizer
+
+        logger.info(
+            "Loading tokenizer for chat template resolution (model=%s)",
+            _MERGED_MODEL_NAME,
+        )
+
+        _tokenizer_instance = AutoTokenizer.from_pretrained(
+            _MERGED_MODEL_NAME,
+            revision=_MERGED_MODEL_REVISION,
+            trust_remote_code=True,
+        )
+
+        logger.info("Tokenizer loaded.")
+
+        return _tokenizer_instance
+
+
 def get_vllm_engine():
     """
     Retourne l'instance singleton d'AsyncLLMEngine,
@@ -262,6 +263,10 @@ def get_vllm_engine():
     génération, afin de ne jamais impacter le démarrage
     de l'API (health checks, /docs, tests unitaires) ni
     l'exécution de la CI (aucun GPU disponible).
+
+    Sert directement le modèle fusionné (_MERGED_MODEL_NAME) :
+    plus de LoRA dynamique, plus de dépendance PEFT au runtime
+    (cf. docstring du module pour le détail du correctif).
     """
 
     global _engine_instance
@@ -324,7 +329,6 @@ def get_vllm_engine():
         try:
             from vllm import AsyncEngineArgs
             from vllm import AsyncLLMEngine
-            from vllm.lora.request import LoRARequest  # noqa : F401
         except ImportError as exc:
             raise RuntimeError(
                 "vLLM n'est pas installé ou "
@@ -337,9 +341,9 @@ def get_vllm_engine():
         _assert_inference_backend_available()
 
         engine_kwargs = dict(
-            model=_BASE_MODEL_NAME,
-            enable_lora=True,
-            max_lora_rank=64,
+            model=_MERGED_MODEL_NAME,
+            revision=_MERGED_MODEL_REVISION,
+            tokenizer_revision=_MERGED_MODEL_REVISION,
             dtype="bfloat16",
             max_model_len=(
                 runtime_config.max_input_tokens + runtime_config.max_output_tokens
@@ -368,12 +372,9 @@ def get_vllm_engine():
 
         logger.info(
             "Initializing vLLM AsyncLLMEngine "
-            "(backend=%s, base_model=%s, adapter_repo=%s, "
-            "adapter_subfolder=%s, enable_lora=True)",
+            "(backend=%s, merged_model=%s, no dynamic LoRA)",
             "cpu" if is_cpu_backend else "cuda",
-            _BASE_MODEL_NAME,
-            _resolve_adapter_repository(),
-            _ADAPTER_SUBFOLDER,
+            _MERGED_MODEL_NAME,
         )
 
         _engine_instance = AsyncLLMEngine.from_engine_args(engine_args)
@@ -393,9 +394,8 @@ async def generate_response_vllm(
     request_id: Optional[str] = None,
 ) -> str:
     """
-    Génère une réponse via vLLM (AsyncLLMEngine),
-    en utilisant l'adaptateur LoRA final (policy post-DPO)
-    chargé dynamiquement (--enable-lora), sans merge.
+    Génère une réponse via vLLM (AsyncLLMEngine), en servant
+    directement le modèle fusionné (_MERGED_MODEL_NAME).
 
     Signature volontairement alignée sur
     generate.generate_response() (mêmes paramètres
@@ -405,14 +405,13 @@ async def generate_response_vllm(
     """
 
     from vllm import SamplingParams
-    from vllm.lora.request import LoRARequest
     import uuid
 
     engine = get_vllm_engine()
+    tokenizer = get_vllm_tokenizer()
 
-    adapter_local_path = _ensure_adapter_downloaded()
-
-    prompt = _build_chat_prompt(
+    prompt = build_chat_prompt_with_tokenizer(
+        tokenizer=tokenizer,
         system_prompt=system_prompt,
         user_prompt=user_prompt,
     )
@@ -424,12 +423,6 @@ async def generate_response_vllm(
         repetition_penalty=repetition_penalty,
     )
 
-    lora_request = LoRARequest(
-        _LORA_ADAPTER_NAME,
-        1,
-        adapter_local_path,
-    )
-
     resolved_request_id = request_id or str(uuid.uuid4())
 
     final_output = None
@@ -438,7 +431,6 @@ async def generate_response_vllm(
         prompt=prompt,
         sampling_params=sampling_params,
         request_id=resolved_request_id,
-        lora_request=lora_request,
     ):
         final_output = output
 

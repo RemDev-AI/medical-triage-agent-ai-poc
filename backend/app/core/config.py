@@ -35,6 +35,27 @@ class Settings(BaseSettings):
     API_ACCESS_KEY: str
 
     # ------------------------------------------------------------
+    # AUDIT_ACCESS_KEY
+    #
+    # Secret DISTINCT d'API_ACCESS_KEY, requis pour obtenir un JWT
+    # avec scope="audit" (accès à GET /audit/ et GET /audit/clinical,
+    # qui expose des données patient). Volontairement séparé
+    # d'API_ACCESS_KEY : le scope d'un jeton est déterminé par QUEL
+    # secret a été présenté à POST /auth/token, jamais par une simple
+    # déclaration du client — sinon n'importe qui connaissant la clé
+    # d'accès standard pourrait s'auto-attribuer l'accès aux données
+    # patient du journal clinique.
+    #
+    # Optional[str] = None (plutôt que requis comme API_ACCESS_KEY) :
+    # reste rétrocompatible avec les déploiements existants qui n'ont
+    # pas encore ce secret dans leurs variables d'environnement /
+    # Secrets HF. Tant qu'il n'est pas défini, POST /auth/token
+    # refuse explicitement d'émettre des jetons scope="audit" (voir
+    # routes/auth.py) plutôt que de se dégrader silencieusement vers
+    # un comportement non sécurisé.
+    AUDIT_ACCESS_KEY: str | None = None
+
+    # ------------------------------------------------------------
     # ALLOWED_ORIGINS
     #
     # Valeur par défaut couvrant le développement local (Streamlit
