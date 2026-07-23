@@ -102,11 +102,11 @@ https://github.com/vllm-project/vllm/releases/download/v0.25.1/vllm-0.25.1+cpu-c
 # ses propres dépendances, mais pour lever toute ambiguïté :
 # ATTENTION : version alignée sur l'exigence exacte de
 # vllm==0.25.1+cpu (confirmée par le message d'erreur pip
-# "vllm 0.25.1+cpu depends on torch==2.11.0+cpu" obtenu lors
+# "vllm 0.25.1+cpu depends on torch==2.12.1+cpu" obtenu lors
 # d'un précédent build en échec — ne pas repin une autre
 # version sans revérifier ce message si vous changez de
 # version de vllm.
-torch==2.11.0+cpu
+torch==2.12.1+cpu
 transformers
 sentencepiece
 safetensors
