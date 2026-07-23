@@ -2,17 +2,35 @@
 # medical-triage-agent-ai-poc/.github/dependabot.yml
 # ==========================================================
 
-# MODE POC : toutes les mises à jour automatiques sont bloquées.
-# `open-pull-requests-limit: 0` empêche Dependabot d'ouvrir la
-# moindre PR (version updates ET security updates) sur chaque
+# MODE POC : toutes les mises à jour automatiques (version updates)
+# sont bloquées via open-pull-requests-limit: 0, pour chaque
 # écosystème ci-dessous, afin d'éviter les échecs de workflow
 # CI/CD bloquants (Trivy gate, ResolutionImpossible pip, etc.)
 # sur un projet qui n'est pas destiné à la production.
+#
+# ⚠️ IMPORTANT — LIMITE DE CE FICHIER ⚠️
+# `open-pull-requests-limit: 0` ne bloque QUE les "version updates"
+# (le cycle planifié `schedule.interval`). Il ne bloque PAS les
+# "security updates" (job Dependabot déclenché automatiquement par
+# une Security Advisory GitHub, indépendamment de ce fichier).
+# C'est ce second mécanisme qui a échoué avec l'erreur
+# "all_versions_ignored" : Dependabot a tenté de traiter une alerte
+# de sécurité sur `setuptools`, a vu que TOUTES les versions sont
+# ignorées ci-dessous (`>= 0`), et a levé une erreur au lieu de
+# simplement ignorer silencieusement.
+#
+# ==> Pour bloquer réellement les security updates (et donc arrêter
+#     ce message d'erreur), il faut désactiver la fonctionnalité au
+#     niveau du dépôt, PAS dans ce fichier :
+#     Settings > Code security > Dependabot > "Dependabot security
+#     updates" > Disable.
+#     (Ce réglage est indépendant de dependabot.yml.)
+#
 # Les scans Trivy restent actifs dans docker-build-push.yml
-# (rapport SARIF non-bloquant + gate documenté via .trivyignore)
-# pour garder une visibilité sur les CVE sans PR intempestives.
-# TODO : repasser à des limites normales (5) si ce POC évolue
-# vers un projet maintenu en continu.
+# (rapport SARIF non-bloquant) pour garder une visibilité sur les
+# CVE sans PR ni échec de job intempestifs.
+# TODO : repasser à des limites normales (5) + réactiver les
+# security updates si ce POC évolue vers un projet maintenu en continu.
 
 version: 2
 updates:

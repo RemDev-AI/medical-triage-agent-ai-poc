@@ -36,21 +36,14 @@ frontend/  → Interface Streamlit
 ---
 
 *API URL Swagger :*
-```bash
 [https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space/docs](https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space/docs)
-```
 
 *HF MODELS URL :* 
-```bash
 [https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main/checkpoints](https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main/checkpoints)
-```
 
 *HF DATASETS URL :* 
-```bash
 [https://huggingface.co/datasets/RemDev-AI/medical-triage-agent-ai-poc-datasets](https://huggingface.co/datasets/RemDev-AI/medical-triage-agent-ai-poc-datasets)
-```
+
 
 *Notebook Colab - GPU T4 - Training Pipeline :*
-```bash
 [https://github.com/RemDev-AI/medical-triage-agent-ai-poc/blob/main/backend/app/training/colab/training_pipeline_colab.ipynb](https://github.com/RemDev-AI/medical-triage-agent-ai-poc/blob/main/backend/app/training/colab/training_pipeline_colab.ipynb)
-```
