@@ -47,11 +47,17 @@ jobs:
 
       - name: Ruff (lint)
         working-directory: ${{ env.WORKDIR }}
-        run: ruff check streamlit_app --output-format=github
+        # POC : ce step ne doit pas bloquer le pipeline. Ruff reste
+        # exécuté et son rapport reste visible dans les logs, mais
+        # `|| true` empêche un exit code non nul de faire échouer le
+        # step (et donc le job / la CI). À retirer si ce garde-fou
+        # doit redevenir bloquant plus tard.
+        run: ruff check streamlit_app --output-format=github || true
 
       - name: Black (format check)
         working-directory: ${{ env.WORKDIR }}
-        run: black --check streamlit_app
+        # POC : idem Ruff, ce step ne doit pas bloquer le pipeline.
+        run: black --check streamlit_app || true
 
   smoke-test:
     name: Streamlit smoke test

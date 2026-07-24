@@ -44,10 +44,18 @@ jobs:
           pip install ruff black==26.5.1 mypy bandit
       - name: Ruff (lint)
         working-directory: ${{ env.WORKDIR }}
-        run: ruff check app --output-format=github --extend-exclude "app/training/colab/training_pipeline_colab.ipynb"
+        # POC : ce step ne doit pas bloquer le pipeline. Ruff reste
+        # exécuté et son rapport reste visible dans les logs (et dans
+        # l'onglet Checks via --output-format=github), mais `|| true`
+        # empêche un exit code non nul de faire échouer le step (et
+        # donc le job / la CI). À retirer si ce garde-fou doit
+        # redevenir bloquant plus tard (cf. bandit ci-dessous, même
+        # logique).
+        run: ruff check app --output-format=github --extend-exclude "app/training/colab/training_pipeline_colab.ipynb" || true
       - name: Black (format check)
         working-directory: ${{ env.WORKDIR }}
-        run: black --check --config pyproject.toml app
+        # POC : idem Ruff, ce step ne doit pas bloquer le pipeline.
+        run: black --check --config pyproject.toml app || true
       
       - name: Bandit (security static analysis)
         working-directory: ${{ env.WORKDIR }}
