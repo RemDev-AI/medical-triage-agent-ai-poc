@@ -221,7 +221,19 @@ class SafetyFilter:
         )
 
     def is_safe(self, example: Dict) -> bool:
-        for field in ("chosen", "rejected", "prompt"):
+        # FIX DPO-SAFETY — en DPO, "rejected" est SUPPOSÉ contenir la
+        # réponse dangereuse/à éviter : c'est justement en pénalisant ces
+        # réponses (chosen préférée à rejected) que le modèle apprend à
+        # ne pas les produire. Écarter l'exemple parce que "rejected"
+        # matche un keyword dangereux revient à retirer du dataset
+        # exactement les paires les plus utiles à l'alignement sécurité,
+        # et peut vider silencieusement une grande partie du dataset DPO
+        # de sécurité (voir dpo_config_validation.yaml [safety]).
+        # Seul "chosen" (la réponse que le modèle doit apprendre à
+        # préférer) et "prompt" doivent déclencher l'exclusion : si l'un
+        # d'eux contient un keyword dangereux, c'est un défaut
+        # d'étiquetage des données, pas un signal DPO valide.
+        for field in ("chosen", "prompt"):
             text = example.get(field, "").lower()
             for kw in self.blocked:
                 if kw.lower() in text:

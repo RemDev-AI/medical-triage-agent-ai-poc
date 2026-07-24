@@ -1345,7 +1345,15 @@ if __name__ == "__main__":
             generated_responses=qcm_generated_responses,
             safe_predictions=safe_predictions,
             dataset_split="clinical_eval",
-            model_revision=hub_model_id,
+            # FIX EVAL-REVISION — hub_model_id est l'identifiant du repo
+            # ("RemDev-AI/medical-triage-agent-ai-poc-models"), pas une
+            # révision. Le transmettre ici à model_revision cassait la
+            # traçabilité voulue par dpo_config_validation.yaml
+            # (model.hub_revision) : le rapport d'évaluation enregistrait
+            # le nom du repo au lieu du commit SHA/"main" réellement
+            # évalué, rendant impossible de savoir quelle version exacte
+            # du modèle a produit ces métriques.
+            model_revision=hub_model_revision,
             metadata={
                 "full_dataset_size": len(dataset_records),
                 "qcm_subset_size": len(qcm_predictions),

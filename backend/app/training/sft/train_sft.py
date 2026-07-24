@@ -165,7 +165,14 @@ def load_dataset_source(split: str) -> Dataset:
 
     hf_repo = dataset_config.get("hf_repo")
     hf_config = dataset_config.get("hf_config", "sft")
-    hf_revision = dataset_config.get("hf_revision", "main")
+    # .get(clé, "main") ne se replie que si la clé est ABSENTE ; ici la clé
+    # existe dans le yaml avec une valeur vide ("hf_revision: \"\""), donc
+    # sans le "or 'main'" on transmettrait revision="" à load_dataset(),
+    # qui échoue avec un message trompeur de type "connexion Internet"
+    # (LocalEntryNotFoundError) au lieu d'une erreur de config claire.
+    # -> même correctif que celui déjà appliqué à base_model_revision dans
+    # training_model_loader.py.
+    hf_revision = dataset_config.get("hf_revision") or "main"
 
     if hf_repo:
         dataset = load_hf_dataset(
