@@ -535,18 +535,27 @@ def train(publish_to_hf: bool = False):  # False par défaut en validation
         #    -> publié sous sft-final/ (PAS la racine), PUIS supprimé
         #    localement.
         #
-        # FIX HUB-COLLISION — la stratégie de déploiement confirme qu'un
-        # Hugging Face Space API (RemDev-AI/medical-triage-agent-ai-poc-api)
-        # charge directement la RACINE de hub_model_id en production.
-        # Cette racine doit donc être réservée au modèle FINAL DPO
-        # (train_dpo.py), pas au modèle SFT intermédiaire. Avant ce
-        # correctif, les deux scripts poussaient vers la racine et le
-        # second (DPO, exécuté après SFT dans le pipeline) écrasait
-        # silencieusement les fichiers du premier. sft-final/ conserve
-        # une trace du modèle SFT pur, exigée par la mission
-        # ("garder une traçabilité... checkpoints pour la reprise de
-        # l'entraînement").
-        SFT_FINAL_MODEL_REMOTE_PREFIX = "sft-final"
+        # FIX HUB-COLLISION — le Space HF de prod
+        # (RemDev-AI/medical-triage-agent-ai-poc-api) charge le modèle final
+        # DPO en production (voir train_dpo.py :
+        # DPO_FINAL_MODEL_REMOTE_PREFIX = "dpo/final"). Le modèle SFT
+        # intermédiaire ne doit donc jamais partager ce chemin.
+        #
+        # FIX STRUCTURE-1 (audit renommage 2026-07-24) — remplace l'ancien
+        # préfixe "sft-final" (plat, sans lien visuel avec
+        # "checkpoints/sft/") par "sft/final", symétrique à :
+        #   - checkpoints/sft/checkpoint-sft-<N>/   (checkpoints intermédiaires)
+        #   - sft/final/                            (modèle final, ce préfixe)
+        # et aligné sur le préfixe DPO équivalent "dpo/final"
+        # (cf. train_dpo.py). "sft" / "dpo" sont désormais le premier
+        # segment du chemin, partout sur le repo.
+        #
+        # NOTE MIGRATION — les runs déjà publiés sous "sft-final/" ne sont
+        # PAS déplacés automatiquement (upload_folder ne renomme pas un
+        # chemin existant sur le Hub). Prévoir un renommage ponctuel
+        # (move_repo_file / nouveau run) pour faire disparaître l'ancien
+        # "sft-final/".
+        SFT_FINAL_MODEL_REMOTE_PREFIX = "sft/final"
 
         logger.info(
             "Publication du modèle final SFT sur Hugging Face "

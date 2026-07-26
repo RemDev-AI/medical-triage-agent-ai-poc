@@ -208,7 +208,13 @@ class ColabCheckpointSync:
 
         remote_name = self._build_remote_checkpoint_name(checkpoint_path)
 
-        remote_dir = "checkpoints/" f"{self.training_type}/" f"{remote_name}"
+        # FIX STRUCTURE-4 (audit renommage 2026-07-24) — "checkpoints/"
+        # était jusqu'ici le premier segment (checkpoints/sft/...,
+        # checkpoints/dpo/...), alors que le reste du repo est désormais
+        # organisé avec le type d'entraînement en premier segment
+        # (sft/final, dpo/final — cf. train_sft.py/train_dpo.py). Aligné
+        # ici : {training_type}/checkpoints/{remote_name}.
+        remote_dir = f"{self.training_type}/checkpoints/{remote_name}"
 
         try:
 
@@ -316,14 +322,17 @@ class ColabCheckpointSync:
 
         Repository layout:
 
-        checkpoints/
-            sft/
+        sft/
+            checkpoints/
                 checkpoint-sft-500/
                 checkpoint-sft-1000/
+            final/
 
-            dpo/
+        dpo/
+            checkpoints/
                 checkpoint-dpo-500/
                 checkpoint-dpo-1000/
+            final/
 
         Returns
         -------
@@ -341,7 +350,7 @@ class ColabCheckpointSync:
                 repo_type="model",
             )
 
-            prefix = f"checkpoints/{self.training_type}/"
+            prefix = f"{self.training_type}/checkpoints/"
 
             checkpoint_dirs = set()
 

@@ -1,3 +1,5 @@
+# medical-triage-agent-ai-poc/backend/scripts/diagnose_lm_head_merge.py
+
 """
 diagnose_lm_head_merge.py
 
@@ -5,7 +7,9 @@ Objectif
 --------
 Vérifier, de façon définitive, l'hypothèse suivante :
 
-    "Le checkpoint adapter (checkpoints/dpo/checkpoint-dpo-32) n'a
+    "Le checkpoint adapter (à l'origine checkpoints/dpo/checkpoint-dpo-32,
+    diagnostic historique — ce script résout désormais toujours le
+    DERNIER checkpoint DPO disponible sur le Hub) n'a
     JAMAIS réellement sauvegardé de poids lm_head distinct dans
     adapter_model.safetensors (bug connu de PEFT avec
     tie_word_embeddings=True, cf. peft#2777), donc
@@ -56,8 +60,16 @@ import sys
 
 BASE_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
 ADAPTER_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
-ADAPTER_SUBFOLDER = "checkpoints/dpo/checkpoint-dpo-32"
 MERGED_MODEL_NAME = "RemDev-AI/medical-triage-agent-ai-poc-merged"
+
+# FIX STRUCTURE-5 (audit cohérence 2026-07-25) — pointe désormais sur
+# dpo/final/ par défaut, exactement comme merge_lora_adapter.py (voir
+# ce fichier pour l'explication complète : dpo/final/ est le MEILLEUR
+# checkpoint selon eval_loss — load_best_model_at_end=True — pas
+# forcément le dernier checkpoint-dpo-<N> intermédiaire). Modifier
+# cette constante manuellement pour diagnostiquer un checkpoint
+# intermédiaire précis à la place.
+ADAPTER_SUBFOLDER = "dpo/final"
 
 # Tolérance pour la comparaison de tenseurs en bfloat16 (le cast
 # fp32 -> bf16 lors de la sauvegarde du modèle fusionné introduit un
@@ -259,6 +271,8 @@ def step2_compare_lm_head_weights() -> None:
 
 
 def main() -> int:
+
+    print(f"Checkpoint DPO ciblé : {ADAPTER_SUBFOLDER}\n")
 
     all_keys = step1_list_adapter_keys()
 

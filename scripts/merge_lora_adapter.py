@@ -1,8 +1,9 @@
 # medical-triage-agent-ai-poc/backend/scripts/merge_lora_adapter.py
 
 """
-Fusionne l'adaptateur LoRA final (policy post-DPO,
-checkpoints/dpo/checkpoint-dpo-32) dans le modèle de base
+Fusionne l'adaptateur LoRA final (policy post-DPO, dpo/final/ par
+défaut — le meilleur checkpoint selon eval_loss, sauvegardé en fin de
+run par train_dpo.py) dans le modèle de base
 Qwen/Qwen3-1.7B-Base, puis publie le modèle fusionné complet
 sur un nouveau repo Hugging Face.
 
@@ -145,7 +146,66 @@ def _resolve_hf_token(explicit_env_var: str | None) -> str | None:
 # exactement l'adapter actuellement servi en production.
 BASE_MODEL_NAME = "Qwen/Qwen3-1.7B-Base"
 ADAPTER_REPO_ID = "RemDev-AI/medical-triage-agent-ai-poc-models"
-ADAPTER_SUBFOLDER = "checkpoints/dpo/checkpoint-dpo-32"
+
+# FIX STRUCTURE-4 (audit renommage 2026-07-24) — chemin aligné sur le
+# nouveau schéma {training_type}/checkpoints/... (cf.
+# colab_checkpoint_sync.py). Ancien chemin : checkpoints/dpo/....
+DPO_CHECKPOINTS_PREFIX = "dpo/checkpoints/"
+
+# FIX STRUCTURE-5 (audit cohérence 2026-07-25) — pointe désormais sur
+# dpo/final/ (le modèle sauvegardé en fin de run par train_dpo.py, avec
+# load_best_model_at_end=True — donc le MEILLEUR checkpoint selon
+# eval_loss), et non plus sur un checkpoint-dpo-<N> intermédiaire
+# arbitraire sous dpo/checkpoints/. Un checkpoint intermédiaire n'est
+# pas garanti être le meilleur modèle du run : "dernier sauvegardé"
+# (numéro de step le plus élevé) ≠ "meilleur" dès que
+# load_best_model_at_end=True restaure un checkpoint antérieur en fin
+# d'entraînement. dpo/final/ est un chemin stable : plus besoin de
+# résoudre dynamiquement un numéro de step.
+DEFAULT_ADAPTER_SUBFOLDER = "dpo/final"
+
+ADAPTER_SUBFOLDER: str | None = None
+
+
+def resolve_latest_dpo_checkpoint(adapter_repo_id: str) -> str:
+    """
+    Repli de secours (utilisé seulement si --adapter-subfolder=intermediate
+    est explicitement demandé) : retourne le sous-dossier du dernier
+    checkpoint DPO INTERMÉDIAIRE disponible sur le Hub (ex:
+    "dpo/checkpoints/checkpoint-dpo-47"). Ce n'est PAS le comportement
+    par défaut — voir DEFAULT_ADAPTER_SUBFOLDER ci-dessus pour pourquoi
+    "dernier" n'est pas la même chose que "meilleur"/"final".
+    """
+    from huggingface_hub import HfApi
+
+    api = HfApi()
+    files = api.list_repo_files(repo_id=adapter_repo_id, repo_type="model")
+
+    checkpoint_dirs = set()
+    for file in files:
+        if not file.startswith(DPO_CHECKPOINTS_PREFIX):
+            continue
+        parts = file.split("/")
+        if len(parts) >= 3:
+            checkpoint_dirs.add(parts[2])
+
+    if not checkpoint_dirs:
+        raise RuntimeError(
+            f"Aucun checkpoint DPO trouvé sous "
+            f"{adapter_repo_id}/{DPO_CHECKPOINTS_PREFIX} — impossible de "
+            "résoudre le dernier checkpoint intermédiaire."
+        )
+
+    latest_name = max(
+        checkpoint_dirs, key=lambda name: int(name.split("-")[-1])
+    )
+    resolved = f"{DPO_CHECKPOINTS_PREFIX}{latest_name}"
+    logger.info(
+        "Dernier checkpoint DPO intermédiaire résolu : %s "
+        "(mode --adapter-subfolder=intermediate explicitement demandé)",
+        resolved,
+    )
+    return resolved
 
 
 def parse_args() -> argparse.Namespace:
@@ -163,9 +223,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--adapter-subfolder",
-        default=ADAPTER_SUBFOLDER,
-        help="Sous-dossier de l'adaptateur final post-DPO "
-        "(défaut : %(default)s). NE PAS pointer vers 'ref/'.",
+        default=None,
+        help="Sous-dossier de l'adaptateur à fusionner. Par défaut "
+        f"(non fourni) : {DEFAULT_ADAPTER_SUBFOLDER!r} (le modèle final "
+        "post-DPO, meilleur checkpoint selon eval_loss). Passer la "
+        "valeur spéciale 'intermediate' pour résoudre automatiquement "
+        "le dernier checkpoint-dpo-<N> intermédiaire sous "
+        f"{DPO_CHECKPOINTS_PREFIX!r} à la place (débogage/reproduction "
+        "d'un merge passé), ou un chemin explicite pour figer un "
+        "checkpoint précis. NE PAS pointer vers 'ref/'.",
     )
     parser.add_argument(
         "--output-dir",
@@ -439,6 +505,23 @@ def main() -> None:
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from peft import PeftModel
+
+    if args.adapter_subfolder is None:
+        args.adapter_subfolder = DEFAULT_ADAPTER_SUBFOLDER
+        logger.info(
+            "--adapter-subfolder non fourni : utilisation du modèle "
+            "final post-DPO (%s).",
+            args.adapter_subfolder,
+        )
+    elif args.adapter_subfolder == "intermediate":
+        args.adapter_subfolder = resolve_latest_dpo_checkpoint(
+            args.adapter_repo_id
+        )
+    else:
+        logger.info(
+            "Checkpoint figé explicitement via --adapter-subfolder=%s.",
+            args.adapter_subfolder,
+        )
 
     logger.info("Base model: %s", args.base_model)
     logger.info(

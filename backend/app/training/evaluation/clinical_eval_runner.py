@@ -280,10 +280,20 @@ def push_evaluation_reports_to_huggingface(
     report_bundle: Dict[str, Any],
     model_name: str,
     hub_model_id: str = DEFAULT_HF_MODELS_REPO_ID,
+    # FIX STRUCTURE-3 (audit renommage 2026-07-24) — "evaluation_reports/"
+    # était le seul dossier du repo sans préfixe "sft"/"dpo", alors que
+    # tout le reste (checkpoints/, et désormais sft/final, dpo/final) est
+    # organisé par type d'entraînement. training_type nomme ce premier
+    # segment explicitement plutôt que de le coder en dur : aujourd'hui
+    # ce module n'évalue que le modèle DPO (evaluate_model() est appelé
+    # exclusivement avec dpo_config plus bas dans ce fichier), donc
+    # "dpo" reste la valeur par défaut. Si une évaluation SFT est ajoutée
+    # un jour, il suffira de passer training_type="sft" à l'appel.
+    training_type: str = "dpo",
 ) -> None:
     """
     Publie les rapports JSON/Markdown générés par generate_reports() sur
-    le dépôt Hugging Face, sous evaluation_reports/{model_name}/.
+    le dépôt Hugging Face, sous {training_type}/evaluation_reports/{model_name}/.
 
     Piloté par evaluation_config.yaml :
     - hf_hub.enabled : coupe-circuit global, aucun appel réseau si False.
@@ -343,7 +353,7 @@ def push_evaluation_reports_to_huggingface(
     from huggingface_hub import HfApi
 
     hf_api = HfApi()
-    remote_prefix = f"evaluation_reports/{model_name}/"
+    remote_prefix = f"{training_type}/evaluation_reports/{model_name}/"
 
     try:
         for kind, local_path in files_to_upload.items():
