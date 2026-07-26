@@ -350,21 +350,51 @@ def patch_tokenizer_config_if_malformed(
     extra_special = cfg.get("extra_special_tokens")
     if isinstance(extra_special, list):
         if extra_special:
-            # Liste non vide : on ne sait pas mapper vers des clés,
-            # on refuse de deviner silencieusement.
-            raise ValueError(
-                "tokenizer_config.json a un champ 'extra_special_tokens' "
-                f"non vide sous forme de liste ({extra_special!r}) : "
-                "impossible de le convertir automatiquement en dict. "
-                "Corrige ce fichier manuellement avant de continuer."
+            # Liste non vide : ce format provient d'environnements
+            # d'entraînement Qwen (2-VL/2.5-VL/3-VL) plus anciens qui
+            # sérialisaient `extra_special_tokens` comme une simple liste
+            # de chaînes au lieu du dict {nom_logique: token} attendu par
+            # les versions récentes de `transformers`. La convention de
+            # nommage Qwen pour ce champ consiste à retirer les
+            # délimiteurs "<|" / "|>" du token pour obtenir le nom de la
+            # clé (ex. "<|im_start|>" -> "im_start"), comme on peut le
+            # vérifier sur des tokenizer_config.json Qwen3 corrigés de la
+            # même façon sur le Hub (même liste de 13 tokens que celle
+            # rencontrée ici : im_start/im_end, object_ref_start/end,
+            # box_start/end, quad_start/end, vision_start/end/pad,
+            # image_pad, video_pad). On applique donc cette conversion
+            # automatique plutôt que d'exiger une correction manuelle.
+            if not all(
+                isinstance(tok, str) and tok.startswith("<|") and tok.endswith("|>")
+                for tok in extra_special
+            ):
+                raise ValueError(
+                    "tokenizer_config.json a un champ 'extra_special_tokens' "
+                    f"non vide sous forme de liste ({extra_special!r}) dont "
+                    "les éléments ne suivent pas le format Qwen attendu "
+                    "('<|nom|>') : impossible de le convertir "
+                    "automatiquement en dict. Corrige ce fichier "
+                    "manuellement avant de continuer."
+                )
+            converted = {tok[2:-2]: tok for tok in extra_special}
+            logger.warning(
+                "Patching malformed 'extra_special_tokens' (list -> dict, "
+                "%d tokens converti(s) via la convention Qwen "
+                "'<|nom|>' -> {'nom': '<|nom|>'}) in cached "
+                "tokenizer_config.json (%s).",
+                len(converted),
+                cfg_path,
             )
-        logger.warning(
-            "Patching malformed 'extra_special_tokens' (empty list -> "
-            "empty dict) in cached tokenizer_config.json (%s).",
-            cfg_path,
-        )
-        cfg["extra_special_tokens"] = {}
-        patched = True
+            cfg["extra_special_tokens"] = converted
+            patched = True
+        else:
+            logger.warning(
+                "Patching malformed 'extra_special_tokens' (empty list -> "
+                "empty dict) in cached tokenizer_config.json (%s).",
+                cfg_path,
+            )
+            cfg["extra_special_tokens"] = {}
+            patched = True
 
     if patched:
         with open(cfg_path, "w", encoding="utf-8") as f:
