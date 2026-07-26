@@ -1,4 +1,4 @@
-# 🏥🤖 Projet 14 - Finetunez votre propre LLM 
+# 🏥🤖 Projet 14 - Finetunez votre propre LLM
 
 **Mission - Développez le POC d'un agent de triage médical**
 
