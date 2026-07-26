@@ -1144,12 +1144,27 @@ if __name__ == "__main__":
         # AutoPeftModelForCausalLM suppose que hub_model_id contient un
         # adapter LoRA (adapter_config.json + adapter_model.safetensors) —
         # cohérent avec lora.target_modules dans dpo_config_validation.yaml.
-        # La racine de hub_model_id est réservée au modèle DPO de production
-        # (cf. FIX HUB-COLLISION dans train_sft.py/train_dpo.py) — le modèle
-        # SFT intermédiaire est publié séparément sous sft-final/, donc plus
-        # de risque d'écrasement ici.
+        #
+        # FIX EVAL-11 (suite au FIX STRUCTURE-2 de train_dpo.py) — le
+        # commentaire précédent ("la racine de hub_model_id est réservée
+        # au modèle DPO de production") décrivait l'ANCIEN comportement.
+        # Depuis FIX STRUCTURE-2, train_dpo.py ne publie plus le modèle
+        # final DPO à la racine du repo mais sous le préfixe "dpo/final/"
+        # (symétrique à "sft/final/" pour le SFT), pour éviter qu'un
+        # unique artefact sans préfixe ne cohabite mal avec
+        # "checkpoints/dpo/". merge_lora_adapter.py a été aligné sur ce
+        # changement (DEFAULT_ADAPTER_SUBFOLDER = "dpo/final", cf.
+        # scripts/merge_lora_adapter.py) mais ce runner d'évaluation ne
+        # l'avait pas été : il continuait à charger depuis la racine, où
+        # adapter_config.json n'existe plus — d'où le
+        # RemoteEntryNotFoundError / 404 constaté sur Colab. On reprend
+        # ici exactement le même chemin que merge_lora_adapter.py pour
+        # que train, merge et eval restent cohérents.
+        DPO_FINAL_MODEL_REMOTE_PREFIX = "dpo/final"
+
         model = AutoPeftModelForCausalLM.from_pretrained(
             hub_model_id,
+            subfolder=DPO_FINAL_MODEL_REMOTE_PREFIX,
             revision=hub_model_revision,
             device_map="auto",
             quantization_config=quantization_config,
@@ -1157,6 +1172,7 @@ if __name__ == "__main__":
 
         tokenizer = AutoTokenizer.from_pretrained(
             hub_model_id,
+            subfolder=DPO_FINAL_MODEL_REMOTE_PREFIX,
             revision=hub_model_revision,
             use_fast=dpo_config["tokenizer"]["use_fast"],
         )
