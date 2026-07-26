@@ -659,16 +659,37 @@ def train(publish_to_hf: bool = False):  # False par défaut en validation
                 "'checkpoint-*' absent) — rien à synchroniser à ce niveau."
             )
 
+        # FIX STRUCTURE-2 (audit renommage 2026-07-24) — le modèle final
+        # DPO était poussé à la RACINE de hub_model_id (aucun path_in_repo),
+        # seul artefact du repo sans préfixe "sft"/"dpo", et sans rapport
+        # visuel avec "checkpoints/dpo/". Remplacé par "dpo/final",
+        # symétrique à :
+        #   - checkpoints/dpo/checkpoint-dpo-<N>/   (checkpoints intermédiaires)
+        #   - dpo/final/                             (modèle final, ce préfixe)
+        # et à sft/final (cf. train_sft.py). Le dossier ref/ (ref_model,
+        # présent dans output_dir si chargé) suit automatiquement sous
+        # dpo/final/ref/*, puisque path_in_repo préfixe tout le contenu
+        # de output_dir_path.
+        #
+        # CONSOMMATEUR RÉEL (audit cohérence 2026-07-25) — ce chemin
+        # n'était consommé par rien jusqu'ici : merge_lora_adapter.py
+        # (le script qui fusionne cet adaptateur LoRA dans le modèle de
+        # base pour produire ce qui est réellement servi en prod via
+        # vLLM) lisait un checkpoint intermédiaire arbitraire sous
+        # checkpoints/dpo/. C'est corrigé : merge_lora_adapter.py pointe
+        # maintenant sur dpo/final/ par défaut — précisément l'adaptateur
+        # que trainer.save_model() sauvegarde ici, juste après cette
+        # publication. dpo/final/ est donc bien le modèle "final" au sens
+        # plein : le meilleur checkpoint (load_best_model_at_end=True),
+        # ET celui effectivement fusionné/servi en production.
+        DPO_FINAL_MODEL_REMOTE_PREFIX = "dpo/final"
+
         logger.info(
-            "Publication du modèle final DPO sur Hugging Face (hub_model_id=%s)...",  # noqa: E501
+            "Publication du modèle final DPO sur Hugging Face "
+            "(hub_model_id=%s, chemin=%s/)...",
             CONFIG["model"]["hub_model_id"],
+            DPO_FINAL_MODEL_REMOTE_PREFIX,
         )
-        # FIX HUB-COLLISION (voir train_sft.py) — la racine de
-        # hub_model_id est réservée au modèle DPO (celui-ci), car c'est
-        # ce que le Hugging Face Space API
-        # (RemDev-AI/medical-triage-agent-ai-poc-api) charge en
-        # production. Le modèle SFT intermédiaire est poussé à part,
-        # sous sft-final/, pour ne pas écraser ce qui est servi en prod.
         from huggingface_hub import HfApi
 
         output_dir_path = Path(CONFIG["training"]["output_dir"])
@@ -689,6 +710,7 @@ def train(publish_to_hf: bool = False):  # False par défaut en validation
                 folder_path=str(output_dir_path),
                 repo_id=CONFIG["model"]["hub_model_id"],
                 repo_type="model",
+                path_in_repo=DPO_FINAL_MODEL_REMOTE_PREFIX,
                 commit_message="DPO validation run — final model",
                 ignore_patterns=[
                     ".cache/**",
@@ -712,12 +734,22 @@ def train(publish_to_hf: bool = False):  # False par défaut en validation
                 )
             }
 
-            remote_files = set(
-                hf_api.list_repo_files(
+            # FIX STRUCTURE-2 (suite) — list_repo_files() renvoie tous les
+            # chemins du repo, désormais préfixés par "dpo/final/" pour le
+            # modèle final. Sans ce filtrage, la comparaison avec
+            # local_files (chemins relatifs, sans préfixe) considérerait à
+            # tort TOUS les fichiers locaux comme "manquants" (faux
+            # positif garanti) — même défaut que celui déjà corrigé côté
+            # SFT (FIX HUB-6 / vérification post-upload, train_sft.py).
+            remote_prefix = f"{DPO_FINAL_MODEL_REMOTE_PREFIX}/"
+            remote_files = {
+                file[len(remote_prefix) :]
+                for file in hf_api.list_repo_files(
                     repo_id=CONFIG["model"]["hub_model_id"],
                     repo_type="model",
                 )
-            )
+                if file.startswith(remote_prefix)
+            }
 
             missing_files = local_files - remote_files
 
@@ -730,9 +762,10 @@ def train(publish_to_hf: bool = False):  # False par défaut en validation
 
             logger.info(
                 "Vérification post-upload OK : %d fichier(s) confirmé(s) "
-                "présent(s) sur %s.",
+                "présent(s) sur %s/%s.",
                 len(local_files),
                 CONFIG["model"]["hub_model_id"],
+                DPO_FINAL_MODEL_REMOTE_PREFIX,
             )
 
             if checkpoint_sync.cleanup_after_upload:

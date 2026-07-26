@@ -17,7 +17,7 @@ CORRECTIF (2026-07-20) — MERGE OFFLINE AU LIEU DE LoRA DYNAMIQUE
 ------------------------------------------------------------------
 Ce module chargeait auparavant le modèle de base
 (Qwen/Qwen3-1.7B-Base) puis l'adaptateur LoRA final post-DPO
-(checkpoints/dpo/checkpoint-dpo-32) dynamiquement via
+(dpo/checkpoints/checkpoint-dpo-<N>) dynamiquement via
 `enable_lora=True` + `LoRARequest`.
 
 Cette approche a été abandonnée car incompatible avec vLLM :
