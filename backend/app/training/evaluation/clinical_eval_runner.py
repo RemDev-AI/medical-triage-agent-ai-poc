@@ -1076,8 +1076,7 @@ if __name__ == "__main__":
         hub_model_id,
     )
 
-    from peft import AutoPeftModelForCausalLM
-    from transformers import AutoTokenizer, BitsAndBytesConfig
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
     import torch
 
     with timed_stage("chargement_modele"):
@@ -1162,12 +1161,43 @@ if __name__ == "__main__":
         # que train, merge et eval restent cohérents.
         DPO_FINAL_MODEL_REMOTE_PREFIX = "dpo/final"
 
-        model = AutoPeftModelForCausalLM.from_pretrained(
+        # FIX EVAL-12 — AutoPeftModelForCausalLM.from_pretrained() transmet
+        # TOUS ses kwargs (y compris `subfolder`) au chargement du modèle
+        # de BASE (cf. peft/auto.py : `target_class.from_pretrained(
+        # base_model_path, revision=base_model_revision, **kwargs)`).
+        # `subfolder="dpo/final"` n'a de sens que pour localiser
+        # l'adaptateur dans le repo `hub_model_id` ; le modèle de base
+        # (Qwen/Qwen3-1.7B-Base) est à la RACINE de son propre repo. En le
+        # propageant, on demandait à HF de résoudre
+        # "Qwen/Qwen3-1.7B-Base/resolve/main/dpo/final/config.json", qui
+        # n'existe pas → ValueError "Unrecognized model in
+        # Qwen/Qwen3-1.7B-Base" (pas de config.json trouvé, donc pas de
+        # model_type). On découple donc : lecture de la PeftConfig (avec
+        # subfolder, pour trouver adapter_config.json dans le repo de
+        # l'adaptateur), chargement du modèle de base SANS subfolder, puis
+        # attache de l'adaptateur via PeftModel.from_pretrained (où
+        # `subfolder` s'applique de nouveau correctement, car c'est là
+        # aussi une lecture dans le repo de l'adaptateur).
+        from peft import PeftConfig, PeftModel
+
+        peft_config = PeftConfig.from_pretrained(
             hub_model_id,
             subfolder=DPO_FINAL_MODEL_REMOTE_PREFIX,
             revision=hub_model_revision,
+        )
+
+        base_model = AutoModelForCausalLM.from_pretrained(
+            peft_config.base_model_name_or_path,
+            revision=getattr(peft_config, "revision", None) or "main",
             device_map="auto",
             quantization_config=quantization_config,
+        )
+
+        model = PeftModel.from_pretrained(
+            base_model,
+            hub_model_id,
+            subfolder=DPO_FINAL_MODEL_REMOTE_PREFIX,
+            revision=hub_model_revision,
         )
 
         tokenizer = AutoTokenizer.from_pretrained(
