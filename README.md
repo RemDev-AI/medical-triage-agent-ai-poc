@@ -39,7 +39,7 @@ frontend/  → Interface Streamlit
 [https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space/docs](https://remdev-ai-medical-triage-agent-ai-poc-api.hf.space/docs)
 
 *HF MODELS URL :* 
-[https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main/checkpoints](https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main/checkpoints)
+[https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main](https://huggingface.co/RemDev-AI/medical-triage-agent-ai-poc-models/tree/main)
 
 *HF DATASETS URL :* 
 [https://huggingface.co/datasets/RemDev-AI/medical-triage-agent-ai-poc-datasets](https://huggingface.co/datasets/RemDev-AI/medical-triage-agent-ai-poc-datasets)
