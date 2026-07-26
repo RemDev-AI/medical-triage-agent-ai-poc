@@ -1,6 +1,6 @@
-# 🏥🤖 Projet 14 - POC Agent IA de Triage Médical 
+# 🏥🤖 Projet 14 - Finetunez votre propre LLM 
 
-**Mission - Développez un agent IA avec LandGraph pour l'apprentissage des échecs**
+**Mission - Développez le POC d'un agent de triage médical**
 
 ✍️ **Auteur :** *[Raymond Francius]*    
 📚 **Rôle :** *[Apprenant - Promotion Sept-2025]* — **Engineer AI** — **Openclassrooms**   
