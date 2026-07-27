@@ -22,12 +22,28 @@
 #            ce filet de sécurité à on_train_begin, il est exposé au même
 #            risque de crash "Attempting to unscale FP16 gradients" que
 #            celui diagnostiqué et corrigé côté DPO.
+#   - OOM-5   : PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True défini au
+#            démarrage (audit Colab du 2026-07-27, run "floral-mountain-28").
+#            Ce correctif existait déjà dans train_dpo.py mais avait été
+#            oublié ici — les deux scripts partagent pourtant le même
+#            TrainingModelLoader (tie_word_embeddings=False, poids maîtres
+#            forcés en float32, Unsloth + torch.compile pour la fused CE
+#            loss), donc le même terrain propice à la fragmentation mémoire
+#            CUDA sur T4. Le crash observé (OutOfMemoryError en tentant
+#            d'allouer seulement 150 MiB alors que 45 MiB à peine étaient
+#            libres, avec de la mémoire "reserved but unallocated") est un
+#            symptôme de fragmentation, pas un déficit brut de VRAM — c'est
+#            précisément le cas que PyTorch recommande de traiter avec
+#            expandable_segments:True (message d'erreur du traceback). Doit
+#            être défini avant toute allocation CUDA, donc en tout début de
+#            module.
 
 from __future__ import annotations
 
 import json
 import logging
 import math
+import os
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -74,6 +90,26 @@ CONFIG = load_config()
 # absent du YAML ; conserve tel quel un choix explicite déjà présent
 # (avec warning informatif en cas de désaccord). cf. colab_environment.py.
 CONFIG = resolve_quantization_settings(CONFIG)
+
+
+# ---------------------------------------------------------------------------
+# OOM-5 — Définir PYTORCH_CUDA_ALLOC_CONF avant tout entraînement.
+# Réduit la fragmentation mémoire sur T4 / Colab (parité avec train_dpo.py).
+# Doit être défini avant que PyTorch alloue quoi que ce soit sur le GPU.
+# ---------------------------------------------------------------------------
+def _configure_cuda_allocator() -> None:
+    current = os.environ.get("PYTORCH_CUDA_ALLOC_CONF", "")
+    if "expandable_segments" not in current:
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = (
+            current + ",expandable_segments:True"
+        ).lstrip(",")
+        logger.info(
+            "PYTORCH_CUDA_ALLOC_CONF → %s",
+            os.environ["PYTORCH_CUDA_ALLOC_CONF"],
+        )
+
+
+_configure_cuda_allocator()
 
 
 # ---------------------------------------------------------------------------
