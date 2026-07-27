@@ -127,8 +127,20 @@ model:
   hub_revision: ""
 
 lora:
-  # Évite tout effet de bord PEFT similaire durant la phase de validation globale
-  modules_to_save: []
+  # CORRECTIF (2026-07-27) — voir sft_config_validation.yaml pour le détail
+  # complet. modules_to_save: [] laissait lm_head ET embed_tokens gelés
+  # (cause racine confirmée par merge_lora_adapter.py / check_embed_tokens_trained,
+  # cf. log du 2026-07-27). Le policy model ET le ref_model DPO doivent
+  # partager la même config LoRA/modules_to_save pour rester comparables ;
+  # comme le ref_model n'est pas entraîné (requires_grad=False dessus),
+  # ce changement n'affecte que le policy model.
+  # IMPACT MÉMOIRE : réintroduit ~10 Go sur le policy model (voir détail
+  # dans sft_config_validation.yaml). En DPO, la pression mémoire est
+  # plus forte (policy + ref_model simultanés) : si un OOM réapparaît,
+  # ajouter training.optim="paged_adamw_8bit" ci-dessus, ou réduire
+  # gradient_accumulation_steps n'aidera pas (c'est un coût par paramètre,
+  # pas par batch) — privilégier le paged optimizer.
+  modules_to_save: ["lm_head", "embed_tokens"]
 
 tokenizer:
   use_fast: true
