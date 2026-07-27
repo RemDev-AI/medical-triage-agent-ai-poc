@@ -3,6 +3,12 @@
 # Petit run de validation LoRA — T4 Colab
 # Objectif : valider la pipeline en ~15 min avant montée en charge
 # NE PAS utiliser pour la production
+#
+# ── Avant de lancer le run, exécuter dans Colab (réduit la fragmentation
+#    CUDA, même rappel que dpo_config_validation.yaml / OOM-5) ───────────────
+#   import os
+#   os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+# ─────────────────────────────────────────────────────────────────────────────
 
 runtime:
   # "transformers" (défaut, PEFT natif + QLoRA via BitsAndBytesConfig)
@@ -33,6 +39,16 @@ training:
   lr_scheduler_type: "cosine"
   max_grad_norm: 1.0
   gradient_checkpointing: true
+  # OOM-7 (2026-07-27) — nécessaire depuis la réactivation de
+  # lora.modules_to_save=["lm_head","embed_tokens"] : AdamW standard
+  # garde 2 états fp32 (m, v) par paramètre entraînable. Sur les ~622M
+  # paramètres de lm_head+embed_tokens (Qwen3-1.7B, vocab=151936,
+  # hidden=2048), ça représente ~5 Go d'états optimizer à lui seul,
+  # en plus des poids et gradients. paged_adamw_8bit (bitsandbytes)
+  # quantifie ces états en 8 bits et les paginé vers la RAM CPU en cas
+  # de pression mémoire GPU (pagination CUDA unifiée), divisant ce
+  # poste par ~4. Nécessite bitsandbytes (déjà requis pour QLoRA).
+  optim: "paged_adamw_8bit"
   logging_steps: 10
   # FIX C — "steps" avec eval_steps/save_steps=50 supposait ~50 steps par
   # epoch (200 échantillons / batch effectif 4). En pratique le filtre de
@@ -128,7 +144,15 @@ dataset:
   validation_split: "validation"
   test_split: "test"
   clinical_eval_split: "clinical_eval"
-  max_sequence_length: 512           # court pour T4
+  # OOM-7 (2026-07-27) — réduit de 512 à 256. Le buffer de logits/loss
+  # matérialisé pour la cross-entropy a une taille proportionnelle à
+  # (batch_effectif x seq_len x vocab_size) — ici vocab_size=151936 pour
+  # Qwen3, donc chaque token de séquence supplémentaire coûte cher. Ce
+  # buffer est indépendant de modules_to_save/LoRA : c'est lui qui a
+  # explosé dans la trace OOM (torchinductor, tenseur (s52, 151936)),
+  # la marge mémoire ayant déjà été réduite par la réactivation de
+  # modules_to_save ci-dessus.
+  max_sequence_length: 256  # 512 → 384 → 256
   max_train_samples: 200             # sous-ensemble pour validation rapide
   max_val_samples: 50
   packing: false
