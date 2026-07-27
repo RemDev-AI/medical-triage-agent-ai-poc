@@ -132,20 +132,36 @@ model:
   hub_revision: ""
 
 lora:
-  # CORRECTIF (2026-07-27) — voir sft_config_validation.yaml pour le détail
-  # complet. modules_to_save: [] laissait lm_head ET embed_tokens gelés
-  # (cause racine confirmée par merge_lora_adapter.py / check_embed_tokens_trained,
-  # cf. log du 2026-07-27). Le policy model ET le ref_model DPO doivent
-  # partager la même config LoRA/modules_to_save pour rester comparables ;
-  # comme le ref_model n'est pas entraîné (requires_grad=False dessus),
-  # ce changement n'affecte que le policy model.
-  # IMPACT MÉMOIRE : réintroduit ~10 Go sur le policy model (voir détail
-  # dans sft_config_validation.yaml). En DPO, la pression mémoire est
-  # plus forte (policy + ref_model simultanés) : si un OOM réapparaît,
-  # ajouter training.optim="paged_adamw_8bit" ci-dessus, ou réduire
-  # gradient_accumulation_steps n'aidera pas (c'est un coût par paramètre,
-  # pas par batch) — privilégier le paged optimizer.
-  modules_to_save: ["lm_head", "embed_tokens"]
+  # CORRECTIF OOM-7bis (2026-07-27) — voir sft_config_validation.yaml
+  # pour le détail complet. lm_head/embed_tokens passent de
+  # modules_to_save (fine-tuning complet fp32) à target_modules (LoRA
+  # bas-rang), car tie_word_embeddings=False les rend indépendants et
+  # adaptables en LoRA classique. Le policy model ET le ref_model DPO
+  # partagent la même LoraConfig ; comme le ref_model n'est pas entraîné
+  # (adapters désactivés pour πref, requires_grad=False dessus, cf.
+  # resolve_ref_model() dans train_dpo.py), ce changement n'affecte que
+  # le policy model.
+  # IMPACT MÉMOIRE : supprime ~6 Go sur le policy model (voir détail
+  # chiffré dans sft_config_validation.yaml). En DPO la pression mémoire
+  # est structurellement plus forte (policy + calcul πref sur le même
+  # modèle avec adapters désactivés) : ce gain est donc encore plus
+  # critique ici que côté SFT.
+  # ATTENTION NON-RÉGRESSION : ce YAML ne définissait auparavant AUCUN
+  # target_modules explicite, donc lora_config.py::QWEN_LORA_TARGET_MODULES
+  # s'appliquait par défaut (q_proj, k_proj, v_proj, o_proj, gate_proj,
+  # up_proj, down_proj — les 7 modules). On les répète ici explicitement
+  # pour ne PAS les perdre, en ajoutant seulement lm_head/embed_tokens.
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+    - "lm_head"
+    - "embed_tokens"
+  modules_to_save: []
 
 tokenizer:
   use_fast: true
