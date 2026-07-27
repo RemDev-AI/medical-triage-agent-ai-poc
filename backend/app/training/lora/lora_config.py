@@ -46,8 +46,33 @@ class LoRAHyperParameters:
         default_factory=lambda: QWEN_LORA_TARGET_MODULES
     )
 
+    # CORRECTIF (2026-07-27) — CAUSE RACINE confirmée d'un bug de
+    # génération illisible en production (sortie /generate/ et
+    # /triage/ en "salade" de tokens multi-scripts, dès les premiers
+    # tokens, quel que soit le gabarit de chat utilisé) :
+    #
+    # tie_word_embeddings=False (cf. training_model_loader.py) rend
+    # bien lm_head entraînable indépendamment via modules_to_save, mais
+    # NE dit rien sur embed_tokens (la table d'EMBEDDINGS D'ENTRÉE).
+    # Or de nouveaux tokens spéciaux (chat template : <|im_start|>,
+    # <|im_end|>, ...) ont été ajoutés au tokenizer avant le SFT/DPO,
+    # ce qui redimensionne AUSSI embed_tokens. Sans "embed_tokens" ici,
+    # ces nouvelles lignes d'embeddings d'entrée restent gelées sous
+    # LoRA, initialisées aléatoirement/par moyenne, et ne sont JAMAIS
+    # entraînées — alors que lm_head (sortie) l'est très bien.
+    #
+    # Conséquence : le modèle sait PRÉDIRE ces tokens spéciaux en
+    # sortie, mais ne sait pas les LIRE en entrée. Comme ils
+    # apparaissent dans absolument tout prompt basé sur un chat
+    # template, le modèle "lit" du bruit dès le début du prompt, et la
+    # génération diverge immédiatement.
+    #
+    # Ne PAS retirer "embed_tokens" de ce tuple sans réentraîner et
+    # revalider (cf. merge_lora_adapter.py::check_embed_tokens_trained,
+    # qui bloque désormais tout push si ce module est absent de
+    # l'adapter sauvegardé).
     modules_to_save: Optional[tuple[str, ...]] = field(
-        default_factory=lambda: ("lm_head",)
+        default_factory=lambda: ("lm_head", "embed_tokens")
     )
 
     inference_mode: bool = False
