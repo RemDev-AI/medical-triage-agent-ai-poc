@@ -126,6 +126,10 @@ model:
   # branche par défaut, potentiellement instable entre deux runs).
   hub_revision: ""
 
+lora:
+  # Évite tout effet de bord PEFT similaire durant la phase de validation globale
+  modules_to_save: []
+
 tokenizer:
   use_fast: true
   padding_side: "right"
