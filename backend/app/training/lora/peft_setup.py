@@ -182,23 +182,41 @@ def build_lora_config_from_yaml(config: Dict) -> LoraConfig:
 
     params.validate()
 
-    # GARDE-FOU (2026-07-27) — voir lora_config.py::LoRAHyperParameters
-    # pour le détail : sans "embed_tokens" dans modules_to_save, les
-    # tokens spéciaux du chat template (ajoutés au tokenizer avant le
-    # SFT/DPO) ont leur embedding D'ENTRÉE jamais entraîné, ce qui a
-    # déjà causé une génération illisible en production. On avertit
-    # bruyamment si un YAML explicite écrase ce réglage sans inclure
-    # "embed_tokens" — ce n'est pas bloqué ici (un besoin légitime
-    # pourrait exister), mais ne doit jamais passer inaperçu.
-    if params.modules_to_save and "embed_tokens" not in params.modules_to_save:
+    # GARDE-FOU (2026-07-27, révisé OOM-7bis) — voir lora_config.py::
+    # LoRAHyperParameters pour le détail : "embed_tokens" doit être
+    # entraîné d'une manière ou d'une autre, sous peine de reproduire le
+    # bug de génération illisible en production (embedding d'entrée des
+    # tokens spéciaux du chat template jamais appris).
+    #
+    # Il existe désormais DEUX chemins valides pour ça (les deux sont
+    # vérifiés par check_embed_tokens_trained dans merge_lora_adapter.py
+    # à la sortie du run) :
+    #   1. modules_to_save=["embed_tokens", ...] — fine-tuning complet
+    #      (poids fp32 + états optimizer dédiés, coûteux en VRAM).
+    #   2. target_modules incluant "embed_tokens" — adaptation LoRA
+    #      bas-rang, possible depuis que tie_word_embeddings=False
+    #      (training_model_loader.py) sépare embed_tokens/lm_head en
+    #      tenseurs indépendants. Beaucoup plus léger en mémoire (cf.
+    #      OOM-7bis, sft_config_validation.yaml / dpo_config_validation.yaml),
+    #      c'est la stratégie recommandée sur GPU contraint (T4).
+    #
+    # Le garde-fou n'avertit désormais que si NI L'UN NI L'AUTRE n'est
+    # présent — ce n'est pas bloqué (un besoin légitime pourrait
+    # exister), mais ne doit jamais passer inaperçu.
+    embed_covered = (
+        params.modules_to_save and "embed_tokens" in params.modules_to_save
+    ) or "embed_tokens" in params.target_modules
+
+    if not embed_covered:
         logger.error(
-            "modules_to_save=%s (issu du YAML) ne contient PAS "
-            "'embed_tokens'. Cela a déjà causé en production une "
-            "génération illisible (l'embedding d'entrée des tokens "
-            "spéciaux du chat template reste alors jamais entraîné, "
-            "voir lora_config.py). Vérifie explicitement que c'est "
-            "intentionnel avant de lancer ce training.",
+            "'embed_tokens' n'est ni dans modules_to_save=%s ni dans "
+            "target_modules=%s (issus du YAML). Cela a déjà causé en "
+            "production une génération illisible (l'embedding d'entrée "
+            "des tokens spéciaux du chat template reste alors jamais "
+            "entraîné, voir lora_config.py). Vérifie explicitement que "
+            "c'est intentionnel avant de lancer ce training.",
             params.modules_to_save,
+            params.target_modules,
         )
 
     logger.info(
