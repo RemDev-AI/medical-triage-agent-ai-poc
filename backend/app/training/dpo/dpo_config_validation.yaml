@@ -46,6 +46,11 @@ training:
   lr_scheduler_type: "cosine"
   max_grad_norm: 1.0
   gradient_checkpointing: true
+  # OOM-7 (2026-07-27) — voir sft_config_validation.yaml pour le détail.
+  # D'autant plus nécessaire en DPO : policy + ref_model coexistent en
+  # VRAM, la marge disponible pour les états optimizer est donc plus
+  # faible qu'en SFT.
+  optim: "paged_adamw_8bit"
   logging_steps: 10
   # FIX DPO-2 — avec max_train_samples=500, batch=1, grad_accum=16 :
   # ~31 steps réels par epoch. eval_steps/save_steps=50 en "steps" ne
