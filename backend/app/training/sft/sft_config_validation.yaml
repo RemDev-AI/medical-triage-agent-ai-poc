@@ -92,7 +92,11 @@ model:
   use_flash_attention: false
   # Utilisé par la branche Unsloth (runtime.engine="unsloth") ; ignoré
   # par la branche transformers.
-  max_seq_length: 2048
+  # max_seq_length: 2048
+
+  # CORRECTION OOM : Aligné sur dataset.max_sequence_length pour éviter 
+  # l'explosion du buffer de cross-entropy d'Unsloth en 2048 tokens.
+  max_seq_length: 256
   hub_model_id: "RemDev-AI/medical-triage-agent-ai-poc-models"
   # Révision Hub (commit SHA) du modèle de base (base_model) chargé par
   # training_model_loader.py. Repli sur "main" si absente/vide.
@@ -130,7 +134,9 @@ lora:
 tokenizer:
   use_fast: true
   padding_side: "right"
-  model_max_length: 2048
+  # model_max_length: 2048
+  # CORRECTION OOM : Cohérence stricte avec le modèle et le dataset
+  model_max_length: 256
 
 special_tokens: {}
 
