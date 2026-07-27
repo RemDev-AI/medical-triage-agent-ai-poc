@@ -47,7 +47,7 @@ jobs:
           echo "  [x] Images Docker construites et scannées (Trivy)"
           echo "  [ ] Validation manuelle requise pour la production"
           echo "proceed=true" >> "$GITHUB_OUTPUT"
-
+  
   deploy-api:
     name: Deploy API Space
     runs-on: ubuntu-latest
@@ -60,10 +60,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Hugging Face CLI
-        run: pip install --upgrade "huggingface_hub[cli]"
-
-      - name: Configure git identity
+      - name: Configuration de l'identité Git
         run: |
           git config --global user.email "ci@remdev-ai.local"
           git config --global user.name "RemDev CI Bot"
@@ -81,22 +78,25 @@ jobs:
             backend/ /tmp/hf-api-space/
           cp backend/Dockerfile /tmp/hf-api-space/Dockerfile
 
-      - name: Push to Hugging Face Space (API)
+      - name: Push to Hugging Face Space (API) via Git
         env:
-          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN_06 }}
         run: |
-          python - <<'PYEOF'
-          import os
-          from huggingface_hub import HfApi
-
-          api = HfApi(token=os.environ["HF_TOKEN_06"])
-          api.upload_folder(
-              folder_path="/tmp/hf-api-space",
-              repo_id="${{ env.HF_API_SPACE }}",
-              repo_type="space",
-              commit_message=f"CI deploy: {os.environ.get('GITHUB_SHA', 'unknown')[:8]}",
-          )
-          PYEOF
+          git lfs install
+          # Clonage du dépôt distant avec le Token dans l'URL
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/${{ env.HF_API_SPACE }} hf-repo-api
+          
+          # Synchronisation des fichiers préparés vers le dépôt cloné
+          rsync -av --delete --exclude='.git' /tmp/hf-api-space/ hf-repo-api/
+          
+          cd hf-repo-api
+          git add .
+          if ! git diff-index --quiet HEAD --; then
+            git commit -m "CI deploy API: ${GITHUB_SHA:0:8}"
+            git push origin main
+          else
+            echo "Aucun changement détecté pour l'API."
+          fi
 
       - name: Restart Space
         env:
@@ -105,7 +105,6 @@ jobs:
           python - <<'PYEOF'
           import os
           from huggingface_hub import HfApi
-
           api = HfApi(token=os.environ["HF_TOKEN_06"])
           api.restart_space(repo_id="${{ env.HF_API_SPACE }}")
           PYEOF
@@ -143,8 +142,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Hugging Face CLI
-        run: pip install --upgrade "huggingface_hub[cli]"
+      - name: Configuration de l'identité Git
+        run: |
+          git config --global user.email "ci@remdev-ai.local"
+          git config --global user.name "RemDev CI Bot"
 
       - name: Prepare UI space payload
         run: |
@@ -157,22 +158,25 @@ jobs:
             frontend/ /tmp/hf-ui-space/
           cp frontend/Dockerfile.hf /tmp/hf-ui-space/Dockerfile
 
-      - name: Push to Hugging Face Space (UI)
+      - name: Push to Hugging Face Space (UI) via Git
         env:
-          HF_TOKEN_06: ${{ secrets.HF_TOKEN_06 }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN_06 }}
         run: |
-          python - <<'PYEOF'
-          import os
-          from huggingface_hub import HfApi
-
-          api = HfApi(token=os.environ["HF_TOKEN_06"])
-          api.upload_folder(
-              folder_path="/tmp/hf-ui-space",
-              repo_id="${{ env.HF_UI_SPACE }}",
-              repo_type="space",
-              commit_message=f"CI deploy: {os.environ.get('GITHUB_SHA', 'unknown')[:8]}",
-          )
-          PYEOF
+          git lfs install
+          # Clonage du dépôt distant avec le Token dans l'URL
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/${{ env.HF_UI_SPACE }} hf-repo-ui
+          
+          # Synchronisation des fichiers préparés vers le dépôt cloné
+          rsync -av --delete --exclude='.git' /tmp/hf-ui-space/ hf-repo-ui/
+          
+          cd hf-repo-ui
+          git add .
+          if ! git diff-index --quiet HEAD --; then
+            git commit -m "CI deploy UI: ${GITHUB_SHA:0:8}"
+            git push origin main
+          else
+            echo "Aucun changement détecté pour l'UI."
+          fi
 
       - name: Restart Space
         env:
@@ -181,7 +185,6 @@ jobs:
           python - <<'PYEOF'
           import os
           from huggingface_hub import HfApi
-
           api = HfApi(token=os.environ["HF_TOKEN_06"])
           api.restart_space(repo_id="${{ env.HF_UI_SPACE }}")
           PYEOF
