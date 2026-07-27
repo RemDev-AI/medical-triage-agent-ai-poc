@@ -91,9 +91,24 @@ lora:
   target_modules:
     - "q_proj"
     - "v_proj"
-  # CORRECTION OOM : Désactive modules_to_save pour éviter l'allocation de lm_head/embed_tokens
-  # en FP32 (économie de ~10 Go). Sûr ici car special_tokens: {} est vide.
-  modules_to_save: []
+  # CORRECTIF (2026-07-27) — l'ancien modules_to_save: [] (introduit pour
+  # une économie mémoire de ~10 Go, cf. historique git) a été identifié
+  # comme la CAUSE RACINE confirmée par merge_lora_adapter.py
+  # (check_embed_tokens_trained) du bug de génération illisible en prod :
+  # avec modules_to_save=[], NI lm_head (sortie) NI embed_tokens (entrée)
+  # n'étaient entraînés, malgré tie_word_embeddings=False dans
+  # training_model_loader.py. Les tokens spéciaux ajoutés (chat template)
+  # restaient donc non appris côté embeddings d'entrée. Le commentaire
+  # précédent ("sûr ici car special_tokens: {} est vide") était erroné :
+  # le tokenizer réellement utilisé en aval contient des tokens spéciaux
+  # (cf. training_tokenizer_loader.py / chat template), même si cette clé
+  # YAML special_tokens est vide.
+  # IMPACT MÉMOIRE : réintroduit ~10 Go (poids fp32 + états optimizer
+  # Adam pour lm_head+embed_tokens, ~311M paramètres chacun sur
+  # Qwen3-1.7B, vocab_size=151936). Sur T4 16 Go, cf. mitigation
+  # recommandée : training.optim="paged_adamw_8bit" (réduit les états
+  # optimizer de ~4x) si un OOM réapparaît avec ce run de validation.
+  modules_to_save: ["lm_head", "embed_tokens"]
   # Qwen3 expose aussi k_proj, o_proj, gate_proj — à ajouter en prod
 
 tokenizer:
