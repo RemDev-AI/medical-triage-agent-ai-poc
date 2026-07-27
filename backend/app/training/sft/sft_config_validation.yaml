@@ -91,6 +91,9 @@ lora:
   target_modules:
     - "q_proj"
     - "v_proj"
+  # CORRECTION OOM : Désactive modules_to_save pour éviter l'allocation de lm_head/embed_tokens
+  # en FP32 (économie de ~10 Go). Sûr ici car special_tokens: {} est vide.
+  modules_to_save: []
   # Qwen3 expose aussi k_proj, o_proj, gate_proj — à ajouter en prod
 
 tokenizer:
