@@ -182,6 +182,25 @@ def build_lora_config_from_yaml(config: Dict) -> LoraConfig:
 
     params.validate()
 
+    # GARDE-FOU (2026-07-27) — voir lora_config.py::LoRAHyperParameters
+    # pour le détail : sans "embed_tokens" dans modules_to_save, les
+    # tokens spéciaux du chat template (ajoutés au tokenizer avant le
+    # SFT/DPO) ont leur embedding D'ENTRÉE jamais entraîné, ce qui a
+    # déjà causé une génération illisible en production. On avertit
+    # bruyamment si un YAML explicite écrase ce réglage sans inclure
+    # "embed_tokens" — ce n'est pas bloqué ici (un besoin légitime
+    # pourrait exister), mais ne doit jamais passer inaperçu.
+    if params.modules_to_save and "embed_tokens" not in params.modules_to_save:
+        logger.error(
+            "modules_to_save=%s (issu du YAML) ne contient PAS "
+            "'embed_tokens'. Cela a déjà causé en production une "
+            "génération illisible (l'embedding d'entrée des tokens "
+            "spéciaux du chat template reste alors jamais entraîné, "
+            "voir lora_config.py). Vérifie explicitement que c'est "
+            "intentionnel avant de lancer ce training.",
+            params.modules_to_save,
+        )
+
     logger.info(
         "LoRA config built from YAML: rank=%s, alpha=%s, dropout=%s, "
         "target_modules=%s",

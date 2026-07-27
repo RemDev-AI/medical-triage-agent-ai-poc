@@ -523,6 +523,108 @@ def get_adapter_lm_head_target_size(
     return None
 
 
+def check_embed_tokens_trained(
+    adapter_repo_id: str, adapter_subfolder: str
+) -> bool:
+    """
+    Vérifie que les poids d'ENTRÉE (embed_tokens), et pas seulement
+    lm_head (sortie), ont été inclus dans modules_to_save.
+
+    CAUSE RACINE DIAGNOSTIQUÉE (2026-07-27) — génération illisible en
+    prod ("salade" de tokens multi-scripts dès les premiers tokens,
+    sur /generate/ ET /triage/, peu importe le gabarit de chat utilisé) :
+
+    Le tokenizer a reçu de nouveaux tokens spéciaux (chat template :
+    <|im_start|>, <|im_end|>, ...) avant le SFT/DPO, d'où le resize de
+    embed_tokens ET lm_head. Mais modules_to_save=["lm_head"] (voir
+    get_adapter_lm_head_target_size) ne fine-tune QUE la projection de
+    SORTIE. La table d'embeddings d'ENTRÉE (embed_tokens) reste gelée
+    sous LoRA, avec des lignes initialisées aléatoirement/par moyenne
+    pour ces nouveaux tokens — jamais entraînées.
+
+    Conséquence : le modèle sait très bien PRÉDIRE ces tokens en
+    sortie (lm_head entraîné), mais ne sait pas les LIRE en entrée
+    (embed_tokens jamais entraîné). Comme ces tokens apparaissent dans
+    TOUT prompt basé sur un chat template (gabarit fait main ou vrai
+    chat_template.jinja — même symptôme constaté avec les deux), le
+    modèle "lit" du bruit dès les premiers tokens du prompt, et la
+    génération diverge immédiatement vers des patterns de langues
+    aléatoires appris ailleurs pendant le pré-entraînement.
+
+    Ce n'est PAS réparable au merge : les poids embed_tokens n'ont
+    jamais été appris nulle part, ce script ne peut que le CONSTATER,
+    pas le corriger. Le vrai fix est côté training_model_loader.py /
+    get_peft_model() : modules_to_save doit inclure "embed_tokens" en
+    plus de "lm_head", suivi d'un ré-entraînement complet SFT -> DPO.
+
+    Retourne True si embed_tokens semble avoir été sauvegardé/entraîné
+    (clé modules_to_save correspondante trouvée), False sinon.
+    """
+    from huggingface_hub import hf_hub_download
+    from safetensors import safe_open
+    import torch as _torch  # noqa: F401
+
+    candidate_filenames = ["adapter_model.safetensors", "adapter_model.bin"]
+
+    for filename in candidate_filenames:
+        try:
+            weight_path = hf_hub_download(
+                repo_id=adapter_repo_id,
+                subfolder=adapter_subfolder,
+                filename=filename,
+            )
+        except Exception:
+            continue
+
+        if filename.endswith(".safetensors"):
+            with safe_open(weight_path, framework="pt") as f:
+                all_keys = list(f.keys())
+        else:
+            all_keys = list(_torch.load(weight_path, map_location="cpu").keys())
+
+        embed_keys = [
+            key
+            for key in all_keys
+            if "modules_to_save" in key
+            and "lora_" not in key
+            and key.endswith("weight")
+            and ("embed_tokens" in key or "wte" in key or "embed_in" in key)
+        ]
+
+        if embed_keys:
+            logger.info(
+                "OK : poids d'embeddings d'entrée trouvés dans "
+                "modules_to_save (%s) — embed_tokens semble avoir été "
+                "entraîné.",
+                embed_keys,
+            )
+            return True
+
+        logger.error(
+            "AUCUNE clé embed_tokens/wte trouvée sous modules_to_save "
+            "dans %s (clés modules_to_save présentes : %s). Cela "
+            "signifie que la table d'embeddings D'ENTRÉE n'a JAMAIS "
+            "été entraînée pour les tokens spéciaux ajoutés (chat "
+            "template) — SEULE lm_head (sortie) l'a été. C'est la "
+            "cause racine confirmée de la génération illisible "
+            "observée en prod (salade multilingue dès les premiers "
+            "tokens, sur /generate/ ET /triage/). Corrige "
+            "modules_to_save=['lm_head', 'embed_tokens'] côté "
+            "training_model_loader.py et RÉENTRAÎNE (SFT puis DPO) "
+            "avant de refaire ce merge — ce script ne peut pas "
+            "réparer des poids jamais appris.",
+            filename,
+            [k for k in all_keys if "modules_to_save" in k and "lora_" not in k],
+        )
+        return False
+
+    logger.warning(
+        "Impossible de localiser adapter_model.safetensors/.bin pour "
+        "vérifier embed_tokens — vérification embed_tokens sautée."
+    )
+    return True  # inconnu : ne bloque pas, mais rien n'a pu être confirmé
+
+
 def main() -> None:
     args = parse_args()
 
@@ -659,6 +761,25 @@ def main() -> None:
             "true target lm_head size.",
             base_vocab_size,
             tokenizer_vocab_size,
+        )
+
+    embed_tokens_trained = check_embed_tokens_trained(
+        adapter_repo_id=args.adapter_repo_id,
+        adapter_subfolder=args.adapter_subfolder,
+    )
+
+    if not embed_tokens_trained and args.push_to_hub:
+        raise RuntimeError(
+            "--push-to-hub annulé par sécurité : la table d'embeddings "
+            "d'entrée (embed_tokens) n'a jamais été entraînée pour les "
+            "tokens spéciaux ajoutés (voir logs ERROR ci-dessus). "
+            "Publier ce merge reproduirait le bug de génération "
+            "illisible déjà observé en prod. Corrige "
+            "modules_to_save=['lm_head', 'embed_tokens'] côté "
+            "training_model_loader.py, réentraîne, puis relance ce "
+            "script. Retire temporairement --push-to-hub si tu veux "
+            "seulement inspecter un merge local à des fins de "
+            "diagnostic."
         )
 
     logger.info("Loading PEFT adapter (LoRA + modules_to_save=['lm_head'])...")
